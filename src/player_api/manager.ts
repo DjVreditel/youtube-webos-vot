@@ -26,8 +26,6 @@ function diffPlayerState(
 
 interface EventMap {
   newVideo: CustomEvent<VideoID>;
-  // @vot-mod
-  noVideo: CustomEvent<undefined>;
   playbackStart: CustomEvent<undefined>;
 }
 
@@ -44,11 +42,6 @@ class PlayerManager
   #player;
   #lastVideoID: VideoID | null = null;
   #lastPlayerState: PlayerStateObject | null = null;
-
-  #handleNoVideo() {
-    console.debug('[PlayerManager] no video');
-    this.dispatchEvent(new TypedCustomEvent('noVideo', { detail: undefined }));
-  }
 
   #handleNewVideo(videoID: VideoID) {
     console.debug('[PlayerManager] new video', videoID);
@@ -70,13 +63,9 @@ class PlayerManager
 
     const currentVideoID = this.currentVideoID;
     if (this.#lastVideoID !== currentVideoID) {
-      if (!currentVideoID) {
-        this.#lastVideoID = null;
-        this.#handleNoVideo();
-      } else {
-        this.#handleNewVideo(currentVideoID);
-        this.#lastVideoID = currentVideoID;
-      }
+      if (!currentVideoID) throw new Error('unexpected `null` video ID');
+      this.#handleNewVideo(currentVideoID);
+      this.#lastVideoID = currentVideoID;
     }
 
     if (diff.isPlaying) {
@@ -117,6 +106,12 @@ export async function getPlayerManager(): Promise<PlayerManager> {
     const player = await getPlayer();
     instance = new PlayerManager(player);
   }
+
+  instance.addEventListener('playbackStart', function (event) {
+    event.type;
+    event.currentTarget?.currentVideoID;
+    event.detail;
+  });
 
   return instance;
 }

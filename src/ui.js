@@ -7,8 +7,6 @@ import {
   configGetDesc
 } from './config.js';
 import './ui.css';
-// @vot-mod
-import { showVotPanel } from './vot/ui';
 import { requireElement } from './player_api/helpers';
 
 // We handle key events ourselves.
@@ -18,11 +16,6 @@ const ARROW_KEY_CODE = { 37: 'left', 38: 'up', 39: 'right', 40: 'down' };
 
 const colorCodeMap = new Map([
   [403, 'red'],
-  [398, 'red'],
-  [112, 'red'],
-  [114, 'red'],
-  [166, 'red'],
-  [108, 'red'],
 
   [404, 'green'],
   [172, 'green'],
@@ -137,7 +130,6 @@ function createOptionsPanel() {
   elmContainer.appendChild(createConfigCheckbox('forceHighResVideo'));
   elmContainer.appendChild(createConfigCheckbox('removeEndscreen'));
   elmContainer.appendChild(createConfigCheckbox('autoAccountSelect'));
-  elmContainer.appendChild(createConfigCheckbox('votShowKeyCodes'));
   elmContainer.appendChild(createConfigCheckbox('enableSponsorBlock'));
 
   const elmBlock = document.createElement('blockquote');
@@ -194,16 +186,7 @@ function showOptionsPanel(visible) {
 
 window.ytaf_showOptionsPanel = showOptionsPanel;
 
-let votLastRedToggle = 0;
-
 const eventHandler = (evt) => {
-  try {
-    if (evt.type === 'keydown' && configRead('votShowKeyCodes')) {
-      showNotification(`key ${evt.keyCode} char ${evt.charCode}`, 1500);
-    }
-  } catch {
-    // config key missing in an older patched tree
-  }
   console.debug(
     'Key event:',
     evt.type,
@@ -221,22 +204,6 @@ const eventHandler = (evt) => {
     if (evt.type === 'keydown') {
       // Toggle visibility.
       showOptionsPanel(!optionsPanelVisible);
-    }
-    return false;
-  } else if (getKeyColor(evt.charCode || evt.keyCode) === 'red') {
-    evt.preventDefault();
-    evt.stopPropagation();
-
-    if (evt.type === 'keydown' && Date.now() - votLastRedToggle > 400) {
-      votLastRedToggle = Date.now();
-      const votState = showVotPanel();
-      try {
-        if (configRead('votShowKeyCodes')) {
-          showNotification('VOT: ' + votState, 1500);
-        }
-      } catch {
-        // config key missing in an older patched tree
-      }
     }
     return false;
   } else if (getKeyColor(evt.charCode) === 'blue') {
