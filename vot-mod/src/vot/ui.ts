@@ -254,17 +254,34 @@ function createPanel(): HTMLDivElement {
   setStatusCallback((status, message) => updateStatusDisplay(status, message));
 
   toggleBtn.addEventListener('click', async () => {
-    if (isTranslationActive() || isTranslationInProgress()) {
-      const manager = await getPlayerManager();
-      setManuallyStopped(manager.currentVideoID);
-      await stopTranslation();
-    } else {
-      setManuallyStopped(null);
-      const manager = await getPlayerManager();
-      const videoId = manager.currentVideoID;
-      if (videoId) {
-        await startTranslation(videoId);
+    // Every failure path must surface in the Status row — a silent return
+    // here reads as "the button does nothing" on a TV with no console
+    try {
+      if (isTranslationActive() || isTranslationInProgress()) {
+        const manager = await getPlayerManager();
+        setManuallyStopped(manager.currentVideoID);
+        await stopTranslation();
+        return;
       }
+      setManuallyStopped(null);
+      updateStatusDisplay('loading');
+      const manager = await Promise.race([
+        getPlayerManager(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Player API timeout')), 5000)
+        )
+      ]);
+      const videoId = manager.currentVideoID;
+      if (!videoId) {
+        updateStatusDisplay('error', 'No video is open');
+        return;
+      }
+      await startTranslation(videoId);
+    } catch (err) {
+      updateStatusDisplay(
+        'error',
+        err instanceof Error ? err.message : String(err)
+      );
     }
   });
 
