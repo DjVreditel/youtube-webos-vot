@@ -32,7 +32,8 @@ pnpm run package        # = node patch.cjs
 2. Патчит `../src/userScript.ts` — добавляет импорт полифилла и вызов `initVot()`
 3. Патчит `../src/config.js` — добавляет VOT-настройки
 4. Патчит `../src/player_api/manager.ts` и `yt-api.ts` — событие `noVideo` и поля аудиодорожек
-5. `pnpm install` → `pnpm run build` → `pnpm run package` в корне — собирает `.ipk`
+5. Патчит `../assets/appinfo.json` (id → `youtube.djvreditel.v4`, title → `YouTube VOT`), а также `package.json` и `tools/deploy.js` под новый app ID
+6. `pnpm install` → `pnpm run build` → `pnpm run package` в корне — собирает `.ipk`
 
 Все патчи идемпотентны (маркер `// @vot-mod`) — повторный запуск безопасен.
 

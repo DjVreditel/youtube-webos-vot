@@ -14,6 +14,10 @@ const PATCH_ONLY = process.argv.includes('--patch-only');
 
 const PATCH_MARKER = '// @vot-mod';
 
+const OLD_APP_ID = 'youtube.leanback.v4';
+const NEW_APP_ID = 'youtube.djvreditel.v4';
+const NEW_APP_TITLE = 'YouTube VOT';
+
 const VOT_USERSCRIPT_PATCH = `
 ${PATCH_MARKER}
 import './abort-controller-polyfill';
@@ -225,11 +229,48 @@ function patchYtApiTs() {
   process.stdout.write('  player_api/yt-api.ts patched\n');
 }
 
+function patchAppId() {
+  // appinfo.json — the id here is the real app ID on the TV; title is the visible name
+  const appInfoPath = path.join(PROJECT_ROOT, 'assets', 'appinfo.json');
+  if (fs.existsSync(appInfoPath)) {
+    const info = JSON.parse(fs.readFileSync(appInfoPath, 'utf8'));
+    if (info.id !== NEW_APP_ID || info.title !== NEW_APP_TITLE) {
+      info.id = NEW_APP_ID;
+      info.title = NEW_APP_TITLE;
+      fs.writeFileSync(
+        appInfoPath,
+        JSON.stringify(info, null, 2) + '\n',
+        'utf8'
+      );
+      process.stdout.write('  assets/appinfo.json patched\n');
+    } else {
+      process.stdout.write('  assets/appinfo.json already patched — skip\n');
+    }
+  }
+
+  // package.json scripts + tools/deploy.js reference the app ID / ipk name literally
+  for (const rel of ['package.json', path.join('tools', 'deploy.js')]) {
+    const filePath = path.join(PROJECT_ROOT, rel);
+    if (!fs.existsSync(filePath)) continue;
+    const content = fs.readFileSync(filePath, 'utf8');
+    if (!content.includes(OLD_APP_ID)) {
+      process.stdout.write(`  ${rel} already patched — skip\n`);
+      continue;
+    }
+    fs.writeFileSync(
+      filePath,
+      content.split(OLD_APP_ID).join(NEW_APP_ID),
+      'utf8'
+    );
+    process.stdout.write(`  ${rel} patched\n`);
+  }
+}
+
 process.stdout.write(`VOT_MOD patcher\nProject: ${PROJECT_ROOT}\n`);
 
 if (process.argv.includes('--restore')) {
   step('Restoring original sources...');
-  run('git checkout -- src/');
+  run('git checkout -- src/ assets/appinfo.json package.json tools/deploy.js');
   run('git clean -f -q src/vot src/abort-controller-polyfill.ts');
   process.stdout.write('\n✓ Restore complete\n');
   process.exit(0);
@@ -256,6 +297,9 @@ patchManagerTs();
 
 step('Patching player_api/yt-api.ts...');
 patchYtApiTs();
+
+step('Patching app ID and title...');
+patchAppId();
 
 process.stdout.write('\n✓ Patch complete\n');
 
