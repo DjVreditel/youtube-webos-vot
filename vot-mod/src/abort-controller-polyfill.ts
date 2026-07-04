@@ -23,7 +23,8 @@ if (typeof AbortController === 'undefined') {
     dispatchAbort() {
       this.aborted = true;
       this.onabort?.();
-      for (const fn of this.#listeners) fn();
+      // Iterate a copy: once-listeners splice themselves out mid-loop
+      for (const fn of [...this.#listeners]) fn();
     }
   }
 

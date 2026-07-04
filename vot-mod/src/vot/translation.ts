@@ -216,14 +216,14 @@ function fetchRangedChunk(
     xhr.onerror = () => reject(new Error('Audio fetch: network error'));
     xhr.ontimeout = () => reject(new Error('Audio fetch: timeout'));
 
-    signal.addEventListener(
-      'abort',
-      () => {
-        xhr.abort();
-        reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
-      },
-      { once: true }
-    );
+    const onAbort = () => {
+      xhr.abort();
+      reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    // Detach on settle: the signal lives for the whole session and would
+    // otherwise retain every chunk's xhr (and its ArrayBuffer) via closure
+    xhr.onloadend = () => signal.removeEventListener('abort', onAbort);
 
     xhr.send();
     console.debug(
@@ -329,14 +329,12 @@ function getFileSize(url: string, signal: AbortSignal): Promise<number> {
     };
     xhr.onerror = () => resolve(0);
     xhr.ontimeout = () => resolve(0);
-    signal.addEventListener(
-      'abort',
-      () => {
-        xhr.abort();
-        resolve(0);
-      },
-      { once: true }
-    );
+    const onAbort = () => {
+      xhr.abort();
+      resolve(0);
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    xhr.onloadend = () => signal.removeEventListener('abort', onAbort);
     xhr.send();
   });
 }
@@ -417,9 +415,6 @@ function attachVideoListeners() {
     seekAbortController?.abort();
     seekAbortController = null;
 
-    prefetchedChunk = null;
-    prefetchPromise = null;
-    prefetchGeneration++;
     const localSeekVersion = ++seekVersion;
 
     if (!audioCtx || !videoElement || !currentAudioUrl || !abortController)
@@ -429,12 +424,18 @@ function attachVideoListeners() {
     const chunkEnd = audioBufferStartTime + (audioBuffer?.duration ?? 0);
 
     if (seekTime >= audioBufferStartTime && seekTime < chunkEnd) {
+      // Seek within the current chunk: keep the prefetched next chunk —
+      // resetting it would re-download the same byte range on every seek
       if (seekVersion !== localSeekVersion) return;
       startAudioFrom(seekTime);
       if (videoElement.paused) audioCtx.suspend().catch(() => {});
       void prefetchNextChunk();
       return;
     }
+
+    prefetchedChunk = null;
+    prefetchPromise = null;
+    prefetchGeneration++;
 
     if (audioSource) {
       audioSource.onended = null;
@@ -592,11 +593,15 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
     const toLang = configRead('votToLang');
     console.log('[VOT] langs:', fromLang, '->', toLang);
 
+    const rawDuration = getVideoElement()?.duration;
     const result = await translateVideo(
       videoId,
       fromLang,
       toLang,
-      getVideoElement()?.duration ?? 343,
+      // duration is NaN until video metadata loads — NaN passes `??`
+      rawDuration !== undefined && Number.isFinite(rawDuration)
+        ? rawDuration
+        : 343,
       signal,
       (remainingTime, _message, isRetry) => {
         if (isRetry) {
@@ -678,6 +683,10 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
     serverRestartCount = 0;
     setStatus('playing');
   } catch (err) {
+    // Superseded by a newer start/stop: shared state (currentVideoId,
+    // abortController) already belongs to the next translation — don't
+    // stop it or restart on our stale error
+    if (signal.aborted) return;
     if (err instanceof Error && err.name === 'AbortError') return;
 
     const failedId = currentVideoId;

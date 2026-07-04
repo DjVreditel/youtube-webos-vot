@@ -336,14 +336,12 @@ function xhrPost(
     xhr.ontimeout = () =>
       resolve({ success: false, data: 'Timeout', status: 0 });
 
-    signal?.addEventListener(
-      'abort',
-      () => {
-        xhr.abort();
-        resolve({ success: false, data: 'Aborted', status: 0 });
-      },
-      { once: true }
-    );
+    const onAbort = () => {
+      xhr.abort();
+      resolve({ success: false, data: 'Aborted', status: 0 });
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+    xhr.onloadend = () => signal?.removeEventListener('abort', onAbort);
 
     xhr.send(payload);
   });
@@ -369,14 +367,12 @@ function xhrPut(
     xhr.onerror = () => resolve();
     xhr.ontimeout = () => resolve();
 
-    signal?.addEventListener(
-      'abort',
-      () => {
-        xhr.abort();
-        resolve();
-      },
-      { once: true }
-    );
+    const onAbort = () => {
+      xhr.abort();
+      resolve();
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+    xhr.onloadend = () => signal?.removeEventListener('abort', onAbort);
 
     xhr.send(payload);
   });
@@ -977,19 +973,21 @@ function waitPoll(signal: AbortSignal, remainingTime = 0): Promise<void> {
       ? Math.max(5_000, Math.min(POLL_INTERVAL_MS, (remainingTime + 3) * 1000))
       : POLL_INTERVAL_MS;
   return new Promise<void>((resolve, reject) => {
-    const id = setTimeout(resolve, ms);
-    signal.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(id);
-        reject(
-          Object.assign(new Error('Translation aborted'), {
-            name: 'AbortError'
-          })
-        );
-      },
-      { once: true }
-    );
+    const onAbort = () => {
+      clearTimeout(id);
+      reject(
+        Object.assign(new Error('Translation aborted'), {
+          name: 'AbortError'
+        })
+      );
+    };
+    // Detach on completion — one listener per poll iteration piles up on
+    // the session-long signal otherwise
+    const id = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener('abort', onAbort, { once: true });
   });
 }
 
