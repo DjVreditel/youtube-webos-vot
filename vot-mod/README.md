@@ -32,7 +32,7 @@ npm run package         # = node patch.cjs
 2. Патчит `../src/userScript.ts` — добавляет импорт полифилла и вызов `initVot()`
 3. Патчит `../src/config.js` — добавляет VOT-настройки
 4. Патчит `../src/player_api/manager.ts` и `yt-api.ts` — событие `noVideo` и поля аудиодорожек
-5. Патчит `../src/ui.js` — красная кнопка открывает панель VOT (обрабатывается там же, где зелёная кнопка настроек; добавлены доп. коды красной кнопки: 398, 114, 166, 108 и fallback на `keyCode`)
+5. Патчит `../src/ui.js` — красная кнопка открывает панель VOT (обрабатывается там же, где зелёная кнопка настроек; добавлены доп. коды красной кнопки: 398, 112 (F1), 114, 166, 108 и fallback на `keyCode`). Плюс отладка: опция «Show remote key codes (debug)» в зелёном меню показывает код каждой нажатой кнопки тостом на экране
 6. Заменяет иконки/сплэш/фон в `../assets/` файлами из `vot-mod/assets/`
 7. Патчит `../assets/appinfo.json` (id → `youtube.djvreditel.v4`, title → `YouTube VOT`), а также `package.json` и `tools/deploy.js` под новый app ID
 8. Патчит `package.json` — переключает менеджер пакетов с pnpm на npm (апстрим жёстко требует pnpm через `devEngines`, что ломает `npm run build`)
@@ -95,6 +95,7 @@ cd vot-mod && npm run package
 | `votToLang`            | `ru`         | Язык перевода                                   |
 | `votTranslationVolume` | `0.9`        | Громкость озвучки (0–1)                         |
 | `votOriginalVolume`    | `0.15`       | Громкость оригинала при активном переводе (0–1) |
+| `votShowKeyCodes`      | `false`      | Показывать коды кнопок пульта (отладка)         |
 
 ---
 

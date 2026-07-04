@@ -48,6 +48,10 @@ const VOT_CONFIG_ENTRIES = `${PATCH_MARKER}
   [
     'votOriginalVolume',
     { default: 0.15, desc: 'Original video volume while VOT is active (0 = muted, 1 = full)' }
+  ],
+  [
+    'votShowKeyCodes',
+    { default: false, desc: 'Show remote key codes (debug)' }
   ]`;
 
 function step(msg) {
@@ -95,13 +99,23 @@ function patchConfig() {
   let content = fs.readFileSync(filePath, 'utf8');
 
   if (content.includes(PATCH_MARKER)) {
-    const updated = content.replace(
+    let updated = content.replace(
       /('enableVot',\s*\{\s*default:\s*)false(\s*,)/,
       '$1true$2'
     );
+    // Top up entries added in newer mod versions on an already-patched tree
+    if (!updated.includes('votShowKeyCodes')) {
+      const endAt = updated.lastIndexOf('\n]);');
+      if (endAt !== -1) {
+        updated =
+          updated.slice(0, endAt) +
+          ",\n  [\n    'votShowKeyCodes',\n    { default: false, desc: 'Show remote key codes (debug)' }\n  ]" +
+          updated.slice(endAt);
+      }
+    }
     if (updated !== content) {
       fs.writeFileSync(filePath, updated, 'utf8');
-      process.stdout.write('  config.js: updated enableVot default to true\n');
+      process.stdout.write('  config.js: updated existing patch\n');
     } else {
       process.stdout.write('  config.js already patched — skip\n');
     }
@@ -268,11 +282,49 @@ function patchUiJs() {
   } else {
     patched = patched.replace(
       redAnchor,
-      "[403, 'red'],\n  [398, 'red'],\n  [114, 'red'],\n  [166, 'red'],\n  [108, 'red'],"
+      // 112 = F1: remotes that map colour keys to F1-F4 report RED as 112
+      // (GREEN=113 already works upstream via 0x71)
+      "[403, 'red'],\n  [398, 'red'],\n  [112, 'red'],\n  [114, 'red'],\n  [166, 'red'],\n  [108, 'red'],"
     );
   }
 
-  // Patch 3: insert the red branch into eventHandler before the blue branch.
+  // Patch 3: key-code debug toast at the top of eventHandler.
+  // try/catch: an older patched config.js may lack the votShowKeyCodes key
+  const handlerAnchor = 'const eventHandler = (evt) => {';
+  if (!patched.includes(handlerAnchor)) {
+    process.stderr.write(
+      '  WARNING: ui.js: eventHandler not found — key debug toast not added\n'
+    );
+  } else {
+    patched = patched.replace(
+      handlerAnchor,
+      handlerAnchor +
+        '\n  try {\n' +
+        "    if (evt.type === 'keydown' && configRead('votShowKeyCodes')) {\n" +
+        '      showNotification(`key ${evt.keyCode} char ${evt.charCode}`, 1500);\n' +
+        '    }\n' +
+        '  } catch {\n' +
+        '    // config key missing in an older patched tree\n' +
+        '  }'
+    );
+  }
+
+  // Patch 4: debug checkbox in the green settings panel
+  const checkboxAnchor =
+    "  elmContainer.appendChild(createConfigCheckbox('enableSponsorBlock'));";
+  if (!patched.includes(checkboxAnchor)) {
+    process.stderr.write(
+      '  WARNING: ui.js: checkbox anchor not found — debug checkbox not added\n'
+    );
+  } else {
+    patched = patched.replace(
+      checkboxAnchor,
+      "  elmContainer.appendChild(createConfigCheckbox('votShowKeyCodes'));\n" +
+        checkboxAnchor
+    );
+  }
+
+  // Patch 5: insert the red branch into eventHandler before the blue branch.
   // charCode||keyCode fallback: on newer webOS keydown carries keyCode only.
   const blueAnchor = "  } else if (getKeyColor(evt.charCode) === 'blue') {";
   if (!patched.includes(blueAnchor)) {
@@ -388,6 +440,9 @@ process.stdout.write(`VOT_MOD patcher\nProject: ${PROJECT_ROOT}\n`);
 
 if (process.argv.includes('--restore')) {
   step('Restoring original sources...');
+  // Unstage first: `git checkout --` restores from the index, which may
+  // hold patched content (e.g. after a failed lint-staged commit)
+  run('git reset -q -- src/ assets/ package.json tools/deploy.js');
   run('git checkout -- src/ assets/ package.json tools/deploy.js');
   run('git clean -f -q src/vot src/abort-controller-polyfill.ts');
   process.stdout.write('\n✓ Restore complete\n');
