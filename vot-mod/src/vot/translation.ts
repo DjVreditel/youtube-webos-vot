@@ -603,14 +603,20 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
         ? rawDuration
         : 343,
       signal,
-      (remainingTime, _message, isRetry) => {
+      (remainingTime, message, isRetry) => {
         if (isRetry) {
           stopCountdown();
           setStatus('retrying');
           return;
         }
+        if (message && message.startsWith('upload')) {
+          stopCountdown();
+          setStatus('waiting', message);
+          return;
+        }
         startCountdown(remainingTime);
-      }
+      },
+      configRead('votLivelyVoice')
     );
 
     stopCountdown();

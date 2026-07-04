@@ -157,6 +157,19 @@ function createPanel(): HTMLDivElement {
   container.style.display = 'none';
   container.setAttribute('tabindex', '0');
 
+  // The YouTube app steals focus back from the panel; while the panel is
+  // visible, pull focus back unless it moved to one of our own controls
+  container.addEventListener('focusout', (evt) => {
+    if (!panelVisible) return;
+    const to = evt.relatedTarget as Node | null;
+    if (to && container.contains(to)) return;
+    setTimeout(() => {
+      if (panelVisible && !container.contains(document.activeElement)) {
+        container.focus();
+      }
+    }, 0);
+  });
+
   const heading = document.createElement('h2');
   heading.textContent = 'VOT Translation';
   container.appendChild(heading);
@@ -176,6 +189,20 @@ function createPanel(): HTMLDivElement {
   autoStartBtn.className = `ytaf-vot-btn${autoStartEnabled ? ' ytaf-vot-btn--active' : ''}`;
   autoStartBtn.textContent = autoStartEnabled ? 'On' : 'Off';
   container.appendChild(createRow('Auto-start:', autoStartBtn));
+
+  // Experimental: works anonymously only if the server allows it (upstream
+  // gates lively voice behind a Yandex account); falls back automatically
+  const livelyEnabled = configRead('votLivelyVoice');
+  const livelyBtn = document.createElement('button');
+  livelyBtn.className = `ytaf-vot-btn${livelyEnabled ? ' ytaf-vot-btn--active' : ''}`;
+  livelyBtn.textContent = livelyEnabled ? 'On' : 'Off';
+  livelyBtn.addEventListener('click', () => {
+    const next = !configRead('votLivelyVoice');
+    configWrite('votLivelyVoice', next);
+    livelyBtn.className = `ytaf-vot-btn${next ? ' ytaf-vot-btn--active' : ''}`;
+    livelyBtn.textContent = next ? 'On' : 'Off';
+  });
+  container.appendChild(createRow('Live voice:', livelyBtn));
 
   const fromPicker = createLangPicker(
     SOURCE_LANGS,
@@ -364,14 +391,21 @@ export function showVotPanel(visible?: boolean): string {
   }
 
   if (visible && !panelVisible) {
+    panelVisible = true;
     panel.style.display = 'block';
     panel.focus();
-    panelVisible = true;
+    // The YouTube app may re-grab focus right after we open — take it back
+    setTimeout(() => {
+      if (panelVisible && panel && !panel.contains(document.activeElement)) {
+        panel.focus();
+      }
+    }, 100);
     return state + 'opened';
   } else if (!visible && panelVisible) {
+    // Flag first: the focusout handler must not fight the deliberate blur
+    panelVisible = false;
     panel.style.display = 'none';
     panel.blur();
-    panelVisible = false;
     return state + 'closed';
   }
   return state + 'no-op';

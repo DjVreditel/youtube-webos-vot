@@ -52,7 +52,24 @@ const VOT_CONFIG_ENTRIES = `${PATCH_MARKER}
   [
     'votShowKeyCodes',
     { default: false, desc: 'Show remote key codes (debug)' }
+  ],
+  [
+    'votLivelyVoice',
+    { default: false, desc: 'VOT lively voice (experimental, en->ru only)' }
   ]`;
+
+// Entries added after the initial release — patchConfig tops these up on
+// trees that were already patched by an older mod version
+const VOT_CONFIG_LATE_ENTRIES = [
+  [
+    'votShowKeyCodes',
+    "  [\n    'votShowKeyCodes',\n    { default: false, desc: 'Show remote key codes (debug)' }\n  ]"
+  ],
+  [
+    'votLivelyVoice',
+    "  [\n    'votLivelyVoice',\n    { default: false, desc: 'VOT lively voice (experimental, en->ru only)' }\n  ]"
+  ]
+];
 
 function step(msg) {
   process.stdout.write(`\n→ ${msg}\n`);
@@ -104,13 +121,12 @@ function patchConfig() {
       '$1true$2'
     );
     // Top up entries added in newer mod versions on an already-patched tree
-    if (!updated.includes('votShowKeyCodes')) {
+    for (const [key, entry] of VOT_CONFIG_LATE_ENTRIES) {
+      if (updated.includes(key)) continue;
       const endAt = updated.lastIndexOf('\n]);');
       if (endAt !== -1) {
         updated =
-          updated.slice(0, endAt) +
-          ",\n  [\n    'votShowKeyCodes',\n    { default: false, desc: 'Show remote key codes (debug)' }\n  ]" +
-          updated.slice(endAt);
+          updated.slice(0, endAt) + ',\n' + entry + updated.slice(endAt);
       }
     }
     if (updated !== content) {

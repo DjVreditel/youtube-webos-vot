@@ -6,6 +6,9 @@ const POLL_INTERVAL_MS = 20_000;
 const MAX_RETRIES = 30;
 const AUDIO_UPLOAD_TIMEOUT_MS = 120_000;
 const AUDIO_CHUNK_SIZE = 1_048_576; // 1MB per chunk
+// Uploading tens of MB through the TV freezes the app (slow CPU + tight
+// memory); beyond this size ask the server to fetch the audio itself
+const MAX_AUDIO_UPLOAD_BYTES = 30 * 1_048_576;
 const AUDIO_DOWNLOAD_TYPE = 'web_api_steal_sig_and_n';
 const YT_BASE = 'https://www.youtube.com';
 const INNERTUBE_ANDROID_VR_VERSION = '1.60.19';
@@ -162,7 +165,8 @@ function encodeTranslationRequest(
   duration: number,
   fromLang: string,
   toLang: string,
-  bypassCache = false
+  bypassCache = false,
+  useLivelyVoice = false
 ): Uint8Array {
   return new ProtoWriter()
     .string(3, url)
@@ -174,6 +178,7 @@ function encodeTranslationRequest(
     .int32(15, 1)
     .int32(16, 2)
     .bool(17, bypassCache)
+    .bool(18, useLivelyVoice)
     .finish();
 }
 
@@ -382,10 +387,15 @@ function buildWorkerPayload(
   body: Uint8Array,
   extraHeaders: Record<string, string>
 ): string {
-  return JSON.stringify({
-    headers: { ...PROTO_HEADERS, ...extraHeaders },
-    body: Array.from(body)
-  });
+  // body.join() instead of JSON.stringify(Array.from(body)): materializing
+  // a multi-megabyte number[] per audio chunk stalls the TV main thread
+  return (
+    '{"headers":' +
+    JSON.stringify({ ...PROTO_HEADERS, ...extraHeaders }) +
+    ',"body":[' +
+    body.join(',') +
+    ']}'
+  );
 }
 
 // --- Vtrans auth headers ---
@@ -881,7 +891,8 @@ async function downloadAndUploadYouTubeAudio(
   videoId: string,
   translationId: string,
   session: Session,
-  signal: AbortSignal
+  signal: AbortSignal,
+  onProgress?: (done: number, total: number) => void
 ): Promise<void> {
   const videoUrl = `https://youtu.be/${videoId}`;
   const path = '/video-translation/audio';
@@ -893,6 +904,11 @@ async function downloadAndUploadYouTubeAudio(
     format.contentLength,
     signal
   );
+  if (fileSize > MAX_AUDIO_UPLOAD_BYTES) {
+    throw new Error(
+      `Audio too large to upload from TV: ${Math.round(fileSize / 1_048_576)}MB`
+    );
+  }
   const totalChunks = Math.max(1, Math.ceil(fileSize / AUDIO_CHUNK_SIZE));
   const fileId = makeAudioFileId(format.itag ?? 0, fileSize);
 
@@ -921,6 +937,7 @@ async function downloadAndUploadYouTubeAudio(
 
   for (let i = 0; i < totalChunks; i++) {
     if (signal.aborted) break;
+    onProgress?.(i + 1, totalChunks);
     const start = i * AUDIO_CHUNK_SIZE;
     const end = Math.min(fileSize - 1, start + AUDIO_CHUNK_SIZE - 1);
     // eslint-disable-next-line no-await-in-loop
@@ -1003,12 +1020,16 @@ export async function translateVideo(
     remainingTime: number,
     message: string,
     isRetry?: boolean
-  ) => void
+  ) => void,
+  useLivelyVoice = false
 ): Promise<VotTranslationResult> {
   const url = `https://youtu.be/${videoId}`;
   let audioHandled = false;
   let bypassCacheUsed = false;
   let shouldRetryCount = 0;
+  // Lively voice needs a Yandex account upstream; try anonymously and fall
+  // back to the standard voice if the server declines
+  let lively = useLivelyVoice;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     if (signal.aborted)
@@ -1017,7 +1038,14 @@ export async function translateVideo(
       });
 
     const session = await getSession();
-    const body = encodeTranslationRequest(url, duration, fromLang, toLang);
+    const body = encodeTranslationRequest(
+      url,
+      duration,
+      fromLang,
+      toLang,
+      false,
+      lively
+    );
     const res = await sendTranslationRequest(body, session, signal);
 
     if (!res.success) {
@@ -1037,6 +1065,18 @@ export async function translateVideo(
     const data = decodeTranslationResponse(res.data);
     console.debug('[VOT] response:', data);
 
+    // Server says lively voices are unavailable (no account / unsupported
+    // pair) — retry immediately with the standard voice
+    if (
+      lively &&
+      data.message &&
+      data.message.toLowerCase().includes('обычная озвучка')
+    ) {
+      console.warn('[VOT] lively voice unavailable, falling back:', data.message);
+      lively = false;
+      continue;
+    }
+
     if (data.status === STATUS_FAILED) {
       if (data.shouldRetry === 1 && !bypassCacheUsed) {
         bypassCacheUsed = true;
@@ -1046,7 +1086,8 @@ export async function translateVideo(
           duration,
           fromLang,
           toLang,
-          true
+          true,
+          lively
         );
         const bypassSession = await getSession();
         const bypassRes = await sendTranslationRequest(
@@ -1105,7 +1146,8 @@ export async function translateVideo(
           videoId,
           data.translationId,
           session,
-          signal
+          signal,
+          (done, total) => onWaiting?.(0, `upload ${done}/${total}`)
         );
       } catch (err) {
         console.warn(
