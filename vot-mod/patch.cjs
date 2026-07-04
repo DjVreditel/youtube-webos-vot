@@ -161,6 +161,37 @@ function patchConfig() {
   process.stdout.write('  config.js patched\n');
 }
 
+function patchAuthServerUrl() {
+  // Optional: vot-mod/auth-server-url.txt holds the deployed vot-auth-server
+  // URL enabling QR login. Without it the Login button is hidden.
+  const urlPath = path.join(__dirname, 'auth-server-url.txt');
+  const filePath = path.join(PROJECT_SRC, 'vot', 'auth.ts');
+  if (!fs.existsSync(filePath)) {
+    process.stdout.write('  vot/auth.ts not found — skip QR login URL\n');
+    return;
+  }
+  const url = fs.existsSync(urlPath)
+    ? fs.readFileSync(urlPath, 'utf8').trim().replace(/\/+$/, '')
+    : '';
+  const content = fs.readFileSync(filePath, 'utf8');
+  const updated = content.replace(
+    /const AUTH_SERVER = '[^']*';/,
+    `const AUTH_SERVER = '${url.replace(/'/g, '')}';`
+  );
+  if (updated === content) {
+    if (!content.includes(`'${url}'`)) {
+      process.stderr.write('  WARNING: AUTH_SERVER constant not found in auth.ts\n');
+    }
+    return;
+  }
+  fs.writeFileSync(filePath, updated, 'utf8');
+  process.stdout.write(
+    url
+      ? '  auth server URL injected into vot/auth.ts\n'
+      : '  auth server URL empty — QR login disabled\n'
+  );
+}
+
 function patchAccountToken() {
   // Optional: vot-mod/account-token.txt holds the user's Yandex token
   // (copied from the desktop VOT extension) enabling lively voice.
@@ -614,6 +645,7 @@ patchUserScript();
 step('Patching config.js...');
 patchConfig();
 patchAccountToken();
+patchAuthServerUrl();
 
 step('Patching player_api/manager.ts...');
 patchManagerTs();
