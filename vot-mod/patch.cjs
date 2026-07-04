@@ -266,6 +266,37 @@ function patchAppId() {
   }
 }
 
+function patchPackageManager() {
+  // Upstream pins pnpm via devEngines.packageManager (onFail: error), which blocks
+  // `npm run build`. Switch the project to npm so it builds with either manager.
+  const filePath = path.join(PROJECT_ROOT, 'package.json');
+  const pkg = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
+  const alreadyNpm =
+    pkg.devEngines?.packageManager?.name === 'npm' &&
+    typeof pkg.packageManager === 'string' &&
+    pkg.packageManager.startsWith('npm@');
+  if (alreadyNpm) {
+    process.stdout.write('  package.json (packageManager) already patched — skip\n');
+    return;
+  }
+
+  if (pkg.devEngines?.packageManager) {
+    pkg.devEngines.packageManager.name = 'npm';
+  }
+  // packageManager must carry a valid corepack hash; drop it and let npm ignore the field
+  pkg.packageManager = 'npm@' + (process.env.npm_config_user_agent?.match(/npm\/(\S+)/)?.[1] ?? '11.0.0');
+
+  // lint:all uses `pnpm run` with a regex filter that npm doesn't support
+  if (pkg.scripts?.['lint:all']?.includes('pnpm run')) {
+    pkg.scripts['lint:all'] =
+      'npm run lint:eslint && npm run lint:tsc && npm run lint:prettier';
+  }
+
+  fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
+  process.stdout.write('  package.json (packageManager) patched\n');
+}
+
 process.stdout.write(`VOT_MOD patcher\nProject: ${PROJECT_ROOT}\n`);
 
 if (process.argv.includes('--restore')) {
@@ -301,17 +332,20 @@ patchYtApiTs();
 step('Patching app ID and title...');
 patchAppId();
 
+step('Patching package manager (pnpm → npm)...');
+patchPackageManager();
+
 process.stdout.write('\n✓ Patch complete\n');
 
 if (!PATCH_ONLY) {
   step('Installing dependencies...');
-  run('pnpm install');
+  run('npm install');
 
   step('Building...');
-  run('pnpm run build');
+  run('npm run build');
 
   step('Packaging...');
-  run('pnpm run package');
+  run('npm run package');
 
   process.stdout.write('\n✓ Done! IPK package is ready\n');
 }
