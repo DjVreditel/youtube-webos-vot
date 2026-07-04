@@ -76,6 +76,39 @@ const configOptions = new Map([
       default: false,
       desc: 'Bypass initial account selection on startup'
     }
+  ],
+// @vot-mod
+  [
+    'enableVot',
+    { default: true, desc: 'Enable Voice Over Translation' }
+  ],
+  [
+    'votFromLang',
+    { default: 'auto', desc: 'VOT source language' }
+  ],
+  [
+    'votToLang',
+    { default: 'ru', desc: 'VOT target language' }
+  ],
+  [
+    'votTranslationVolume',
+    { default: 0.9, desc: 'VOT translation audio volume (0-1)' }
+  ],
+  [
+    'votOriginalVolume',
+    { default: 0.15, desc: 'Original video volume while VOT is active (0 = muted, 1 = full)' }
+  ],
+  [
+    'votShowKeyCodes',
+    { default: false, desc: 'Show remote key codes (debug)' }
+  ],
+  [
+    'votLivelyVoice',
+    { default: false, desc: 'VOT lively voice (experimental, en->ru only)' }
+  ],
+  [
+    'votAccountToken',
+    { default: 'y0__wgBEIeAu0wYh9A-IM7XooUYVdGFfDI_apJrtMqHwnk9ZLtApMM', desc: 'Yandex account token for lively voice' }
   ]
 ]);
 
