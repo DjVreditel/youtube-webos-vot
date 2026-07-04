@@ -135,3 +135,51 @@
   text-align: center;
   min-height: 1.4em;
 }
+
+.ytaf-vot-qr-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.ytaf-vot-qr-box {
+  background: #1a1a1a;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 14px;
+  padding: 1.6em 2em;
+  text-align: center;
+  max-width: 70%;
+  color: #fff;
+}
+
+.ytaf-vot-qr-title {
+  font-size: 1.6rem;
+  margin-bottom: 0.8em;
+}
+
+.ytaf-vot-qr-img {
+  width: 260px;
+  height: 260px;
+  background: #fff;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+.ytaf-vot-qr-code {
+  font-size: 2rem;
+  letter-spacing: 0.15em;
+  font-weight: 700;
+  margin: 0.6em 0;
+  color: #ffd54a;
+}
+
+.ytaf-vot-qr-info {
+  font-size: 1.15rem;
+  color: #ccc;
+  line-height: 1.5;
+  margin-top: 0.4em;
+}

@@ -11,6 +11,12 @@ import {
   setManuallyStopped
 } from './translation';
 import { getPlayerManager } from '../player_api';
+import {
+  isAuthServerConfigured,
+  startDeviceAuth,
+  waitForDeviceToken,
+  qrImageUrl
+} from './auth';
 import type { VotTranslationStatus } from './types';
 
 declare const navigate: (direction: string) => void;
@@ -151,6 +157,104 @@ function updateStatusDisplay(status: VotTranslationStatus, message?: string) {
   toggleBtn.textContent = active ? 'Stop' : 'Start';
 }
 
+let qrOverlay: HTMLDivElement | null = null;
+let qrCancelled = false;
+
+function closeQrOverlay() {
+  qrCancelled = true;
+  if (qrOverlay && qrOverlay.parentNode) {
+    qrOverlay.parentNode.removeChild(qrOverlay);
+  }
+  qrOverlay = null;
+  if (panel) panel.focus();
+}
+
+async function runQrLogin(onDone: () => void) {
+  if (qrOverlay) return;
+  qrCancelled = false;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'ytaf-vot-qr-overlay';
+  overlay.setAttribute('tabindex', '0');
+  qrOverlay = overlay;
+
+  const box = document.createElement('div');
+  box.className = 'ytaf-vot-qr-box';
+  overlay.appendChild(box);
+
+  const title = document.createElement('div');
+  title.className = 'ytaf-vot-qr-title';
+  title.textContent = 'Sign in to Yandex';
+  box.appendChild(title);
+
+  const info = document.createElement('div');
+  info.className = 'ytaf-vot-qr-info';
+  info.textContent = 'Starting…';
+  box.appendChild(info);
+
+  // Back/OK closes the overlay
+  overlay.addEventListener(
+    'keydown',
+    (evt) => {
+      const code = evt.keyCode;
+      if (code === 27 || code === 461 || code === 13) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        closeQrOverlay();
+      }
+    },
+    true
+  );
+
+  document.body.appendChild(overlay);
+  overlay.focus();
+
+  try {
+    const start = await startDeviceAuth();
+
+    const img = document.createElement('img');
+    img.className = 'ytaf-vot-qr-img';
+    img.src = qrImageUrl(start.verification_url);
+    box.insertBefore(img, info);
+
+    const codeEl = document.createElement('div');
+    codeEl.className = 'ytaf-vot-qr-code';
+    codeEl.textContent = start.user_code;
+    box.insertBefore(codeEl, info);
+
+    info.innerHTML =
+      `Scan the QR or open<br><b>${start.verification_url}</b><br>` +
+      `on your phone and enter the code above.`;
+
+    const token = await waitForDeviceToken(
+      start.device_code,
+      start.interval,
+      start.expires_in,
+      (left) => {
+        if (!qrCancelled) info.innerHTML =
+          `Waiting for confirmation… ${left}s<br>` +
+          `Code: <b>${start.user_code}</b>`;
+      },
+      () => qrCancelled
+    );
+
+    if (qrCancelled) return;
+
+    if (token) {
+      info.textContent = 'Signed in! Live voice is ready.';
+      onDone();
+      setTimeout(closeQrOverlay, 1500);
+    } else {
+      info.textContent = 'Login timed out. Try again.';
+      setTimeout(closeQrOverlay, 2500);
+    }
+  } catch (err) {
+    info.textContent =
+      'Login failed: ' + (err instanceof Error ? err.message : String(err));
+    setTimeout(closeQrOverlay, 3000);
+  }
+}
+
 function createPanel(): HTMLDivElement {
   const container = document.createElement('div');
   container.className = 'ytaf-vot-panel';
@@ -215,6 +319,21 @@ function createPanel(): HTMLDivElement {
     }
   });
   container.appendChild(createRow('Live voice:', livelyBtn));
+
+  if (isAuthServerConfigured()) {
+    const loginBtn = document.createElement('button');
+    loginBtn.className = 'ytaf-vot-btn';
+    const refreshLoginLabel = () => {
+      loginBtn.textContent = configRead('votAccountToken')
+        ? 'Re-login'
+        : 'Login (QR)';
+    };
+    refreshLoginLabel();
+    loginBtn.addEventListener('click', () => {
+      void runQrLogin(refreshLoginLabel);
+    });
+    container.appendChild(createRow('Yandex:', loginBtn));
+  }
 
   const fromPicker = createLangPicker(
     SOURCE_LANGS,
