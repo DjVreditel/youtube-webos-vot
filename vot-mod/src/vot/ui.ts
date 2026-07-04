@@ -196,11 +196,23 @@ function createPanel(): HTMLDivElement {
   const livelyBtn = document.createElement('button');
   livelyBtn.className = `ytaf-vot-btn${livelyEnabled ? ' ytaf-vot-btn--active' : ''}`;
   livelyBtn.textContent = livelyEnabled ? 'On' : 'Off';
-  livelyBtn.addEventListener('click', () => {
+  livelyBtn.addEventListener('click', async () => {
     const next = !configRead('votLivelyVoice');
     configWrite('votLivelyVoice', next);
     livelyBtn.className = `ytaf-vot-btn${next ? ' ytaf-vot-btn--active' : ''}`;
     livelyBtn.textContent = next ? 'On' : 'Off';
+
+    // The voice is chosen at request time — restart an active translation
+    // so the new setting takes effect without a manual Stop/Start
+    if (isTranslationActive() || isTranslationInProgress()) {
+      const manager = await getPlayerManager();
+      const videoId = manager.currentVideoID;
+      await stopTranslation();
+      if (videoId) {
+        setManuallyStopped(null);
+        await startTranslation(videoId);
+      }
+    }
   });
   container.appendChild(createRow('Live voice:', livelyBtn));
 
