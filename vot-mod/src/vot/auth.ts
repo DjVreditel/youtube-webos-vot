@@ -1,9 +1,10 @@
 import { configWrite } from '../config';
 
-// Deployed vot-auth-server (Yandex OAuth device-flow broker). Override at
-// build time by putting the URL in vot-mod/auth-server-url.txt — the patcher
-// bakes it into this constant. Empty = QR login disabled.
-export const AUTH_SERVER = '__VOT_AUTH_SERVER__';
+// Deployed vot-auth-server (Yandex OAuth device-flow broker). This default
+// is committed and public (the URL is not a secret). Override per-build by
+// putting a different URL in vot-mod/auth-server-url.txt — the patcher bakes
+// it into this constant. Empty string = QR login disabled.
+export const AUTH_SERVER = 'https://vot-auth-server.onrender.com';
 
 export function isAuthServerConfigured(): boolean {
   return /^https?:\/\//.test(AUTH_SERVER);

@@ -162,17 +162,19 @@ function patchConfig() {
 }
 
 function patchAuthServerUrl() {
-  // Optional: vot-mod/auth-server-url.txt holds the deployed vot-auth-server
-  // URL enabling QR login. Without it the Login button is hidden.
+  // Optional override: vot-mod/auth-server-url.txt replaces the committed
+  // default AUTH_SERVER. Without the file the default in auth.ts is kept.
   const urlPath = path.join(__dirname, 'auth-server-url.txt');
+  if (!fs.existsSync(urlPath)) {
+    process.stdout.write('  auth-server-url.txt not found — keep default\n');
+    return;
+  }
   const filePath = path.join(PROJECT_SRC, 'vot', 'auth.ts');
   if (!fs.existsSync(filePath)) {
     process.stdout.write('  vot/auth.ts not found — skip QR login URL\n');
     return;
   }
-  const url = fs.existsSync(urlPath)
-    ? fs.readFileSync(urlPath, 'utf8').trim().replace(/\/+$/, '')
-    : '';
+  const url = fs.readFileSync(urlPath, 'utf8').trim().replace(/\/+$/, '');
   const content = fs.readFileSync(filePath, 'utf8');
   const updated = content.replace(
     /const AUTH_SERVER = '[^']*';/,
