@@ -22,38 +22,6 @@ const ARROW_KEY_CODE: Record<number, string> = {
   40: 'down'
 };
 
-const COLOR_KEY_MAP = new Map<number, string>([
-  // RED
-  [403, 'red'],
-  [398, 'red'],
-  [114, 'red'],
-  [166, 'red'],
-  [108, 'red'],
-  // GREEN
-  [404, 'green'],
-  [399, 'green'],
-  [172, 'green'],
-  [115, 'green'],
-  [0x71, 'green'],
-  // YELLOW
-  [405, 'yellow'],
-  [400, 'yellow'],
-  [170, 'yellow'],
-  [121, 'yellow'],
-  [0x63, 'yellow'],
-  // BLUE
-  [406, 'blue'],
-  [401, 'blue'],
-  [167, 'blue'],
-  [191, 'blue'],
-  [122, 'blue'],
-  [0x61, 'blue']
-]);
-
-function getKeyColor(code: number): string | null {
-  return COLOR_KEY_MAP.get(code) ?? null;
-}
-
 const SUPPORTED_LANGS: [string, string][] = [
   ['ar', 'Arabic'],
   ['be', 'Belarusian'],
@@ -378,35 +346,14 @@ export function showVotPanel(visible?: boolean) {
   }
 }
 
-let redKeyDown = false;
-
-function handleColorKey(evt: KeyboardEvent) {
-  const code = evt.charCode || evt.keyCode;
-  if (getKeyColor(code) !== 'red') return;
-
-  evt.preventDefault();
-  evt.stopPropagation();
-
-  if (evt.type === 'keydown') {
-    if (!redKeyDown) {
-      redKeyDown = true;
-      showVotPanel();
-    }
-  } else if (evt.type === 'keyup') {
-    redKeyDown = false;
-  }
-}
-
 let votPanelInitialized = false;
 
+// The RED button itself is handled by the patched upstream ui.js event
+// handler (same code path as the GREEN settings button) — see patch.cjs.
 export function initVotPanel() {
   if (votPanelInitialized) return;
   votPanelInitialized = true;
 
   panel = createPanel();
   document.body.appendChild(panel);
-
-  document.addEventListener('keydown', handleColorKey, true);
-  document.addEventListener('keypress', handleColorKey, true);
-  document.addEventListener('keyup', handleColorKey, true);
 }

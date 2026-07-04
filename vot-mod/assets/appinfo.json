@@ -1,0 +1,37 @@
+{
+  "id": "youtube.djvreditel.v4",
+  "vendor": "webosbrew.org",
+  "type": "web",
+  "main": "index.html",
+  "title": "YouTube VOT",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "mediumLargeIcon": "mediumLargeIcon.png",
+  "extraLargeIcon": "extraLargeIcon.png",
+  "playIcon": "playIcon.png",
+  "iconColor": "#ff0000",
+  "splashBackground": "splashBackground-v1.png",
+  "imageForRecents": "imageForRecents.png",
+  "bgImage": "bgImage.png",
+  "support360Content": true,
+  "checkUpdateOnLaunch": false,
+  "accessibility": {
+    "supportsAudioGuidance": true
+  },
+  "vendorExtension": {
+    "userAgent": "$browserName$/$browserVersion$ ($platformName$-$platformVersion$), _TV_O18/$firmwareVersion$ (LG, $modelName$, $networkMode$)",
+    "allowCrossDomain": true
+  },
+  "deeplinkingParams": "{\"contentTarget\":\"v=$CONTENTID\"}",
+  "inAppSearchParams": "{\"target\":\"q=$SEARCH_KEYWORD\"}",
+  "inAppVoiceIntent": "{\"target\":{\"intent\":\"$INTENT\",\"intentParam\":\"$INTENT_PARAM\",\"languageCode\":\"$LANG_CODE\"}}",
+  "supportQueryRouting": "{\"amazonAlexa\":true,\"googleAssistant\":true}",
+  "enablePigScreenSaver": false,
+  "trustLevel": "netcast",
+  "privilegedJail": true,
+  "supportQuickStart": true,
+  "dialAppName": "YouTube",
+  "disableBackHistoryAPI": true,
+  "supportGIP": true,
+  "wolwowlan": true
+}

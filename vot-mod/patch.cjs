@@ -231,6 +231,72 @@ function patchYtApiTs() {
   process.stdout.write('  player_api/yt-api.ts patched\n');
 }
 
+function patchUiJs() {
+  const filePath = path.join(PROJECT_SRC, 'ui.js');
+  if (!fs.existsSync(filePath)) {
+    process.stderr.write('  WARNING: ui.js not found — RED button not wired\n');
+    return;
+  }
+
+  let content = fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n');
+
+  if (content.includes(PATCH_MARKER)) {
+    process.stdout.write('  ui.js already patched — skip\n');
+    return;
+  }
+
+  // Patch 1: import showVotPanel
+  const importAnchor = "import './ui.css';";
+  if (!content.includes(importAnchor)) {
+    process.stderr.write(
+      '  WARNING: ui.js: import anchor not found — RED button not wired\n'
+    );
+    return;
+  }
+  let patched = content.replace(
+    importAnchor,
+    `${importAnchor}\n${PATCH_MARKER}\nimport { showVotPanel } from './vot/ui';`
+  );
+
+  // Patch 2: extend the red entries of colorCodeMap (upstream only has 403).
+  // Extra codes cover remotes that report RED as 398/114/166/108.
+  const redAnchor = "[403, 'red'],";
+  if (!patched.includes(redAnchor)) {
+    process.stderr.write(
+      '  WARNING: ui.js: colorCodeMap red entry not found — extra codes not added\n'
+    );
+  } else {
+    patched = patched.replace(
+      redAnchor,
+      "[403, 'red'],\n  [398, 'red'],\n  [114, 'red'],\n  [166, 'red'],\n  [108, 'red'],"
+    );
+  }
+
+  // Patch 3: insert the red branch into eventHandler before the blue branch.
+  // charCode||keyCode fallback: on newer webOS keydown carries keyCode only.
+  const blueAnchor = "  } else if (getKeyColor(evt.charCode) === 'blue') {";
+  if (!patched.includes(blueAnchor)) {
+    process.stderr.write(
+      '  WARNING: ui.js: blue branch not found — RED button not wired\n'
+    );
+    return;
+  }
+  patched = patched.replace(
+    blueAnchor,
+    "  } else if (getKeyColor(evt.charCode || evt.keyCode) === 'red') {\n" +
+      '    evt.preventDefault();\n' +
+      '    evt.stopPropagation();\n\n' +
+      "    if (evt.type === 'keydown') {\n" +
+      '      showVotPanel();\n' +
+      '    }\n' +
+      '    return false;\n' +
+      blueAnchor
+  );
+
+  fs.writeFileSync(filePath, patched, 'utf8');
+  process.stdout.write('  ui.js patched\n');
+}
+
 function patchAssets() {
   // Overwrite upstream icons / splash / background with the mod's branding
   if (!fs.existsSync(MOD_ASSETS)) {
@@ -349,6 +415,9 @@ patchManagerTs();
 
 step('Patching player_api/yt-api.ts...');
 patchYtApiTs();
+
+step('Patching ui.js (RED button)...');
+patchUiJs();
 
 step('Replacing assets (icons, splash, background)...');
 patchAssets();

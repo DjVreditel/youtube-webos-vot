@@ -32,10 +32,11 @@ npm run package         # = node patch.cjs
 2. Патчит `../src/userScript.ts` — добавляет импорт полифилла и вызов `initVot()`
 3. Патчит `../src/config.js` — добавляет VOT-настройки
 4. Патчит `../src/player_api/manager.ts` и `yt-api.ts` — событие `noVideo` и поля аудиодорожек
-5. Заменяет иконки/сплэш/фон в `../assets/` файлами из `vot-mod/assets/`
-6. Патчит `../assets/appinfo.json` (id → `youtube.djvreditel.v4`, title → `YouTube VOT`), а также `package.json` и `tools/deploy.js` под новый app ID
-7. Патчит `package.json` — переключает менеджер пакетов с pnpm на npm (апстрим жёстко требует pnpm через `devEngines`, что ломает `npm run build`)
-8. `npm install` → `npm run build` → `npm run package` в корне — собирает `.ipk`
+5. Патчит `../src/ui.js` — красная кнопка открывает панель VOT (обрабатывается там же, где зелёная кнопка настроек; добавлены доп. коды красной кнопки: 398, 114, 166, 108 и fallback на `keyCode`)
+6. Заменяет иконки/сплэш/фон в `../assets/` файлами из `vot-mod/assets/`
+7. Патчит `../assets/appinfo.json` (id → `youtube.djvreditel.v4`, title → `YouTube VOT`), а также `package.json` и `tools/deploy.js` под новый app ID
+8. Патчит `package.json` — переключает менеджер пакетов с pnpm на npm (апстрим жёстко требует pnpm через `devEngines`, что ломает `npm run build`)
+9. `npm install` → `npm run build` → `npm run package` в корне — собирает `.ipk`
 
 Все патчи идемпотентны (маркер `// @vot-mod`) — повторный запуск безопасен.
 
