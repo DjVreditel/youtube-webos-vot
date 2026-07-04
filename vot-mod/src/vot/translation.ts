@@ -673,7 +673,8 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
           }
           startCountdown(remainingTime);
         },
-        lively
+        lively,
+        String(configRead('votAccountToken') ?? '')
       );
 
       stopCountdown();

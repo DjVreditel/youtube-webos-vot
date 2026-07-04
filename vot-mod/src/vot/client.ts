@@ -456,11 +456,16 @@ async function getSession(): Promise<Session> {
 async function sendTranslationRequest(
   body: Uint8Array,
   session: Session,
-  signal: AbortSignal
+  signal: AbortSignal,
+  extraHeaders: Record<string, string> = {}
 ): Promise<WorkerResponse> {
   const path = '/video-translation/translate';
   const headers = await getVtransHeaders(session, body, path);
-  return xhrPost(path, buildWorkerPayload(body, headers), signal);
+  return xhrPost(
+    path,
+    buildWorkerPayload(body, { ...headers, ...extraHeaders }),
+    signal
+  );
 }
 
 async function sendFailAudioJs(
@@ -1025,15 +1030,19 @@ export async function translateVideo(
     message: string,
     isRetry?: boolean
   ) => void,
-  useLivelyVoice = false
+  useLivelyVoice = false,
+  apiToken = ''
 ): Promise<VotTranslationResult> {
   const url = `https://youtu.be/${videoId}`;
   let audioHandled = false;
   let bypassCacheUsed = false;
   let shouldRetryCount = 0;
-  // Lively voice needs a Yandex account upstream; try anonymously and fall
-  // back to the standard voice if the server declines
+  // Lively voice needs a Yandex account: with a token the request is sent
+  // authorized (Authorization: OAuth ...), anonymously we try briefly and
+  // fall back to the standard voice if the server declines
   let lively = useLivelyVoice;
+  const livelyHeaders = (): Record<string, string> =>
+    lively && apiToken ? { Authorization: `OAuth ${apiToken}` } : {};
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     if (signal.aborted)
@@ -1041,7 +1050,7 @@ export async function translateVideo(
         name: 'AbortError'
       });
 
-    if (lively && attempt >= LIVELY_MAX_ATTEMPTS) {
+    if (lively && !apiToken && attempt >= LIVELY_MAX_ATTEMPTS) {
       console.warn('[VOT] lively voice not ready, falling back to standard');
       lively = false;
       attempt = -1; // restart the retry budget for the standard voice
@@ -1057,7 +1066,12 @@ export async function translateVideo(
       false,
       lively
     );
-    const res = await sendTranslationRequest(body, session, signal);
+    const res = await sendTranslationRequest(
+      body,
+      session,
+      signal,
+      livelyHeaders()
+    );
 
     if (!res.success) {
       if (res.status >= 500 || res.status === 0) {
@@ -1108,7 +1122,8 @@ export async function translateVideo(
         const bypassRes = await sendTranslationRequest(
           bypassBody,
           bypassSession,
-          signal
+          signal,
+          livelyHeaders()
         );
         if (bypassRes.success && bypassRes.data instanceof ArrayBuffer) {
           const bypassData = decodeTranslationResponse(bypassRes.data);

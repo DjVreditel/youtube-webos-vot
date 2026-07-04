@@ -56,6 +56,10 @@ const VOT_CONFIG_ENTRIES = `${PATCH_MARKER}
   [
     'votLivelyVoice',
     { default: false, desc: 'VOT lively voice (experimental, en->ru only)' }
+  ],
+  [
+    'votAccountToken',
+    { default: '', desc: 'Yandex account token for lively voice' }
   ]`;
 
 // Entries added after the initial release — patchConfig tops these up on
@@ -68,6 +72,10 @@ const VOT_CONFIG_LATE_ENTRIES = [
   [
     'votLivelyVoice',
     "  [\n    'votLivelyVoice',\n    { default: false, desc: 'VOT lively voice (experimental, en->ru only)' }\n  ]"
+  ],
+  [
+    'votAccountToken',
+    "  [\n    'votAccountToken',\n    { default: '', desc: 'Yandex account token for lively voice' }\n  ]"
   ]
 ];
 
@@ -151,6 +159,37 @@ function patchConfig() {
 
   fs.writeFileSync(filePath, patched, 'utf8');
   process.stdout.write('  config.js patched\n');
+}
+
+function patchAccountToken() {
+  // Optional: vot-mod/account-token.txt holds the user's Yandex token
+  // (copied from the desktop VOT extension) enabling lively voice.
+  // The file is gitignored — the token is baked only into local builds.
+  const tokenPath = path.join(__dirname, 'account-token.txt');
+  if (!fs.existsSync(tokenPath)) {
+    process.stdout.write('  account-token.txt not found — lively voice stays anonymous\n');
+    return;
+  }
+  const token = fs.readFileSync(tokenPath, 'utf8').trim();
+  if (!token) {
+    process.stdout.write('  account-token.txt is empty — skip\n');
+    return;
+  }
+
+  const filePath = path.join(PROJECT_SRC, 'config.js');
+  const content = fs.readFileSync(filePath, 'utf8');
+  const updated = content.replace(
+    /('votAccountToken',\s*\{\s*default:\s*)'[^']*'/,
+    `$1'${token.replace(/'/g, '')}'`
+  );
+  if (updated === content) {
+    process.stderr.write(
+      '  WARNING: votAccountToken entry not found in config.js — token not injected\n'
+    );
+    return;
+  }
+  fs.writeFileSync(filePath, updated, 'utf8');
+  process.stdout.write('  account token injected into config.js\n');
 }
 
 function patchManagerTs() {
@@ -570,6 +609,7 @@ patchUserScript();
 
 step('Patching config.js...');
 patchConfig();
+patchAccountToken();
 
 step('Patching player_api/manager.ts...');
 patchManagerTs();
