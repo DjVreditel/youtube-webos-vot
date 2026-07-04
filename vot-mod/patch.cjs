@@ -178,17 +178,21 @@ function patchAccountToken() {
 
   const filePath = path.join(PROJECT_SRC, 'config.js');
   const content = fs.readFileSync(filePath, 'utf8');
-  const updated = content.replace(
-    /('votAccountToken',\s*\{\s*default:\s*)'[^']*'/,
-    `$1'${token.replace(/'/g, '')}'`
-  );
-  if (updated === content) {
+  const safeToken = token.replace(/'/g, '');
+  const re = /('votAccountToken',\s*\{\s*default:\s*)'[^']*'/;
+  if (!re.test(content)) {
     process.stderr.write(
       '  WARNING: votAccountToken entry not found in config.js — token not injected\n'
     );
     return;
   }
-  fs.writeFileSync(filePath, updated, 'utf8');
+  const currentMatch = content.match(re);
+  const currentToken = currentMatch ? currentMatch[0].match(/'([^']*)'\s*$/)?.[1] : '';
+  if (currentToken === safeToken) {
+    process.stdout.write('  account token already injected — skip\n');
+    return;
+  }
+  fs.writeFileSync(filePath, content.replace(re, `$1'${safeToken}'`), 'utf8');
   process.stdout.write('  account token injected into config.js\n');
 }
 
