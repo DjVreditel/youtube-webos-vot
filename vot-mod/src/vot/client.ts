@@ -12,7 +12,11 @@ const AUDIO_UPLOAD_TIMEOUT_MS = 120_000;
 const AUDIO_CHUNK_SIZE = 1_048_576; // 1MB per chunk
 // Uploading tens of MB through the TV freezes the app (slow CPU + tight
 // memory); beyond this size ask the server to fetch the audio itself
-const MAX_AUDIO_UPLOAD_BYTES = 30 * 1_048_576;
+// The server requires the client to upload the source audio (status 6)
+// for any video it hasn't cached — this is mandatory, not optional, so we
+// cannot cap it. We yield to the event loop between chunks to keep the TV
+// UI responsive during the upload.
+const UPLOAD_CHUNK_PAUSE_MS = 50;
 const AUDIO_DOWNLOAD_TYPE = 'web_api_steal_sig_and_n';
 const YT_BASE = 'https://www.youtube.com';
 const INNERTUBE_ANDROID_VR_VERSION = '1.60.19';
@@ -913,11 +917,6 @@ async function downloadAndUploadYouTubeAudio(
     format.contentLength,
     signal
   );
-  if (fileSize > MAX_AUDIO_UPLOAD_BYTES) {
-    throw new Error(
-      `Audio too large to upload from TV: ${Math.round(fileSize / 1_048_576)}MB`
-    );
-  }
   const totalChunks = Math.max(1, Math.ceil(fileSize / AUDIO_CHUNK_SIZE));
   const fileId = makeAudioFileId(format.itag ?? 0, fileSize);
 
@@ -947,6 +946,11 @@ async function downloadAndUploadYouTubeAudio(
   for (let i = 0; i < totalChunks; i++) {
     if (signal.aborted) break;
     onProgress?.(i + 1, totalChunks);
+    // Yield between chunks so the TV can repaint / handle remote input
+    if (i > 0) {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((r) => setTimeout(r, UPLOAD_CHUNK_PAUSE_MS));
+    }
     const start = i * AUDIO_CHUNK_SIZE;
     const end = Math.min(fileSize - 1, start + AUDIO_CHUNK_SIZE - 1);
     // eslint-disable-next-line no-await-in-loop
