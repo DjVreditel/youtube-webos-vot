@@ -7,5 +7,5 @@ export type VotTranslationStatus =
   | 'error';
 
 export type VotTranslationResult =
-  | { translated: true; url: string }
+  | { translated: true; url: string; usedLivelyVoice: boolean }
   | { translated: false; remainingTime: number; message: string };

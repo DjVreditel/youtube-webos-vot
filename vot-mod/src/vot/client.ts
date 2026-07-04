@@ -1054,6 +1054,7 @@ export async function translateVideo(
       console.warn('[VOT] lively voice not ready, falling back to standard');
       lively = false;
       attempt = -1; // restart the retry budget for the standard voice
+      onWaiting?.(0, 'lively-fallback');
       continue;
     }
 
@@ -1103,6 +1104,7 @@ export async function translateVideo(
       );
       lively = false;
       attempt = -1;
+      onWaiting?.(0, 'lively-fallback');
       continue;
     }
 
@@ -1151,6 +1153,7 @@ export async function translateVideo(
         console.warn('[VOT] lively voice failed, retrying with standard');
         lively = false;
         attempt = -1;
+        onWaiting?.(0, 'lively-fallback');
         continue;
       }
 
@@ -1164,7 +1167,7 @@ export async function translateVideo(
 
     if (data.status === STATUS_FINISHED) {
       if (!data.url) throw new Error('No audio URL in response');
-      return { translated: true, url: data.url };
+      return { translated: true, url: data.url, usedLivelyVoice: lively };
     }
 
     if (data.status === STATUS_PART_CONTENT) {

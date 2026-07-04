@@ -666,6 +666,11 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
             setStatus('retrying');
             return;
           }
+          if (message === 'lively-fallback') {
+            stopCountdown();
+            setStatus('waiting', 'lively N/A → standard voice');
+            return;
+          }
           if (message && message.startsWith('upload')) {
             stopCountdown();
             setStatus('waiting', message);
@@ -684,7 +689,12 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
         setStatus('error', 'Translation not available');
         return null;
       }
-      putCachedTranslationUrl(cacheKey, result.url);
+      // Cache under the voice actually delivered: a lively request that
+      // fell back to the standard voice must not poison the lively slot
+      putCachedTranslationUrl(
+        `${videoId}_${fromLang}_${toLang}_${result.usedLivelyVoice}`,
+        result.url
+      );
       return result.url;
     };
 
