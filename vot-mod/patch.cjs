@@ -325,7 +325,10 @@ function patchUiJs() {
   }
 
   // Patch 5: insert the red branch into eventHandler before the blue branch.
-  // charCode||keyCode fallback: on newer webOS keydown carries keyCode only.
+  // charCode||keyCode fallback: on this remote RED keydown carries keyCode
+  // only (403, charCode 0). The remote fires TWO distinct RED keydowns per
+  // press (403 then 166) — toggling on both cancels out, so debounce: only
+  // act on the first RED keydown within a short window.
   const blueAnchor = "  } else if (getKeyColor(evt.charCode) === 'blue') {";
   if (!patched.includes(blueAnchor)) {
     process.stderr.write(
@@ -338,11 +341,19 @@ function patchUiJs() {
     "  } else if (getKeyColor(evt.charCode || evt.keyCode) === 'red') {\n" +
       '    evt.preventDefault();\n' +
       '    evt.stopPropagation();\n\n' +
-      "    if (evt.type === 'keydown') {\n" +
+      "    if (evt.type === 'keydown' && Date.now() - votLastRedToggle > 400) {\n" +
+      '      votLastRedToggle = Date.now();\n' +
       '      showVotPanel();\n' +
       '    }\n' +
       '    return false;\n' +
       blueAnchor
+  );
+
+  // Module-level debounce timestamp for the RED handler above
+  const handlerAnchor2 = 'const eventHandler = (evt) => {';
+  patched = patched.replace(
+    handlerAnchor2,
+    'let votLastRedToggle = 0;\n\n' + handlerAnchor2
   );
 
   fs.writeFileSync(filePath, patched, 'utf8');
