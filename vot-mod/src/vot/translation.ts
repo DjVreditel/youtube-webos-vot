@@ -642,10 +642,15 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
   console.log('[VOT] status set to loading, calling translateVideo');
 
   try {
-    const fromLang = configRead('votFromLang');
     const toLang = configRead('votToLang');
     const lively: boolean = configRead('votLivelyVoice');
-    console.log('[VOT] langs:', fromLang, '->', toLang);
+    // Lively voice is en->ru only and the server ignores it when the source
+    // language is 'auto', so force 'en' when lively is requested
+    const fromLang =
+      lively && configRead('votFromLang') === 'auto'
+        ? 'en'
+        : configRead('votFromLang');
+    console.log('[VOT] langs:', fromLang, '->', toLang, 'lively:', lively);
 
     const cacheKey = `${videoId}_${fromLang}_${toLang}_${lively}`;
 
@@ -695,11 +700,17 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
         `${videoId}_${fromLang}_${toLang}_${result.usedLivelyVoice}`,
         result.url
       );
+      // Surface which voice the server actually returned — the only
+      // reliable signal on the TV that lively did or didn't take
+      setStatus(
+        'waiting',
+        result.usedLivelyVoice ? 'lively voice' : 'standard voice'
+      );
       return result.url;
     };
 
     let fromCache = false;
-    let audioUrl = getCachedTranslationUrl(cacheKey);
+    let audioUrl = lively ? null : getCachedTranslationUrl(cacheKey);
     if (audioUrl) {
       fromCache = true;
       console.log('[VOT] using cached translation URL');
