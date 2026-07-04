@@ -1,0 +1,14 @@
+{
+  "name": "youtube-webos-vot-mod",
+  "version": "0.5.0",
+  "description": "Voice Over Translation mod for youtube-webos (webosbrew)",
+  "license": "GPL-3.0-only",
+  "engines": {
+    "node": ">=16"
+  },
+  "scripts": {
+    "patch": "node patch.cjs --patch-only",
+    "package": "node patch.cjs",
+    "restore": "node patch.cjs --restore"
+  }
+}
