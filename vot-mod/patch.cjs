@@ -343,7 +343,14 @@ function patchUiJs() {
       '    evt.stopPropagation();\n\n' +
       "    if (evt.type === 'keydown' && Date.now() - votLastRedToggle > 400) {\n" +
       '      votLastRedToggle = Date.now();\n' +
-      '      showVotPanel();\n' +
+      '      const votState = showVotPanel();\n' +
+      '      try {\n' +
+      "        if (configRead('votShowKeyCodes')) {\n" +
+      "          showNotification('VOT: ' + votState, 1500);\n" +
+      '        }\n' +
+      '      } catch {\n' +
+      '        // config key missing in an older patched tree\n' +
+      '      }\n' +
       '    }\n' +
       '    return false;\n' +
       blueAnchor

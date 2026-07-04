@@ -330,20 +330,34 @@ function createPanel(): HTMLDivElement {
   return container;
 }
 
-export function showVotPanel(visible?: boolean) {
+// Returns a status string — surfaced as a debug toast by the patched
+// upstream ui.js when votShowKeyCodes is enabled
+export function showVotPanel(visible?: boolean): string {
   visible ??= !panelVisible;
 
-  if (!panel) return;
+  let state = '';
+  if (!panel) {
+    panel = createPanel();
+    document.body.appendChild(panel);
+    state = 'late-init ';
+  } else if (!document.body.contains(panel)) {
+    // The YouTube app re-rendered body and detached our node
+    document.body.appendChild(panel);
+    state = 'reattached ';
+  }
 
   if (visible && !panelVisible) {
     panel.style.display = 'block';
     panel.focus();
     panelVisible = true;
+    return state + 'opened';
   } else if (!visible && panelVisible) {
     panel.style.display = 'none';
     panel.blur();
     panelVisible = false;
+    return state + 'closed';
   }
+  return state + 'no-op';
 }
 
 let votPanelInitialized = false;
