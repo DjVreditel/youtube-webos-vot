@@ -245,6 +245,78 @@ function patchYtApiTs() {
   process.stdout.write('  player_api/yt-api.ts patched\n');
 }
 
+function patchCustomEventTarget() {
+  const filePath = path.join(PROJECT_SRC, 'custom-event-target.ts');
+  if (!fs.existsSync(filePath)) {
+    process.stderr.write(
+      '  WARNING: custom-event-target.ts not found — EventTarget shim not applied\n'
+    );
+    return;
+  }
+
+  let content = fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n');
+
+  if (content.includes(PATCH_MARKER)) {
+    process.stdout.write('  custom-event-target.ts already patched — skip\n');
+    return;
+  }
+
+  const anchor = 'export const CustomEventTarget = EventTarget as {';
+  if (!content.includes(anchor)) {
+    process.stderr.write(
+      '  WARNING: custom-event-target.ts: CustomEventTarget export not found — shim not applied\n'
+    );
+    return;
+  }
+
+  const shim =
+    `${PATCH_MARKER}: \`new EventTarget()\` is an illegal constructor on\n` +
+    '// Chromium < 64 (webOS <= 4.x), which breaks every subclass below.\n' +
+    'const ConstructibleEventTarget = (() => {\n' +
+    '  try {\n' +
+    '    new EventTarget();\n' +
+    '    return EventTarget;\n' +
+    '  } catch {\n' +
+    '    class EventTargetShim {\n' +
+    '      private listeners = new Map<\n' +
+    '        string,\n' +
+    '        EventListenerOrEventListenerObject[]\n' +
+    '      >();\n' +
+    '      addEventListener(\n' +
+    '        type: string,\n' +
+    '        cb: EventListenerOrEventListenerObject | null\n' +
+    '      ) {\n' +
+    '        if (!cb) return;\n' +
+    '        const arr = this.listeners.get(type) ?? [];\n' +
+    '        arr.push(cb);\n' +
+    '        this.listeners.set(type, arr);\n' +
+    '      }\n' +
+    '      removeEventListener(\n' +
+    '        type: string,\n' +
+    '        cb: EventListenerOrEventListenerObject | null\n' +
+    '      ) {\n' +
+    '        const arr = this.listeners.get(type);\n' +
+    '        if (!arr || !cb) return;\n' +
+    '        const i = arr.indexOf(cb);\n' +
+    '        if (i !== -1) arr.splice(i, 1);\n' +
+    '      }\n' +
+    '      dispatchEvent(event: Event): boolean {\n' +
+    '        for (const cb of [...(this.listeners.get(event.type) ?? [])]) {\n' +
+    "          if (typeof cb === 'function') cb.call(this, event);\n" +
+    '          else cb.handleEvent(event);\n' +
+    '        }\n' +
+    '        return true;\n' +
+    '      }\n' +
+    '    }\n' +
+    '    return EventTargetShim as unknown as typeof EventTarget;\n' +
+    '  }\n' +
+    '})();\n\n' +
+    'export const CustomEventTarget = ConstructibleEventTarget as {';
+
+  fs.writeFileSync(filePath, content.replace(anchor, shim), 'utf8');
+  process.stdout.write('  custom-event-target.ts patched\n');
+}
+
 function patchUiJs() {
   const filePath = path.join(PROJECT_SRC, 'ui.js');
   if (!fs.existsSync(filePath)) {
@@ -488,6 +560,9 @@ patchManagerTs();
 
 step('Patching player_api/yt-api.ts...');
 patchYtApiTs();
+
+step('Patching custom-event-target.ts (old webOS shim)...');
+patchCustomEventTarget();
 
 step('Patching ui.js (RED button)...');
 patchUiJs();
