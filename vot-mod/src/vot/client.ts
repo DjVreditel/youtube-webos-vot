@@ -4,6 +4,10 @@ const WORKER_HOST = 'https://vot-new.toil-dump.workers.dev';
 
 const POLL_INTERVAL_MS = 20_000;
 const MAX_RETRIES = 30;
+// Anonymous lively-voice requests are queued by the server but never
+// complete (upstream requires a Yandex account) — cap the wait and fall
+// back to the standard voice instead of burning the whole retry budget
+const LIVELY_MAX_ATTEMPTS = 4;
 const AUDIO_UPLOAD_TIMEOUT_MS = 120_000;
 const AUDIO_CHUNK_SIZE = 1_048_576; // 1MB per chunk
 // Uploading tens of MB through the TV freezes the app (slow CPU + tight
@@ -1037,6 +1041,13 @@ export async function translateVideo(
         name: 'AbortError'
       });
 
+    if (lively && attempt >= LIVELY_MAX_ATTEMPTS) {
+      console.warn('[VOT] lively voice not ready, falling back to standard');
+      lively = false;
+      attempt = -1; // restart the retry budget for the standard voice
+      continue;
+    }
+
     const session = await getSession();
     const body = encodeTranslationRequest(
       url,
@@ -1072,8 +1083,12 @@ export async function translateVideo(
       data.message &&
       data.message.toLowerCase().includes('обычная озвучка')
     ) {
-      console.warn('[VOT] lively voice unavailable, falling back:', data.message);
+      console.warn(
+        '[VOT] lively voice unavailable, falling back:',
+        data.message
+      );
       lively = false;
+      attempt = -1;
       continue;
     }
 
@@ -1114,6 +1129,13 @@ export async function translateVideo(
         cachedSession = null;
         onWaiting?.(0, '', true);
         await waitPoll(signal, 2);
+        continue;
+      }
+
+      if (lively) {
+        console.warn('[VOT] lively voice failed, retrying with standard');
+        lively = false;
+        attempt = -1;
         continue;
       }
 

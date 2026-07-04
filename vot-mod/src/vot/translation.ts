@@ -553,6 +553,59 @@ export function setStatusCallback(cb: StatusChangeCallback) {
   statusCallback = cb;
 }
 
+// Translated-audio URLs stay valid ~2h (same TTL the VOT userscript uses);
+// caching them locally makes re-opening a translated video instant
+const TRANSLATION_URL_TTL_MS = 2 * 60 * 60 * 1000;
+const TRANSLATION_CACHE_KEY = 'ytaf-vot-url-cache';
+const TRANSLATION_CACHE_MAX = 30;
+
+type CachedUrl = { url: string; expiresAt: number };
+
+function readUrlCache(): Record<string, CachedUrl> {
+  try {
+    const raw = window.localStorage.getItem(TRANSLATION_CACHE_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, CachedUrl>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeUrlCache(cache: Record<string, CachedUrl>) {
+  try {
+    const now = Date.now();
+    let entries = Object.entries(cache).filter(
+      ([, v]) => v.expiresAt > now
+    );
+    if (entries.length > TRANSLATION_CACHE_MAX) {
+      entries.sort((a, b) => b[1].expiresAt - a[1].expiresAt);
+      entries = entries.slice(0, TRANSLATION_CACHE_MAX);
+    }
+    window.localStorage.setItem(
+      TRANSLATION_CACHE_KEY,
+      JSON.stringify(Object.fromEntries(entries))
+    );
+  } catch {
+    // localStorage full/unavailable — cache is best-effort
+  }
+}
+
+function getCachedTranslationUrl(key: string): string | null {
+  const entry = readUrlCache()[key];
+  return entry && entry.expiresAt > Date.now() ? entry.url : null;
+}
+
+function putCachedTranslationUrl(key: string, url: string) {
+  const cache = readUrlCache();
+  cache[key] = { url, expiresAt: Date.now() + TRANSLATION_URL_TTL_MS };
+  writeUrlCache(cache);
+}
+
+function dropCachedTranslationUrl(key: string) {
+  const cache = readUrlCache();
+  delete cache[key];
+  writeUrlCache(cache);
+}
+
 export function isTranslationActive(): boolean {
   return audioCtx !== null;
 }
@@ -591,40 +644,57 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
   try {
     const fromLang = configRead('votFromLang');
     const toLang = configRead('votToLang');
+    const lively: boolean = configRead('votLivelyVoice');
     console.log('[VOT] langs:', fromLang, '->', toLang);
 
-    const rawDuration = getVideoElement()?.duration;
-    const result = await translateVideo(
-      videoId,
-      fromLang,
-      toLang,
-      // duration is NaN until video metadata loads — NaN passes `??`
-      rawDuration !== undefined && Number.isFinite(rawDuration)
-        ? rawDuration
-        : 343,
-      signal,
-      (remainingTime, message, isRetry) => {
-        if (isRetry) {
-          stopCountdown();
-          setStatus('retrying');
-          return;
-        }
-        if (message && message.startsWith('upload')) {
-          stopCountdown();
-          setStatus('waiting', message);
-          return;
-        }
-        startCountdown(remainingTime);
-      },
-      configRead('votLivelyVoice')
-    );
+    const cacheKey = `${videoId}_${fromLang}_${toLang}_${lively}`;
 
-    stopCountdown();
-    if (signal.aborted) return;
+    const requestTranslationUrl = async (): Promise<string | null> => {
+      const rawDuration = getVideoElement()?.duration;
+      const result = await translateVideo(
+        videoId,
+        fromLang,
+        toLang,
+        // duration is NaN until video metadata loads — NaN passes `??`
+        rawDuration !== undefined && Number.isFinite(rawDuration)
+          ? rawDuration
+          : 343,
+        signal,
+        (remainingTime, message, isRetry) => {
+          if (isRetry) {
+            stopCountdown();
+            setStatus('retrying');
+            return;
+          }
+          if (message && message.startsWith('upload')) {
+            stopCountdown();
+            setStatus('waiting', message);
+            return;
+          }
+          startCountdown(remainingTime);
+        },
+        lively
+      );
 
-    if (!result.translated) {
-      setStatus('error', 'Translation not available');
-      return;
+      stopCountdown();
+      if (signal.aborted) return null;
+
+      if (!result.translated || !result.url) {
+        setStatus('error', 'Translation not available');
+        return null;
+      }
+      putCachedTranslationUrl(cacheKey, result.url);
+      return result.url;
+    };
+
+    let fromCache = false;
+    let audioUrl = getCachedTranslationUrl(cacheKey);
+    if (audioUrl) {
+      fromCache = true;
+      console.log('[VOT] using cached translation URL');
+    } else {
+      audioUrl = await requestTranslationUrl();
+      if (!audioUrl) return;
     }
 
     videoElement = getVideoElement();
@@ -647,10 +717,20 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
     const videoTime = videoElement.currentTime;
 
     console.log('[VOT] fetching file size...');
-    const fileSize = await getFileSize(result.url, signal);
+    let fileSize = await getFileSize(audioUrl, signal);
     console.log('[VOT] file size:', fileSize);
 
     if (signal.aborted) return;
+
+    if (fileSize === 0 && fromCache) {
+      // Cached URL expired server-side — request a fresh one
+      console.warn('[VOT] cached translation URL is stale, re-requesting');
+      dropCachedTranslationUrl(cacheKey);
+      audioUrl = await requestTranslationUrl();
+      if (!audioUrl) return;
+      fileSize = await getFileSize(audioUrl, signal);
+      if (signal.aborted) return;
+    }
 
     const { startByte, endByte } = calcChunkRange(
       videoTime,
@@ -658,7 +738,7 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
       fileSize
     );
     const chunk = await fetchRangedChunk(
-      result.url,
+      audioUrl,
       signal,
       startByte,
       endByte,
@@ -669,7 +749,7 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
 
     audioBuffer = chunk.buffer;
     audioBufferStartTime = chunk.bufferStartTime;
-    currentAudioUrl = result.url;
+    currentAudioUrl = audioUrl;
     currentFileSize = fileSize;
     currentVideoDuration = videoDuration;
     currentChunkEndByte = chunk.endByte;
