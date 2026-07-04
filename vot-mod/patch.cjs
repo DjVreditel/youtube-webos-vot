@@ -7,8 +7,10 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 const MOD_SRC = path.join(__dirname, 'src');
+const MOD_ASSETS = path.join(__dirname, 'assets');
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const PROJECT_SRC = path.join(PROJECT_ROOT, 'src');
+const PROJECT_ASSETS = path.join(PROJECT_ROOT, 'assets');
 
 const PATCH_ONLY = process.argv.includes('--patch-only');
 
@@ -229,6 +231,25 @@ function patchYtApiTs() {
   process.stdout.write('  player_api/yt-api.ts patched\n');
 }
 
+function patchAssets() {
+  // Overwrite upstream icons / splash / background with the mod's branding
+  if (!fs.existsSync(MOD_ASSETS)) {
+    process.stdout.write('  vot-mod/assets not found — skip\n');
+    return;
+  }
+  for (const name of fs.readdirSync(MOD_ASSETS)) {
+    const from = path.join(MOD_ASSETS, name);
+    const to = path.join(PROJECT_ASSETS, name);
+    const src = fs.readFileSync(from);
+    if (fs.existsSync(to) && fs.readFileSync(to).equals(src)) {
+      process.stdout.write(`  assets/${name} already replaced — skip\n`);
+      continue;
+    }
+    fs.writeFileSync(to, src);
+    process.stdout.write(`  assets/${name} replaced\n`);
+  }
+}
+
 function patchAppId() {
   // appinfo.json — the id here is the real app ID on the TV; title is the visible name
   const appInfoPath = path.join(PROJECT_ROOT, 'assets', 'appinfo.json');
@@ -301,7 +322,7 @@ process.stdout.write(`VOT_MOD patcher\nProject: ${PROJECT_ROOT}\n`);
 
 if (process.argv.includes('--restore')) {
   step('Restoring original sources...');
-  run('git checkout -- src/ assets/appinfo.json package.json tools/deploy.js');
+  run('git checkout -- src/ assets/ package.json tools/deploy.js');
   run('git clean -f -q src/vot src/abort-controller-polyfill.ts');
   process.stdout.write('\n✓ Restore complete\n');
   process.exit(0);
@@ -328,6 +349,9 @@ patchManagerTs();
 
 step('Patching player_api/yt-api.ts...');
 patchYtApiTs();
+
+step('Replacing assets (icons, splash, background)...');
+patchAssets();
 
 step('Patching app ID and title...');
 patchAppId();
