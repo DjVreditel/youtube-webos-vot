@@ -96,6 +96,35 @@ function run(cmd) {
   execSync(cmd, { cwd: PROJECT_ROOT, stdio: 'inherit' });
 }
 
+function runQuiet(cmd) {
+  try {
+    return execSync(cmd, { cwd: PROJECT_ROOT, encoding: 'utf8' });
+  } catch {
+    return '';
+  }
+}
+
+// Generated tracked files the patcher rewrites. Marked skip-worktree so git
+// (and the IDE commit view) ignores their patched state — they must never be
+// committed. setSkipWorktree() re-marks after a fresh checkout; clear before
+// git checkout, which cannot touch skip-worktree paths otherwise.
+function trackedGeneratedFiles() {
+  const out = runQuiet(
+    'git ls-files src/ assets/ package.json tools/deploy.js .husky/pre-commit'
+  );
+  return out
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+}
+
+function setSkipWorktree(on) {
+  const flag = on ? '--skip-worktree' : '--no-skip-worktree';
+  for (const f of trackedGeneratedFiles()) {
+    runQuiet(`git update-index ${flag} "${f}"`);
+  }
+}
+
 function validate() {
   if (!fs.existsSync(PROJECT_SRC)) {
     throw new Error(
@@ -685,6 +714,8 @@ process.stdout.write(`VOT_MOD patcher\nProject: ${PROJECT_ROOT}\n`);
 
 if (process.argv.includes('--restore')) {
   step('Restoring original sources...');
+  // Clear skip-worktree first — git checkout cannot touch those paths
+  setSkipWorktree(false);
   // Unstage first: `git checkout --` restores from the index, which may
   // hold patched content (e.g. after a failed lint-staged commit)
   run('git reset -q -- src/ assets/ package.json tools/deploy.js .husky/');
@@ -695,6 +726,9 @@ if (process.argv.includes('--restore')) {
 }
 
 validate();
+
+// Clear skip-worktree so this run writes onto normally-tracked files
+setSkipWorktree(false);
 
 step('Injecting VOT mod files...');
 fs.cpSync(MOD_SRC, PROJECT_SRC, {
@@ -735,6 +769,24 @@ patchPackageManager();
 
 step('Patching .husky/pre-commit (pnpm -> npx)...');
 patchHuskyHook();
+
+step('Hiding generated files from git (skip-worktree + exclude)...');
+// Tracked files: skip-worktree so the IDE commit view ignores them
+setSkipWorktree(true);
+// Untracked generated files: local exclude so they don't show as new
+{
+  const excludePath = path.join(PROJECT_ROOT, '.git', 'info', 'exclude');
+  if (fs.existsSync(excludePath)) {
+    let exclude = fs.readFileSync(excludePath, 'utf8');
+    for (const line of ['src/vot/', 'src/abort-controller-polyfill.ts']) {
+      if (!exclude.split('\n').includes(line)) {
+        exclude = exclude.replace(/\n?$/, '\n') + line + '\n';
+      }
+    }
+    fs.writeFileSync(excludePath, exclude, 'utf8');
+  }
+  process.stdout.write('  generated files hidden\n');
+}
 
 process.stdout.write('\n✓ Patch complete\n');
 
