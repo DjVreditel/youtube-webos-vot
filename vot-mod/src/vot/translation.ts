@@ -600,9 +600,7 @@ function readUrlCache(): Record<string, CachedUrl> {
 function writeUrlCache(cache: Record<string, CachedUrl>) {
   try {
     const now = Date.now();
-    let entries = Object.entries(cache).filter(
-      ([, v]) => v.expiresAt > now
-    );
+    let entries = Object.entries(cache).filter(([, v]) => v.expiresAt > now);
     if (entries.length > TRANSLATION_CACHE_MAX) {
       entries.sort((a, b) => b[1].expiresAt - a[1].expiresAt);
       entries = entries.slice(0, TRANSLATION_CACHE_MAX);
@@ -935,6 +933,40 @@ let votTranslationInitialized = false;
 export async function initVotTranslation() {
   if (votTranslationInitialized) return;
   votTranslationInitialized = true;
+
+  // The PlayerManager 'noVideo' event does not fire when the user closes
+  // the watch page (the player emits no state change), so a translation
+  // stuck in Waiting kept polling/uploading forever. The reliable signal is
+  // the WEB_PAGE_TYPE_WATCH class on <body> (upstream screensaver-fix uses
+  // the same) — when it disappears while a translation is running, stop.
+  const WATCH_CLASS = 'WEB_PAGE_TYPE_WATCH';
+  let leftWatchTimer: ReturnType<typeof setTimeout> | null = null;
+  const bodyClassObs = new MutationObserver(() => {
+    if (document.body.classList.contains(WATCH_CLASS)) {
+      if (leftWatchTimer !== null) {
+        clearTimeout(leftWatchTimer);
+        leftWatchTimer = null;
+      }
+      return;
+    }
+    if (!isTranslationActive() && !isTranslationInProgress()) return;
+    if (leftWatchTimer !== null) return;
+    // Debounce: page-transition flicker must not kill an active translation
+    leftWatchTimer = setTimeout(() => {
+      leftWatchTimer = null;
+      if (
+        !document.body.classList.contains(WATCH_CLASS) &&
+        (isTranslationActive() || isTranslationInProgress())
+      ) {
+        console.log('[VOT] left watch page — stopping translation');
+        void stopTranslation();
+      }
+    }, 1500);
+  });
+  bodyClassObs.observe(document.body, {
+    attributes: true,
+    attributeFilter: ['class']
+  });
 
   const manager = await getPlayerManager();
   currentManager = manager;
