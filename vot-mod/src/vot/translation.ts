@@ -4,10 +4,14 @@ import { PlayerMode } from '../player_api';
 import type { PlayerManager, VideoID } from '../player_api';
 import { translateVideo } from './client';
 import type { VotTranslationStatus } from './types';
-
-const AUDIO_CHUNK_BYTES = 512 * 1024;
-const RANGE_ALIGN_BYTES = 32 * 1024;
-const SYNC_DRIFT_THRESHOLD_S = 3;
+import {
+  AUDIO_CHUNK_BYTES,
+  RANGE_ALIGN_BYTES,
+  SYNC_DRIFT_THRESHOLD_S,
+  resolveSyncAction,
+  shouldRunDriftCheck,
+  calcChunkRange
+} from './sync-core';
 
 let originalVolumeReduction: number = configRead('votOriginalVolume');
 
@@ -110,23 +114,52 @@ function getAudioCurrentTime(): number {
   return audioPlayVideoStart + elapsed;
 }
 
+function stopAudioSource() {
+  if (!audioSource) return;
+  audioSource.onended = null;
+  try {
+    audioSource.stop();
+  } catch {}
+  audioSource.disconnect();
+  audioSource = null;
+}
+
+// Refetch guard: when the CBR byte estimate keeps producing a chunk that
+// still doesn't cover the target time, stop refetching and play best-effort
+const MAX_OUT_OF_CHUNK_RETRIES = 2;
+let outOfChunkTarget = -1;
+let outOfChunkRetries = 0;
+
 function startAudioFrom(videoTime: number) {
   if (!audioCtx || !audioBuffer || !gainNode) return;
 
-  const offset = videoTime - audioBufferStartTime;
-  const clampedOffset = Math.max(
-    0,
-    Math.min(offset, audioBuffer.duration - 0.1)
+  const action = resolveSyncAction(
+    videoTime,
+    audioBufferStartTime,
+    audioBuffer.duration
   );
+  let offset = videoTime - audioBufferStartTime;
 
-  if (audioSource) {
-    audioSource.onended = null;
-    try {
-      audioSource.stop();
-    } catch {}
-    audioSource.disconnect();
-    audioSource = null;
+  if (action === 'load-chunk') {
+    // The target lies outside the loaded chunk — e.g. SponsorBlock/adblock
+    // skipped past it. Clamp-playing the chunk tail here used to end the
+    // source instantly, chain onended -> sequential next chunk -> clamp
+    // again: the audible looping bug. Fetch the right chunk instead.
+    const sameTarget = Math.abs(videoTime - outOfChunkTarget) < 1;
+    outOfChunkRetries = sameTarget ? outOfChunkRetries + 1 : 0;
+    outOfChunkTarget = videoTime;
+    if (outOfChunkRetries <= MAX_OUT_OF_CHUNK_RETRIES) {
+      void loadChunkAt(videoTime);
+      return;
+    }
+    // Positioning keeps missing this time — play the nearest edge of what
+    // we have rather than refetching forever
+    offset = Math.max(0, Math.min(offset, audioBuffer.duration - 0.5));
+  } else {
+    outOfChunkRetries = 0;
   }
+
+  stopAudioSource();
 
   const source = audioCtx.createBufferSource();
   source.buffer = audioBuffer;
@@ -138,7 +171,7 @@ function startAudioFrom(videoTime: number) {
 
   audioPlayCtxStart = audioCtx.currentTime;
   audioPlayVideoStart = videoTime;
-  source.start(0, clampedOffset);
+  source.start(0, offset);
   audioSource = source;
 }
 
@@ -301,23 +334,6 @@ async function continuePlayback() {
   }
 }
 
-function calcChunkRange(
-  videoTime: number,
-  videoDuration: number,
-  fileSize: number
-): { startByte: number; endByte: number } {
-  let startByte = 0;
-  if (fileSize > AUDIO_CHUNK_BYTES && videoDuration > 0) {
-    const approxByte = Math.floor((videoTime / videoDuration) * fileSize);
-    startByte = Math.max(0, approxByte - RANGE_ALIGN_BYTES);
-  }
-  const endByte =
-    fileSize > 0
-      ? Math.min(fileSize - 1, startByte + AUDIO_CHUNK_BYTES - 1)
-      : startByte + AUDIO_CHUNK_BYTES - 1;
-  return { startByte, endByte };
-}
-
 function getFileSize(url: string, signal: AbortSignal): Promise<number> {
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
@@ -376,9 +392,85 @@ async function prefetchNextChunk() {
   }
 }
 
+/**
+ * Fetch and activate the chunk covering seekTime, then start playback from
+ * the current video position. Single entry point for every "audio must jump
+ * somewhere outside the loaded chunk" case: user seeks, SponsorBlock/adblock
+ * skips, drift corrections landing out of range.
+ */
+async function loadChunkAt(seekTime: number) {
+  if (!audioCtx || !videoElement || !currentAudioUrl || !abortController)
+    return;
+
+  seekAbortController?.abort();
+  const localSeekVersion = ++seekVersion;
+
+  prefetchedChunk = null;
+  prefetchPromise = null;
+  prefetchGeneration++;
+
+  stopAudioSource();
+
+  const seekCtrl = new AbortController();
+  seekAbortController = seekCtrl;
+  const { startByte, endByte } = calcChunkRange(
+    seekTime,
+    currentVideoDuration,
+    currentFileSize
+  );
+
+  try {
+    const chunk = await fetchRangedChunk(
+      currentAudioUrl,
+      seekCtrl.signal,
+      startByte,
+      endByte,
+      currentFileSize
+    );
+    if (
+      seekCtrl.signal.aborted ||
+      !audioCtx ||
+      !videoElement ||
+      seekVersion !== localSeekVersion
+    )
+      return;
+    audioBuffer = chunk.buffer;
+    audioBufferStartTime = chunk.bufferStartTime;
+    currentChunkEndByte = chunk.endByte;
+    startAudioFrom(videoElement.currentTime);
+    if (videoElement.paused) audioCtx.suspend().catch(() => {});
+    void prefetchNextChunk();
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') return;
+    console.error('[VOT] seek chunk error:', err);
+  } finally {
+    if (seekAbortController === seekCtrl) seekAbortController = null;
+  }
+}
+
 function attachVideoListeners() {
   if (!videoElement || !audioCtx) return;
   const el = videoElement;
+
+  // Drift correction must stay quiet mid-seek and while a chunk fetch is
+  // in flight — correcting then restarts audio from a stale chunk
+  const driftCheckAllowed = () =>
+    !!audioCtx &&
+    !!videoElement &&
+    shouldRunDriftCheck({
+      ctxRunning: audioCtx.state === 'running',
+      paused: videoElement.paused,
+      seeking: videoElement.seeking,
+      seekPending: seekAbortController !== null
+    });
+
+  const correctDriftIfNeeded = () => {
+    if (!driftCheckAllowed() || !videoElement) return;
+    const drift = Math.abs(getAudioCurrentTime() - videoElement.currentTime);
+    if (drift > SYNC_DRIFT_THRESHOLD_S) {
+      startAudioFrom(videoElement.currentTime);
+    }
+  };
 
   const onPlay = () => {
     if (!audioCtx || !videoElement) return;
@@ -387,20 +479,11 @@ function attachVideoListeners() {
     if (audioCtx.state === 'suspended') {
       audioCtx
         .resume()
-        .then(() => {
-          if (!videoElement) return;
-          const drift = Math.abs(
-            getAudioCurrentTime() - videoElement.currentTime
-          );
-          if (drift > SYNC_DRIFT_THRESHOLD_S)
-            startAudioFrom(videoElement.currentTime);
-        })
+        .then(() => correctDriftIfNeeded())
         .catch(() => {});
       return;
     }
-    const drift = Math.abs(getAudioCurrentTime() - videoElement.currentTime);
-    if (drift > SYNC_DRIFT_THRESHOLD_S)
-      startAudioFrom(videoElement.currentTime);
+    correctDriftIfNeeded();
   };
 
   const onPause = () => {
@@ -411,76 +494,32 @@ function attachVideoListeners() {
     void stopTranslation();
   };
 
-  const onSeeked = async () => {
-    seekAbortController?.abort();
-    seekAbortController = null;
-
-    const localSeekVersion = ++seekVersion;
-
+  const onSeeked = () => {
     if (!audioCtx || !videoElement || !currentAudioUrl || !abortController)
       return;
 
     const seekTime = videoElement.currentTime;
-    const chunkEnd = audioBufferStartTime + (audioBuffer?.duration ?? 0);
 
-    if (seekTime >= audioBufferStartTime && seekTime < chunkEnd) {
+    if (
+      audioBuffer &&
+      resolveSyncAction(
+        seekTime,
+        audioBufferStartTime,
+        audioBuffer.duration
+      ) === 'play-offset'
+    ) {
       // Seek within the current chunk: keep the prefetched next chunk —
       // resetting it would re-download the same byte range on every seek
-      if (seekVersion !== localSeekVersion) return;
+      seekAbortController?.abort();
+      seekAbortController = null;
+      seekVersion++;
       startAudioFrom(seekTime);
       if (videoElement.paused) audioCtx.suspend().catch(() => {});
       void prefetchNextChunk();
       return;
     }
 
-    prefetchedChunk = null;
-    prefetchPromise = null;
-    prefetchGeneration++;
-
-    if (audioSource) {
-      audioSource.onended = null;
-      try {
-        audioSource.stop();
-      } catch {}
-      audioSource.disconnect();
-      audioSource = null;
-    }
-
-    const seekCtrl = new AbortController();
-    seekAbortController = seekCtrl;
-    const { startByte, endByte } = calcChunkRange(
-      seekTime,
-      currentVideoDuration,
-      currentFileSize
-    );
-
-    try {
-      const chunk = await fetchRangedChunk(
-        currentAudioUrl,
-        seekCtrl.signal,
-        startByte,
-        endByte,
-        currentFileSize
-      );
-      if (
-        seekCtrl.signal.aborted ||
-        !audioCtx ||
-        !videoElement ||
-        seekVersion !== localSeekVersion
-      )
-        return;
-      audioBuffer = chunk.buffer;
-      audioBufferStartTime = chunk.bufferStartTime;
-      currentChunkEndByte = chunk.endByte;
-      startAudioFrom(videoElement.currentTime);
-      if (videoElement.paused) audioCtx.suspend().catch(() => {});
-      void prefetchNextChunk();
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') return;
-      console.error('[VOT] seek chunk error:', err);
-    } finally {
-      if (seekAbortController === seekCtrl) seekAbortController = null;
-    }
+    void loadChunkAt(seekTime);
   };
 
   const onRateChange = () => {
@@ -489,19 +528,7 @@ function attachVideoListeners() {
     }
   };
 
-  const syncId = setInterval(() => {
-    if (
-      !audioCtx ||
-      !videoElement ||
-      audioCtx.state !== 'running' ||
-      videoElement.paused
-    )
-      return;
-    const drift = Math.abs(getAudioCurrentTime() - videoElement.currentTime);
-    if (drift > SYNC_DRIFT_THRESHOLD_S) {
-      startAudioFrom(videoElement.currentTime);
-    }
-  }, 5000);
+  const syncId = setInterval(correctDriftIfNeeded, 5000);
   syncIntervalId = syncId;
 
   el.addEventListener('play', onPlay);
