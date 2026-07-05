@@ -17,6 +17,14 @@ const PERF_CSS = `
 html {
   scroll-behavior: auto !important;
 }
+/* Keep loading spinners animated — a frozen loader looks broken. CSS can't
+   restore the original duration on old Chromium (no revert), so use a
+   typical 1s spin. */
+[class*="spinner" i], [class*="spinner" i] *,
+[class*="loader" i], [class*="loader" i] *,
+[class*="loading" i] [class*="icon" i] {
+  animation-duration: 1s !important;
+}
 `;
 
 function applyPerfMode(enabled: boolean) {
