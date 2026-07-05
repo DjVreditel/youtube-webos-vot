@@ -105,49 +105,7 @@ interface CustomEventTarget<T extends EmptyEventMap> {
   ): boolean;
 }
 
-// @vot-mod: `new EventTarget()` is an illegal constructor on
-// Chromium < 64 (webOS <= 4.x), which breaks every subclass below.
-const ConstructibleEventTarget = (() => {
-  try {
-    new EventTarget();
-    return EventTarget;
-  } catch {
-    class EventTargetShim {
-      private listeners = new Map<
-        string,
-        EventListenerOrEventListenerObject[]
-      >();
-      addEventListener(
-        type: string,
-        cb: EventListenerOrEventListenerObject | null
-      ) {
-        if (!cb) return;
-        const arr = this.listeners.get(type) ?? [];
-        arr.push(cb);
-        this.listeners.set(type, arr);
-      }
-      removeEventListener(
-        type: string,
-        cb: EventListenerOrEventListenerObject | null
-      ) {
-        const arr = this.listeners.get(type);
-        if (!arr || !cb) return;
-        const i = arr.indexOf(cb);
-        if (i !== -1) arr.splice(i, 1);
-      }
-      dispatchEvent(event: Event): boolean {
-        for (const cb of [...(this.listeners.get(event.type) ?? [])]) {
-          if (typeof cb === 'function') cb.call(this, event);
-          else cb.handleEvent(event);
-        }
-        return true;
-      }
-    }
-    return EventTargetShim as unknown as typeof EventTarget;
-  }
-})();
-
-export const CustomEventTarget = ConstructibleEventTarget as {
+export const CustomEventTarget = EventTarget as {
   new <T extends EmptyEventMap>(): CustomEventTarget<T>;
   prototype: CustomEventTarget<EmptyEventMap>;
 };

@@ -29,9 +29,3 @@ import './remove-endscreen';
 import './hooks';
 import './block-webos-cast';
 import './auto-account-select';
-
-// @vot-mod
-import './abort-controller-polyfill';
-import { initVot } from './vot';
-
-initVot();

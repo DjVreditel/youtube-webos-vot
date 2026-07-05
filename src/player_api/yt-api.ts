@@ -23,9 +23,6 @@ export type VideoID = string;
 
 export interface VideoData {
   video_id: VideoID | undefined;
-  // @vot-mod
-  defaultAudioLanguage?: string;
-  audioTracks?: Array<{ language?: string }>;
 }
 
 export type PlayerStateKeys =
