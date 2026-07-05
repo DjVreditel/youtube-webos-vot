@@ -182,7 +182,9 @@ function patchAuthServerUrl() {
   );
   if (updated === content) {
     if (!content.includes(`'${url}'`)) {
-      process.stderr.write('  WARNING: AUTH_SERVER constant not found in auth.ts\n');
+      process.stderr.write(
+        '  WARNING: AUTH_SERVER constant not found in auth.ts\n'
+      );
     }
     return;
   }
@@ -200,7 +202,9 @@ function patchAccountToken() {
   // The file is gitignored — the token is baked only into local builds.
   const tokenPath = path.join(__dirname, 'account-token.txt');
   if (!fs.existsSync(tokenPath)) {
-    process.stdout.write('  account-token.txt not found — lively voice stays anonymous\n');
+    process.stdout.write(
+      '  account-token.txt not found — lively voice stays anonymous\n'
+    );
     return;
   }
   const token = fs.readFileSync(tokenPath, 'utf8').trim();
@@ -220,7 +224,9 @@ function patchAccountToken() {
     return;
   }
   const currentMatch = content.match(re);
-  const currentToken = currentMatch ? currentMatch[0].match(/'([^']*)'\s*$/)?.[1] : '';
+  const currentToken = currentMatch
+    ? currentMatch[0].match(/'([^']*)'\s*$/)?.[1]
+    : '';
   if (currentToken === safeToken) {
     process.stdout.write('  account token already injected — skip\n');
     return;
@@ -598,7 +604,9 @@ function patchPackageManager() {
     typeof pkg.packageManager === 'string' &&
     pkg.packageManager.startsWith('npm@');
   if (alreadyNpm) {
-    process.stdout.write('  package.json (packageManager) already patched — skip\n');
+    process.stdout.write(
+      '  package.json (packageManager) already patched — skip\n'
+    );
     return;
   }
 
@@ -606,7 +614,9 @@ function patchPackageManager() {
     pkg.devEngines.packageManager.name = 'npm';
   }
   // packageManager must carry a valid corepack hash; drop it and let npm ignore the field
-  pkg.packageManager = 'npm@' + (process.env.npm_config_user_agent?.match(/npm\/(\S+)/)?.[1] ?? '11.0.0');
+  pkg.packageManager =
+    'npm@' +
+    (process.env.npm_config_user_agent?.match(/npm\/(\S+)/)?.[1] ?? '11.0.0');
 
   // lint:all uses `pnpm run` with a regex filter that npm doesn't support
   if (pkg.scripts?.['lint:all']?.includes('pnpm run')) {
@@ -614,8 +624,31 @@ function patchPackageManager() {
       'npm run lint:eslint && npm run lint:tsc && npm run lint:prettier';
   }
 
+  // npm's flat node_modules exposes fdir's picomatch import to tsc, which
+  // fails without its types (pnpm's isolated layout hides it)
+  if (pkg.devDependencies && !pkg.devDependencies['@types/picomatch']) {
+    pkg.devDependencies['@types/picomatch'] = '^4.0.2';
+  }
+
   fs.writeFileSync(filePath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
   process.stdout.write('  package.json (packageManager) patched\n');
+}
+
+function patchHuskyHook() {
+  // The upstream pre-commit hook runs `pnpm exec lint-staged`, which refuses
+  // to run once the project is switched to npm
+  const filePath = path.join(PROJECT_ROOT, '.husky', 'pre-commit');
+  if (!fs.existsSync(filePath)) {
+    process.stdout.write('  .husky/pre-commit not found — skip\n');
+    return;
+  }
+  const content = fs.readFileSync(filePath, 'utf8');
+  if (!content.includes('pnpm exec')) {
+    process.stdout.write('  .husky/pre-commit already patched — skip\n');
+    return;
+  }
+  fs.writeFileSync(filePath, content.replace(/pnpm exec/g, 'npx'), 'utf8');
+  process.stdout.write('  .husky/pre-commit patched\n');
 }
 
 process.stdout.write(`VOT_MOD patcher\nProject: ${PROJECT_ROOT}\n`);
@@ -624,8 +657,8 @@ if (process.argv.includes('--restore')) {
   step('Restoring original sources...');
   // Unstage first: `git checkout --` restores from the index, which may
   // hold patched content (e.g. after a failed lint-staged commit)
-  run('git reset -q -- src/ assets/ package.json tools/deploy.js');
-  run('git checkout -- src/ assets/ package.json tools/deploy.js');
+  run('git reset -q -- src/ assets/ package.json tools/deploy.js .husky/');
+  run('git checkout -- src/ assets/ package.json tools/deploy.js .husky/');
   run('git clean -f -q src/vot src/abort-controller-polyfill.ts');
   process.stdout.write('\n✓ Restore complete\n');
   process.exit(0);
@@ -669,6 +702,9 @@ patchAppId();
 
 step('Patching package manager (pnpm → npm)...');
 patchPackageManager();
+
+step('Patching .husky/pre-commit (pnpm -> npx)...');
+patchHuskyHook();
 
 process.stdout.write('\n✓ Patch complete\n');
 
