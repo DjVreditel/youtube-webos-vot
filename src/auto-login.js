@@ -192,6 +192,7 @@ export function attemptActiveBypass(force = false) {
     setTimeout(() => {
         // The option may have been turned off during the delay; stop and unhide the selector
         if (!shouldAutoSelectAccount()) {
+            hasBypassed = false;
             if (document.body) document.body.classList.remove(BYPASS_BODY_CLASS);
             return;
         }
