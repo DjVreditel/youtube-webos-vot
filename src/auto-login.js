@@ -170,7 +170,14 @@ function finalizeBypass() {
     }, 2000);
 }
 
+// Account selection is skipped only when the master toggle is on and the user
+// hasn't asked to be prompted for who is watching.
+function shouldAutoSelectAccount() {
+  return configRead('enableAutoLogin') && configRead('autoSelectAccount');
+}
+
 export function attemptActiveBypass(force = false) {
+    if (!shouldAutoSelectAccount()) return;
     const isSelector = document.body && document.body.classList.contains(SELECTORS.ACCOUNT_SELECTOR);
 
     // Note: launch-param gating was removed deliberately — we check for the
@@ -212,7 +219,7 @@ function setupActiveBypassListener() {
 export function initAutoLogin() {
   if (configRead('enableAutoLogin')) {
     console.info('[Auto Login] Initializing...');
-    disableWhosWatching();
+    if (configRead('autoSelectAccount')) disableWhosWatching();
     disablePromoUpsell();
     setupActiveBypassListener();
     
@@ -238,6 +245,12 @@ configAddChangeListener('enableAutoLogin', ({ detail }) => {
     disableWhosWatching(false); // Reset local storage time value
     disablePromoUpsell(false);
   }
+});
+
+configAddChangeListener('autoSelectAccount', ({ detail }) => {
+  if (!configRead('enableAutoLogin')) return;
+  // Re-apply (or clear) the 7 day "Who's watching" suppression to match the choice
+  disableWhosWatching(detail.newValue);
 });
 
 configAddChangeListener('forcePreviews', ({ detail }) => {
