@@ -13,22 +13,54 @@ const BYPASS_BODY_CLASS = 'ytaf-bypassing-login';
 let hasBypassed = false;
 let pageObserverAttached = false;
 
+const WHOS_WATCHING_SHIFT_MS = 7 * 24 * 60 * 60 * 1000;
+const ALWAYS_ASK_REFRESH_MS = 60 * 1000;
+let alwaysAskTimer = null;
+
 /**
  * Disables "Who's watching" by pushing the lastFired date 7 days into the future.
  * Credit: reisxd || https://github.com/reisxd/TizenTube/
  */
 function disableWhosWatching(enable = true) {
+  // Use a future date if enabling, or Date.now() if disabling
+  const targetDate = enable ? Date.now() + WHOS_WATCHING_SHIFT_MS : Date.now();
+  if (setWhosWatchingLastFired(targetDate)) {
+    console.info(`Auto login: "Who's watching" screens ${enable ? 'disabled' : 'enabled'}`);
+  }
+}
+
+/**
+ * Makes "Who's watching" show on every launch by dating lastFired 7 days into
+ * the past, so the app always considers it due. The app stamps lastFired itself
+ * when the screen fires, so the value is re-applied every minute while active.
+ * Same approach as TizenTube's "Permanently enable Who's Watching" option.
+ */
+function setAlwaysAskWhosWatching(enable) {
+  if (alwaysAskTimer) {
+    clearInterval(alwaysAskTimer);
+    alwaysAskTimer = null;
+  }
+  if (!enable) return;
+
+  const apply = () => setWhosWatchingLastFired(Date.now() - WHOS_WATCHING_SHIFT_MS);
+  if (apply()) console.info('[Auto Login] "Who\'s watching" will be shown on every launch');
+  alwaysAskTimer = setInterval(apply, ALWAYS_ASK_REFRESH_MS);
+}
+
+// Returns true if any of the account selector records were updated.
+function setWhosWatchingLastFired(targetDate) {
   try {
     const storedData = localStorage.getItem(STORAGE_KEY);
-    if (!storedData) return console.warn('Auto login: No recurring actions found');
+    if (!storedData) {
+      console.warn('Auto login: No recurring actions found');
+      return false;
+    }
 
     const json = JSON.parse(storedData);
     const actions = json.data?.data;
 
-    if (!actions) return;
+    if (!actions) return false;
 
-    // Use a future date if enabling, or Date.now() if disabling
-    const targetDate = enable ? Date.now() + (7 * 24 * 60 * 60 * 1000) : Date.now();
     let isModified = false;
 
     for (const key of TARGET_ACTIONS) {
@@ -38,12 +70,11 @@ function disableWhosWatching(enable = true) {
       }
     }
 
-    if (isModified) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(json));
-      console.info(`Auto login: "Who's watching" screens ${enable ? 'disabled' : 'enabled'}`);
-    }
+    if (isModified) localStorage.setItem(STORAGE_KEY, JSON.stringify(json));
+    return isModified;
   } catch (error) {
     console.error('Auto login: Failed to update settings:', error);
+    return false;
   }
 }
 
@@ -238,9 +269,13 @@ export function initAutoLogin() {
   }
 }
 
+function initAccountSelection() {
+  if (!configRead('autoSelectAccount')) setAlwaysAskWhosWatching(true);
+}
+
 document.readyState === 'loading'
-  ? document.addEventListener('DOMContentLoaded', () => { initAutoLogin(); initPreviews(); })
-  : (initAutoLogin(), initPreviews());
+  ? document.addEventListener('DOMContentLoaded', () => { initAutoLogin(); initAccountSelection(); initPreviews(); })
+  : (initAutoLogin(), initAccountSelection(), initPreviews());
 
 configAddChangeListener('enableAutoLogin', ({ detail }) => {
   if (detail.newValue) {
@@ -248,15 +283,16 @@ configAddChangeListener('enableAutoLogin', ({ detail }) => {
     initAutoLogin();
   } else {
     console.info('Auto login disabled');
-    disableWhosWatching(false); // Reset local storage time value
+    // Reset local storage time value, unless "always ask" is keeping it in the past
+    if (configRead('autoSelectAccount')) disableWhosWatching(false);
     disablePromoUpsell(false);
   }
 });
 
 configAddChangeListener('autoSelectAccount', ({ detail }) => {
-  if (!configRead('enableAutoLogin')) return;
-  // Re-apply (or clear) the 7 day "Who's watching" suppression to match the choice
-  disableWhosWatching(detail.newValue);
+  setAlwaysAskWhosWatching(!detail.newValue);
+  // Turning auto-select back on restores the 7 day suppression if auto login is on
+  if (detail.newValue && configRead('enableAutoLogin')) disableWhosWatching(true);
 });
 
 configAddChangeListener('forcePreviews', ({ detail }) => {
