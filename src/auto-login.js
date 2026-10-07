@@ -190,6 +190,11 @@ export function attemptActiveBypass(force = false) {
     injectBypassCSS();
 
     setTimeout(() => {
+        // The option may have been turned off during the delay; stop and unhide the selector
+        if (!shouldAutoSelectAccount()) {
+            if (document.body) document.body.classList.remove(BYPASS_BODY_CLASS);
+            return;
+        }
         if (isGuestMode()) {
             sendKey(REMOTE_KEYS.DOWN);
             setTimeout(() => { sendKey(REMOTE_KEYS.ENTER); finalizeBypass(); }, 200);
