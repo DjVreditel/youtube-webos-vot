@@ -42,9 +42,9 @@
     "@types/eslint": "^9.6.1",
     "@types/eslint-config-prettier": "^6.11.3",
     "@types/node": "^24.10.1",
-    "@webos-tools/cli": "^3.2.1",
+    "@webos-tools/cli": "^3.2.6",
     "babel-loader": "^10.0.0",
-    "copy-webpack-plugin": "^13.0.0",
+    "copy-webpack-plugin": "^14.0.0",
     "css-loader": "^7.1.2",
     "cssnano": "^7.1.2",
     "eslint": "^9.30.1",
@@ -59,6 +59,7 @@
     "postcss-preset-env": "^10.5.0",
     "prettier": "^3.7.4",
     "style-loader": "^4.0.0",
+    "terser-webpack-plugin": "^5.6.1",
     "transform-async-modules-webpack-plugin": "^1.1.1",
     "typescript": "^5.8.3",
     "webpack": "^5.103.0",
@@ -66,5 +67,11 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "allowScripts": {
+    "@webos-tools/cli": false,
+    "cpu-features": false,
+    "jasmine-spec-reporter": false,
+    "ssh2": false
   }
 }
