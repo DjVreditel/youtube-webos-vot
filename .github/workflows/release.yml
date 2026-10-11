@@ -15,6 +15,9 @@ name: Draft release
 # Later pushes to main with the same version refresh the same draft. Once a
 # version is published, nothing happens until package.json gets a new version
 # number - that starts the next draft.
+#
+# Drafts of other versions are deleted when a draft is made, so only the
+# current test build is on the Releases page.
 
 on:
   push:
@@ -119,3 +122,18 @@ jobs:
             gh release create "$TAG" out/*.ipk --draft --target "$GITHUB_SHA" --title "$VERSION" --notes-file notes.md
           fi
           echo "Draft release $TAG is ready: ${{ github.server_url }}/${{ github.repository }}/releases" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove drafts of other versions
+        if: steps.state.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          # Only one test build is current. Drafts were never published, so
+          # nothing that anyone installed from goes away with them.
+          gh api "repos/${{ github.repository }}/releases?per_page=100" \
+            --jq ".[] | select(.draft and .tag_name != \"$TAG\") | \"\(.id) \(.tag_name)\"" |
+          while read -r id tag; do
+            gh api -X DELETE "repos/${{ github.repository }}/releases/$id"
+            echo "Removed the stale draft $tag" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
