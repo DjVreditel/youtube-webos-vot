@@ -38,11 +38,38 @@ const CHAIN_SKIP_CONSTANTS = {
     MIN_PLAYBACK_TIME: 0.1
 };
 
+// By the API's names: the settings' 'musicofftopic' is 'music_offtopic' on the
+// server. Requesting the settings' spelling silently returned none of them.
+// normalizeSegments() maps the answer back to the settings' name.
 const FETCH_CATEGORIES = encodeURIComponent(JSON.stringify([
     'sponsor', 'intro', 'outro', 'interaction', 'selfpromo',
-    'musicofftopic', 'preview', 'chapter', 'poi_highlight',
+    'music_offtopic', 'preview', 'chapter', 'poi_highlight',
     'filler', 'hook'
 ]));
+
+// Waits before asking again when both servers failed. An empty answer is an
+// answer and is never retried.
+const FETCH_RETRY_DELAYS = [2000, 4000];
+
+function isWellFormedSegment(entry) {
+    return !!entry &&
+        typeof entry.category === 'string' &&
+        Array.isArray(entry.segment) &&
+        typeof entry.segment[0] === 'number' &&
+        typeof entry.segment[1] === 'number';
+}
+
+/** Drops malformed API entries and maps API category names to the settings' names. */
+function normalizeSegments(segments) {
+    const out = [];
+    for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        if (!isWellFormedSegment(seg)) continue;
+        if (seg.category === 'music_offtopic') seg.category = 'musicofftopic';
+        out.push(seg);
+    }
+    return out;
+}
 /**
  * Full-video labels are always requested.
  *
@@ -79,6 +106,9 @@ class SponsorBlockHandler {
         this.lastNotifiedSegmentIndex = -1;
         this.hasPerformedChainSkip = false;
         this.skipSegments = [];
+        this.muteSegments = [];
+        this.mutedSegment = null;
+        this.mutedBefore = false;
         this.nextSegmentIndex = 0;
         this.nextSegmentStart = Infinity;
 
@@ -248,6 +278,7 @@ class SponsorBlockHandler {
 
     rebuildSkipSegments() {
         this.stopHighFreqLoop();
+        this.rebuildMuteSegments();
 
         if (!this.segments || this.segments.length === 0 || this.activeCategories.size === 0) {
             this.skipSegments = [];
@@ -278,6 +309,59 @@ class SponsorBlockHandler {
             });
         }
         this.resetSegmentTracking();
+    }
+
+    /**
+     * Segments the API marks `mute` are muted rather than skipped, when
+     * "Allow segments that mute audio" is on and their category is set to
+     * auto or manual skip. The viewer's own mute state comes back on the way
+     * out, on a seek away and on destroy.
+     */
+    rebuildMuteSegments() {
+        const config = configGetAll();
+        const list = [];
+        if (config.enableMutedSegments && this.segments) {
+            for (let i = 0; i < this.segments.length; i++) {
+                const seg = this.segments[i];
+                if (seg.actionType !== 'mute' || seg.category === 'poi_highlight') continue;
+                const mode = config[CONFIG_MAPPING[seg.category]];
+                if (mode !== 'auto_skip' && mode !== 'manual_skip') continue;
+                list.push({ start: seg.segment[0], end: seg.segment[1], categoryName: this.getCategoryName(seg.category) });
+            }
+        }
+        this.muteSegments = list;
+        this.checkMutedSegment();
+    }
+
+    checkMutedSegment() {
+        const video = this.video;
+        if (!video || this.isDestroyed) return;
+        if (!this.muteSegments || this.muteSegments.length === 0) {
+            this.leaveMutedSegment();
+            return;
+        }
+        const t = video.currentTime;
+        let current = null;
+        for (let i = 0; i < this.muteSegments.length; i++) {
+            const seg = this.muteSegments[i];
+            if (t >= seg.start && t < seg.end) { current = seg; break; }
+        }
+        if (!current) {
+            this.leaveMutedSegment();
+            return;
+        }
+        if (this.mutedSegment === current) return;
+        if (!this.mutedSegment) this.mutedBefore = video.muted;
+        this.mutedSegment = current;
+        video.muted = true;
+        const name = current.categoryName;
+        showNotification(`Muted ${name.charAt(0).toUpperCase() + name.slice(1)} segment`);
+    }
+
+    leaveMutedSegment() {
+        if (!this.mutedSegment) return;
+        this.mutedSegment = null;
+        if (this.video) this.video.muted = this.mutedBefore;
     }
 
     toggleTimeListener(enable) {
@@ -529,18 +613,29 @@ class SponsorBlockHandler {
         const hashPrefix = hash.substring(0, 4);
 
         try {
-            const data = await this.fetchSegments(hashPrefix);
+            let data = await this.fetchSegments(hashPrefix);
+            // Both servers failed: ask again a couple of times before giving
+            // up on this video.
+            for (let attempt = 0; data === null && attempt < FETCH_RETRY_DELAYS.length; attempt++) {
+                if (this.isDestroyed || this.videoID !== initVideoID) return;
+                // eslint-disable-next-line no-await-in-loop
+                await new Promise(resolve => setTimeout(resolve, FETCH_RETRY_DELAYS[attempt]));
+                if (this.isDestroyed || this.videoID !== initVideoID) return;
+                // eslint-disable-next-line no-await-in-loop
+                data = await this.fetchSegments(hashPrefix);
+            }
             if (this.isDestroyed || this.videoID !== initVideoID) return;
-            const videoData = Array.isArray(data) ? data.find(x => x.videoID === this.videoID) : data;
+            const videoData = Array.isArray(data) ? data.find(x => x && x.videoID === this.videoID) : data;
+            const segments = videoData && Array.isArray(videoData.segments) ? normalizeSegments(videoData.segments) : [];
 
-            if (!videoData || !videoData.segments || videoData.segments.length === 0) {
+            if (segments.length === 0) {
                 this.log('debug', 'No SponsorBlock segments available, cleaning up');
                 this.destroy(); 
                 return;
             }
 
             // sort in place is fine
-            this.segments = videoData.segments.sort((a, b) => a.segment[0] - b.segment[0]);
+            this.segments = segments.sort((a, b) => a.segment[0] - b.segment[0]);
             this.highlightSegment = this.segments.find(s => s.category === 'poi_highlight');
 
             // Use 'this.video' if start() already found it, or re-query
@@ -653,6 +748,7 @@ class SponsorBlockHandler {
 
         this.addEvent(this.video, 'seeked', () => {
             if (this.isDestroyed) return;
+            this.checkMutedSegment();
             this._clearSkipWatchdog();
             this.stopHighFreqLoop();
             this.hasPerformedChainSkip = false;
@@ -675,6 +771,10 @@ class SponsorBlockHandler {
                 this.drawOverlay();
                 this.updateLabels();
             }
+        });
+
+        this.addEvent(this.video, 'timeupdate', () => {
+            if (this.muteSegments && (this.muteSegments.length || this.mutedSegment)) this.checkMutedSegment();
         });
 
         this.addEvent(this.video, 'playing', () => {
@@ -761,6 +861,7 @@ class SponsorBlockHandler {
     }
 
     _rebindVideo() {
+        this.leaveMutedSegment();
         const old = this.video;
         if (old) {
             if (this.isTimeListenerActive) {
@@ -1405,7 +1506,10 @@ class SponsorBlockHandler {
                     ]);
                 }
 
-                return res.ok ? await res.json() : null;
+                if (res.ok) return await res.json();
+                // 404 is the API saying it has nothing for this prefix - an
+                // answer, not a failure worth retrying.
+                return res.status === 404 ? [] : null;
             } catch (e) {
                 if (!this.isDestroyed && e.name !== 'AbortError') {
                     this.log('warn', 'Fetch attempt failed:', e.message);
@@ -1455,6 +1559,7 @@ class SponsorBlockHandler {
         this.chainSkipVideo = null;
 
         window.__sb_pending_unmute = false;
+        this.leaveMutedSegment();
 
         if (this.abortController) {
             this.abortController.abort();
@@ -1559,4 +1664,4 @@ if (typeof window !== 'undefined') {
     } else {
         window.addEventListener('load', () => setTimeout(initSB, 500), { once: true });
     }
-}
+}

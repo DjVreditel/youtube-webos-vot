@@ -752,8 +752,14 @@ class ReturnYouTubeDislike {
   }
 
   formatNumber(num) {
-    if (num >= 1e6) return (num / 1e6).toFixed(1).replace(/\.0$/, '') + 'm';
-    if (num >= 1e3) return (num / 1e3).toFixed(1).replace(/\.0$/, '') + 'k';
+    // Rounded first, so a count just under a unit moves up to it: 999,950 is
+    // "1m", not "1000k".
+    const fmt = (value, unit) => value.toFixed(1).replace(/\.0$/, '') + unit;
+    if (num >= 1e6) return fmt(num / 1e6, 'm');
+    if (num >= 1e3) {
+      const k = Math.round(num / 100) / 10;
+      return k >= 1000 ? fmt(k / 1000, 'm') : fmt(k, 'k');
+    }
     return num.toString();
   }
   
@@ -849,4 +855,4 @@ if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', cleanup, { passive: true });
 }
 
-export { ReturnYouTubeDislike };
+export { ReturnYouTubeDislike };

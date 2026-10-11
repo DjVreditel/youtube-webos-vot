@@ -17,76 +17,111 @@
  * The bounded BFS is kept for the case where both are true but the shape has
  * moved, so an InnerTube schema change degrades to "slower" rather than
  * "silently stops working".
+ *
+ * The flag is set on a copy of the chain down to contentPlaybackContext, never
+ * on YouTube's own objects - see withNoAdFlag().
  */
 const originalStringify = JSON.stringify;
-const hasOwn = Object.prototype.hasOwnProperty;
 const MAX_DEPTH = 6;
 // Bounds the fallback walk. A request body is a few hundred nodes; anything
 // far past that is not the object we are looking for.
 const MAX_NODES = 2000;
 const DEBUG = false;
 
-function findCtx(root: any): any {
-  const queue: any[] = [root, 0];
+/**
+ * Path (list of keys) from `root` to the object holding `playbackContext`,
+ * or null. The path is what lets stringify() rebuild the chain with copies
+ * instead of writing into YouTube's own objects.
+ */
+function findCtxPath(root: any): string[] | null {
+  // Flat queue: [node, depth, parentIndex, key, ...]; parentIndex points at
+  // the entry's own slot so the path can be read back once found.
+  const queue: any[] = [root, 0, -1, ''];
   let i = 0;
   let visited = 0;
   while (i < queue.length) {
     if (++visited > MAX_NODES) return null;
+    const self = i;
     const node = queue[i++];
     const depth = queue[i++];
+    i += 2;
     if (!node || typeof node !== 'object' || depth > MAX_DEPTH) continue;
     const pc = node.playbackContext;
     if (pc && typeof pc === 'object' && pc.contentPlaybackContext) {
-      return pc.contentPlaybackContext;
+      const path: string[] = [];
+      for (let at = self; at > 0; at = queue[at + 2]) path.push(queue[at + 3]);
+      return path.reverse();
     }
     const nextDepth = depth + 1;
     for (const k in node) {
       const v = node[k];
-      if (v && typeof v === 'object') queue.push(v, nextDepth);
+      if (v && typeof v === 'object') queue.push(v, nextDepth, self, k);
     }
   }
   return null;
 }
 
+function copyOf(obj: any): any {
+  return Array.isArray(obj) ? obj.slice() : Object.assign({}, obj);
+}
+
+/**
+ * Copy of `value` with isInlinePlaybackNoAd set on the contentPlaybackContext
+ * reached through `path`. Only the chain down to it is copied; everything else
+ * is shared.
+ *
+ * YouTube ships a "locker" that defines isInlinePlaybackNoAd as
+ * non-writable/non-configurable (and request bodies can be frozen), so an
+ * in-place write silently fails and the server answers with the SABR backoff
+ * that stalls playback a few seconds in. JSON.stringify only serializes own
+ * enumerable properties, so a shallow copy serializes identically while
+ * dropping the locked descriptor.
+ */
+function withNoAdFlag(value: any, path: string[]): any {
+  const root = copyOf(value);
+  let node = root;
+  for (const key of path) {
+    node[key] = copyOf(node[key]);
+    node = node[key];
+  }
+  const pc = copyOf(node.playbackContext);
+  pc.contentPlaybackContext = Object.assign({}, pc.contentPlaybackContext, {
+    isInlinePlaybackNoAd: true
+  });
+  node.playbackContext = pc;
+  return root;
+}
+
 function stringify(value: any, replacer?: any, space?: any): string {
-  let ctx = null;
-  let had = false;
-  let prev;
   try {
     if (value !== null && typeof value === 'object') {
+      let path: string[] | null = null;
       // (1) The shape YouTube actually sends - no traversal at all.
       const rootPc = (value as any).playbackContext;
       if (rootPc && typeof rootPc === 'object' && rootPc.contentPlaybackContext) {
-        ctx = rootPc.contentPlaybackContext;
+        path = [];
       } else if (
         (value as any).context &&
         typeof (value as any).context === 'object'
       ) {
         // (2) Looks like an InnerTube request, but not the expected shape.
-        ctx = findCtx(value);
+        path = findCtxPath(value);
       }
 
-      if (ctx && ctx.isInlinePlaybackNoAd !== true) {
-        had = hasOwn.call(ctx, 'isInlinePlaybackNoAd');
-        prev = ctx.isInlinePlaybackNoAd;
-        ctx.isInlinePlaybackNoAd = true;
-        if (DEBUG) console.info('[JSON.stringify] Set isInlinePlaybackNoAd');
-      } else {
-        ctx = null;
+      if (path) {
+        let ctx = value;
+        for (const key of path) ctx = ctx[key];
+        if (ctx.playbackContext.contentPlaybackContext.isInlinePlaybackNoAd !== true) {
+          value = withNoAdFlag(value, path);
+          if (DEBUG) console.info('[JSON.stringify] Set isInlinePlaybackNoAd');
+        }
       }
     }
   } catch (e) {
-    ctx = null; // our logic must never break YouTube's serialization
+    // our logic must never break YouTube's serialization
   }
 
-  try {
-    return originalStringify(value, replacer, space);
-  } finally {
-    if (ctx) {
-      if (had) ctx.isInlinePlaybackNoAd = prev;
-      else delete ctx.isInlinePlaybackNoAd;
-    }
-  }
+  return originalStringify(value, replacer, space);
 }
 
 JSON.stringify = stringify;

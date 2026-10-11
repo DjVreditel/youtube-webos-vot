@@ -9,12 +9,13 @@ import { initVideoQuality } from './video-quality.js';
 import { initLogoStyle } from './logo-style.js';
 // import { initPlaybackSpeed, stepSpeed, resetSpeed } from './playback-speed.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
-import { sendKey, REMOTE_KEYS, COLOR_CODE_MAP, isGuestMode, isWatchPage, isShortsPage, isSearchPage, SELECTORS, getVideo } from './utils.js';
+import { sendKey, REMOTE_KEYS, COLOR_CODE_MAP, isGuestMode, isWatchPage, isShortsPage, isSearchPage, SELECTORS, getVideo, SYNTHETIC_KEY_FLAG } from './utils.js';
 import { syncAdblockHook, initTrackingBlock, destroyTrackingBlock } from './adblock.js';
 import logoBlueUrl from './icons/logo-blue.png';
 import logoRedUrl from './icons/logo-red.png';
 import logoDarkUrl from './icons/logo-dark.png';
-import { getWebOSVersion } from './webos-utils.js';
+import { getWebOSVersion, isWebOS25 } from './webos-utils.js';
+import { subtitleTranslateLanguages } from './subtitle-translate.js';
 import { showNotification as _showNotification, setNotificationOled, setNotificationTheme } from './notifications.js';
 
 // Re-export so existing `import { showNotification } from './ui'` sites keep working.
@@ -26,6 +27,12 @@ let oledKeepAliveTimer = null;
 let lastShortcutTime = 0;
 let lastShortcutKey = -1;
 let shortcutDebounceTime = 100;
+// Burst actions opt out of the debounce so seeks can be repeated quickly, but
+// they still have to swallow the duplicate one physical press produces: the
+// colour buttons emit two codes that both map to the same name (red 403/166,
+// green 404/172, yellow 405/170, blue 406/167/191) in the same tick. No remote
+// repeats inside 50ms, and held-key repeat is already dropped by evt.repeat.
+const BURST_DUPLICATE_MS = 50;
 
 // Seek Burst Variables
 let seekAccumulator = 0;
@@ -44,9 +51,9 @@ let panelInitBlock = false;
 
 const shortcutCache = {};
 // Define keys including colors
-const shortcutKeys = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'red', 'green', 'blue'];
+const shortcutKeys = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'red', 'green', 'yellow', 'blue'];
 
-const COLOR_KEYS = new Set(['red', 'green', 'blue']);
+const COLOR_KEYS = new Set(['red', 'green', 'yellow', 'blue']);
 
 const cachedSelectors = {
     comments: null,
@@ -101,6 +108,7 @@ window.addEventListener('ytaf-page-update', (e) => {
 const ACTION_SCOPES = {
     config_menu: 'GLOBAL',
     oled_toggle: 'GLOBAL',
+    sleep_timer: 'GLOBAL',
     refresh_page: 'NON_VIDEO',
     chapter_skip: 'VIDEO',
     chapter_skip_prev: 'VIDEO',
@@ -541,7 +549,7 @@ function createOptionsPanel() {
       }
     } else if (evt.keyCode === REMOTE_KEYS.ENTER.code) {
       if (evt instanceof KeyboardEvent) document.activeElement.click();
-    } else if (evt.keyCode === 27) { // Escape
+    } else if (evt.keyCode === 27 || evt.keyCode === REMOTE_KEYS.BACK.code) { // Escape / remote Back
       showOptionsPanel(false);
     }
     evt.preventDefault(); evt.stopPropagation();
@@ -608,9 +616,14 @@ function createOptionsPanel() {
   [createConfigCheckbox('forceHighResVideo'),
   //createConfigCheckbox('enablePlaybackSpeed'),
   createVideoCodecControl(),
+  createAlignedCycleControl('subtitleTranslateLang', subtitleTranslateLanguages),
   createConfigCheckbox('hideEndcards'),
+  createConfigCheckbox('enableScrollSeek'),
   createConfigCheckbox('enableReturnYouTubeDislike')]));
-  pageMain.appendChild(createSection('Interface', [createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('upgradeThumbnails'), createThumbnailQualityControl(), createLogoControl(), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')]));
+  const interfaceGroup = [createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('upgradeThumbnails'), createThumbnailQualityControl(), createLogoControl(), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')];
+  // The cast block only exists on webOS 25 (see userScript.js).
+  if (isWebOS25()) interfaceGroup.push(createConfigCheckbox('blockWebosCast'));
+  pageMain.appendChild(createSection('Interface', interfaceGroup));
   elmContainer.appendChild(pageMain);
 
   // --- Pages 2-4: built off the critical path ---
@@ -919,6 +932,26 @@ function performBurstSeek(seconds, video) {
     }, 1200);
 }
 
+// --- Magic Remote scroll-wheel seeking ---
+// While the progress bar has focus, each wheel notch seeks: up is forward,
+// down is back. Anywhere else the wheel keeps scrolling as before. Ported from
+// jesvijonathan's fork, onto the burst-seek path so rapid notches coalesce
+// into one seek and one notification.
+const SCROLL_SEEK_STEP_S = 10;
+const isProgressBarFocused = () => !!document.querySelector('ytlr-progress-bar.ytLrProgressBarFocused, ytlr-progress-bar[focused]');
+
+function handleScrollSeek(evt) {
+    if (!configRead('enableScrollSeek') || optionsPanelVisible) return;
+    if (!isWatchPage() || !evt.deltaY || !isProgressBarFocused()) return;
+    const video = getVideo();
+    if (!video || !video.duration) return;
+    evt.preventDefault();
+    evt.stopPropagation();
+    performBurstSeek(evt.deltaY > 0 ? -SCROLL_SEEK_STEP_S : SCROLL_SEEK_STEP_S, video);
+}
+
+window.addEventListener('wheel', handleScrollSeek, { passive: false, capture: true });
+
 function triggerInternal(element, name) {
   if (!element) return false;
   let success = false;
@@ -1159,6 +1192,37 @@ function playPauseLogic(video) {
     }
 }
 
+// --- Sleep Timer ---
+// Each press steps to the next duration; past the last one it switches off.
+// When it runs out the video is paused, so the TV's own idle timer and
+// screensaver take over as if the viewer had stopped watching.
+const SLEEP_TIMER_STEPS_MIN = [15, 30, 60, 90, 120];
+let sleepTimerStep = -1;
+let sleepTimerId = null;
+
+function clearSleepTimer() {
+    if (sleepTimerId) { clearTimeout(sleepTimerId); sleepTimerId = null; }
+    sleepTimerStep = -1;
+}
+
+function cycleSleepTimer() {
+    const next = sleepTimerStep + 1;
+    clearSleepTimer();
+    if (next >= SLEEP_TIMER_STEPS_MIN.length) {
+        showNotification('Sleep timer off');
+        return;
+    }
+    sleepTimerStep = next;
+    const minutes = SLEEP_TIMER_STEPS_MIN[next];
+    sleepTimerId = setTimeout(() => {
+        clearSleepTimer();
+        const video = getVideo();
+        if (video && !video.paused) video.pause();
+        showNotification('Sleep timer: playback paused');
+    }, minutes * 60000);
+    showNotification(`Sleep timer: ${minutes} min`);
+}
+
 function handleShortcutAction(action) {
   // Global Actions - Do not require Video
   if (action === 'config_menu') {
@@ -1170,12 +1234,18 @@ function handleShortcutAction(action) {
       let overlay = document.getElementById('oled-black-overlay');
       if (overlay) {
           overlay.remove();
+          document.documentElement.classList.remove('ytaf-oled-blackout');
           if (oledKeepAliveTimer) { clearInterval(oledKeepAliveTimer); oledKeepAliveTimer = null; }
           showNotification('OLED Mode Deactivated');
       } else {
           if (optionsPanelVisible) showOptionsPanel(false);
-          overlay = createElement('div', { id: 'oled-black-overlay', style: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: '#000', zIndex: 9999 }});
+          // Below the notification container (1200) so the toasts - this
+          // feature's own included - are not painted behind the blackout, and
+          // above the settings panel (1000). The clock (1199) is hidden by the
+          // class instead, so it does not burn in on a black screen.
+          overlay = createElement('div', { id: 'oled-black-overlay', style: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: '#000', zIndex: 1100 }});
           document.body.appendChild(overlay);
+          document.documentElement.classList.add('ytaf-oled-blackout');
           
           // Keep TV awake by simulating input
           oledKeepAliveTimer = setInterval(() => {
@@ -1184,6 +1254,10 @@ function handleShortcutAction(action) {
           }, 30 * 60 * 1000);
           showNotification('OLED Mode Activated');
       }
+      return;
+  }
+  if (action === 'sleep_timer') {
+      cycleSleepTimer();
       return;
   }
   if (action === 'refresh_page') {
@@ -1272,6 +1346,9 @@ function handleShortcutAction(action) {
 
 const eventHandler = (evt) => {
   if (evt.repeat) return;
+  // Keys this mod synthesises (screensaver keep-alive sends Yellow, play/pause
+  // sends Back) must never trigger a binding.
+  if (evt[SYNTHETIC_KEY_FLAG] || evt.isTrusted === false) return true;
 
   const code = evt.keyCode || evt.charCode; 
   const keyColor = getKeyColor(code);
@@ -1308,7 +1385,9 @@ const eventHandler = (evt) => {
   const isBurstAction = action === 'seek_15_fwd' || action === 'seek_15_back';
   const now = Date.now();
 
-  if (!isBurstAction && now - lastShortcutTime < shortcutDebounceTime && lastShortcutKey === keyName) {
+  const dedupeWindow = isBurstAction ? BURST_DUPLICATE_MS : shortcutDebounceTime;
+
+  if (now - lastShortcutTime < dedupeWindow && lastShortcutKey === keyName) {
       evt.preventDefault();
       evt.stopPropagation();
       return false;
@@ -1327,7 +1406,13 @@ const eventHandler = (evt) => {
   return false;
 };
 
-document.addEventListener('keydown', eventHandler, true);
+// window, not document, and in the capture phase. YouTube's own key handler
+// sits on window capture and calls stopPropagation for the colour keys it
+// claims - yellow routes to search - so a document-capture listener never saw
+// a trusted yellow keydown at all. The userScript runs before YouTube's app
+// code, so registering here first resolves our binding before theirs. Keys
+// with no binding return without preventDefault and propagate as before.
+window.addEventListener('keydown', eventHandler, true);
 
 // --- Initialization & CSS Injection ---
 
@@ -1341,6 +1426,8 @@ function initGlobalStyles() {
     const style = createElement('style');
     style.textContent = `
         :root { --ytaf-oled-opacity: 1; }
+
+        html.ytaf-oled-blackout .webOs-watch { display: none !important; }
 
         html.ytaf-hide-logo ytlr-redux-connect-ytlr-logo-entity,
         html.ytaf-hide-logo ytlr-logo-entity { visibility: hidden !important; }
@@ -1540,4 +1627,4 @@ configAddChangeListener('videoShelfOpacity', () => {
 syncAdblockHook();
 syncTrackingBlock();
 
-setTimeout(() => showNotification('Press [GREEN] to open SponsorBlock configuration screen'), 2000);
+setTimeout(() => showNotification('Press [GREEN] to open SponsorBlock configuration screen'), 2000);

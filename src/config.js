@@ -52,6 +52,7 @@ export const shortcutActions = {
   toggle_description: 'Toggle Description',
   save_to_playlist: 'Save / Watch Later',
   oled_toggle: 'Toggle OLED Black Overlay',
+  sleep_timer: 'Sleep Timer (15/30/60/90/120 min, off)',
   sb_manual_skip: 'Manual Skip / Jump to Highlight',
   config_menu: 'Open/Close Settings'
   //speed_up: 'Playback Speed +',
@@ -124,6 +125,7 @@ const configOptions = new Map([
   ['sbMode_hook', { default: 'seek_bar', desc: 'Hook/Greetings' }],
   ['sbMode_highlight', { default: 'seek_bar', desc: 'Highlight' }],
   ['hideEndcards', { default: false, desc: 'Hide Endcards' }],
+  ['enableScrollSeek', { default: false, desc: 'Magic Remote: Scroll Wheel Seeks on Progress Bar' }],
   ['enableAutoLogin', { default: true, desc: 'Bypass Nag Screens' }],
   ['logoStyle', { default: 'default', desc: 'YouTube Logo' }],
   ['showWatch', { default: false, desc: 'Display Time in UI' }],
@@ -136,7 +138,9 @@ const configOptions = new Map([
   ['hideGuestSignInPrompts', { default: false, desc: 'Guest Mode: Hide Sign-in Buttons' }],
   ['forceHighResVideo', { default: false, desc: 'Force Max Quality' }],
   ['forceVideoCodec', { default: 'auto', desc: 'Force Video Codec' }],
+  ['subtitleTranslateLang', { default: 'off', desc: 'Auto-Translate Subtitles' }],
   //['enablePlaybackSpeed', { default: true, desc: 'Playback Speed Control' }],
+  ['blockWebosCast', { default: true, desc: 'Block webOS Cast Service (webOS 25)' }],
   ['disableNotifications', { default: false, desc: 'Disable Notifications' }]
 ]);
 
@@ -145,8 +149,9 @@ for (let i = 0; i < 10; i++) {
   configOptions.set(`shortcut_key_${i}`, { default: i === 5 ? 'chapter_skip' : 'none', desc: `Key ${i} Action` });
 }
 
-// Register shortcut keys Red, Green, Blue
-['red', 'green', 'blue'].forEach(color => {
+// Register shortcut keys Red, Green, Yellow, Blue. Yellow defaults to 'none' so
+// YouTube's own binding for it (search) keeps working until it is claimed.
+['red', 'green', 'yellow', 'blue'].forEach(color => {
     let def = 'none';
     if (color === 'red') def = 'oled_toggle';
     if (color === 'green') def = 'config_menu';
@@ -248,4 +253,4 @@ export function configGetDefault(key) {
 // Export the live object reference directly for zero-overhead caching
 export function configGetAll() {
   return localConfig;
-}
+}
