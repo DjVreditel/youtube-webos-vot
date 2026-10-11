@@ -16,6 +16,7 @@ function ensureContainer() {
   notificationContainer = makeEl('div', 'ytaf-notification-container');
   if (configRead('enableOledCareMode')) notificationContainer.classList.add('oled-care');
   if (configRead('uiTheme') === 'classic-red') notificationContainer.classList.add('theme-classic-red');
+  if (configRead('uiTheme') === 'fox') notificationContainer.classList.add('theme-fox');
   document.body.appendChild(notificationContainer);
   return notificationContainer;
 }
@@ -90,4 +91,5 @@ export function setNotificationOled(enabled) {
 export function setNotificationTheme(theme) {
   if (!notificationContainer) return;
   notificationContainer.classList.toggle('theme-classic-red', theme === 'classic-red');
+  notificationContainer.classList.toggle('theme-fox', theme === 'fox');
 }

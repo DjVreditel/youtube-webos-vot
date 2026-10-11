@@ -11,6 +11,7 @@ import { initLogoStyle } from './logo-style.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { sendKey, REMOTE_KEYS, COLOR_CODE_MAP, isGuestMode, isWatchPage, isShortsPage, isSearchPage, SELECTORS, getVideo, SYNTHETIC_KEY_FLAG } from './utils.js';
 import { syncAdblockHook, initTrackingBlock, destroyTrackingBlock } from './adblock.js';
+import logoOrangeUrl from './icons/logo-orange.png';
 import logoBlueUrl from './icons/logo-blue.png';
 import logoRedUrl from './icons/logo-red.png';
 import logoDarkUrl from './icons/logo-dark.png';
@@ -54,6 +55,19 @@ const shortcutCache = {};
 const shortcutKeys = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'red', 'green', 'yellow', 'blue'];
 
 const COLOR_KEYS = new Set(['red', 'green', 'yellow', 'blue']);
+
+// The settings panel's tabs, in order. `focus` is what takes focus when the
+// tab is opened from inside a page. The old Main tab grew past the height of a
+// 1080p screen, so it is split into Filters, Player and Interface.
+const SETTINGS_PAGES = [
+  { id: 'filters', name: 'Filters', focus: 'input' },
+  { id: 'player', name: 'Player', focus: 'input, .shortcut-control-row' },
+  { id: 'interface', name: 'Interface', focus: 'input, .shortcut-control-row' },
+  { id: 'sponsor', name: 'SponsorBlock', focus: '.shortcut-control-row, input' },
+  { id: 'shortcuts', name: 'Shortcuts', focus: '.shortcut-control-row' },
+  { id: 'ui-tweaks', name: 'UI Tweaks', focus: '.shortcut-control-row, input' }
+];
+const SPONSOR_PAGE = 3;
 
 const cachedSelectors = {
     comments: null,
@@ -444,7 +458,8 @@ function createOptionsPanel() {
 
   let activePage = 0;
   elmContainer.activePage = 0;
-  let pageMain, pageSponsor, pageShortcuts, pageUITweaks;
+  // One element per entry of SETTINGS_PAGES, filled as each page is built.
+  const pages = [];
 
   const tabMenu = createElement('div', { 
     class: 'ytaf-tab-menu',
@@ -457,8 +472,7 @@ function createOptionsPanel() {
       }
     }
   });
-  const tabs = ['Main', 'SponsorBlock', 'Shortcuts', 'UI Tweaks'];
-  const tabBtns = tabs.map((name, index) => createElement('button', {
+  const tabBtns = SETTINGS_PAGES.map(({ name }, index) => createElement('button', {
       class: index === 0 ? 'ytaf-tab-btn active' : 'ytaf-tab-btn',
       text: name,
       tabIndex: 0,
@@ -472,17 +486,13 @@ function createOptionsPanel() {
 	const setActivePage = (pageIndex) => {
 	  if (pageIndex === activePage) return; // Don't do work if we are already on this tab
 	  ensurePage(pageIndex);   // may still be queued behind the idle build chain
-	  const pagesArray = [pageMain, pageSponsor, pageShortcuts, pageUITweaks];
-	  const focusSelectors = ['input', '.shortcut-control-row, input', '.shortcut-control-row', '.shortcut-control-row, input'];
-	  const hasPopups = [false, true, false, false];
-
 	  // 1. Deactivate old state
-	  pagesArray[activePage].style.display = 'none';
+	  pages[activePage].style.display = 'none';
 	  tabBtns[activePage].classList.remove('active');
 
 	  // 2. Set new state
 	  activePage = elmContainer.activePage = pageIndex;
-	  pagesArray[activePage].style.display = 'block';
+	  pages[activePage].style.display = 'block';
 	  tabBtns[activePage].classList.add('active');
 
 	  // 3. Focus management
@@ -490,12 +500,12 @@ function createOptionsPanel() {
 	  const isTabFocused = activeEl && activeEl.classList.contains('ytaf-tab-btn');
 	  
 	  if (!isTabFocused) {
-		const focusTarget = pagesArray[activePage].querySelector(focusSelectors[activePage]);
+		const focusTarget = pages[activePage].querySelector(SETTINGS_PAGES[activePage].focus);
 		if (focusTarget) focusTarget.focus();
 	  }
 	  
 	  // 4. Handle SponsorBlock popup state
-	  sponsorBlockUI.togglePopup(hasPopups[activePage] && isWatchPage());
+	  sponsorBlockUI.togglePopup(activePage === SPONSOR_PAGE && isWatchPage());
 	};
 
   // Keyboard Navigation for the Options Panel
@@ -533,8 +543,7 @@ function createOptionsPanel() {
 
         if (preFocus === postFocus) {
           const activeTabBtn = tabBtns[activePage];
-		  const pagesList = [pageMain, pageSponsor, pageShortcuts, pageUITweaks];
-		  const visiblePage = pagesList[activePage]; 
+		  const visiblePage = pages[activePage];
 		  let pageFocusables = [];
 
 		  if (visiblePage) {
@@ -562,14 +571,19 @@ function createOptionsPanel() {
   const toggleTheme = (evt) => { 
       evt.preventDefault(); 
       evt.stopPropagation(); 
-      configWrite('uiTheme', configRead('uiTheme') === 'blue-force-field' ? 'classic-red' : 'blue-force-field'); 
+      // Fox -> blue -> red -> Fox.
+      const order = ['fox', 'blue-force-field', 'classic-red'];
+      const next = order[(order.indexOf(configRead('uiTheme')) + 1) % order.length];
+      configWrite('uiTheme', next);
       const activeTab = tabBtns[activePage];
       if (activeTab) activeTab.focus();
   };
-  const createLogo = (src, cls) => createElement('img', { src, alt: 'Logo', class: `ytaf-logo ${cls}`, title: 'Click to switch theme', style: cls !== 'logo-blue' ? { display: 'none' } : {}, events: { click: toggleTheme }});
+  // All start hidden; updateLogoState() shows the one for the current theme.
+  const createLogo = (src, cls) => createElement('img', { src, alt: 'Logo', class: `ytaf-logo ${cls}`, title: 'Click to switch theme', style: { display: 'none' }, events: { click: toggleTheme }});
   
   const elmHeading = createElement('h1', {},
     createElement('span', { text: 'YouTube Extended' }),
+    createLogo(logoOrangeUrl, 'logo-orange'),
     createLogo(logoBlueUrl, 'logo-blue'),
     createLogo(logoRedUrl, 'logo-red'),
     createLogo(logoDarkUrl, 'logo-dark')
@@ -577,8 +591,22 @@ function createOptionsPanel() {
   elmContainer.appendChild(elmHeading);
   elmContainer.appendChild(tabMenu);
 
-  // --- Page 1: Main ---
-  pageMain = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-main' });
+  // A page element: the first one visible, the others hidden until their tab
+  // is picked. They are appended in build order, which does not matter since
+  // only one is ever displayed.
+  const makePage = (index) => {
+    const page = createElement('div', {
+      class: 'ytaf-settings-page ytaf-page-sectioned',
+      id: `ytaf-page-${SETTINGS_PAGES[index].id}`,
+      style: index === 0 ? {} : { display: 'none' }
+    });
+    pages[index] = page;
+    elmContainer.appendChild(page);
+    return page;
+  };
+
+  // --- Page 1: Filters ---
+  const pageFilters = makePage(0);
   
   const elAdBlock = createConfigCheckbox('enableAdBlock');
   const elTrackingBlock = createConfigCheckbox('enableTrackingBlock');
@@ -591,7 +619,7 @@ function createOptionsPanel() {
   cosmeticGroup.push(elRemoveGlobalShorts, elRemoveLiveVideos, elRemoveTopLiveGames, elRemoveMostRelevant);
   if (isGuestMode()) { elGuestPrompts = createConfigCheckbox('hideGuestSignInPrompts'); cosmeticGroup.push(elGuestPrompts); }
 
-  pageMain.appendChild(createSection('Cosmetic Filtering', cosmeticGroup, 'ytaf-section-2col'));
+  pageFilters.appendChild(createSection('Cosmetic Filtering', cosmeticGroup, 'ytaf-section-2col'));
 
   // Dependency Management
   const setState = (el, enabled) => { if (!el) return; const input = el.querySelector('input'); if (input) { input.disabled = !enabled; el.style.opacity = enabled ? '1' : '0.5'; }};
@@ -616,7 +644,8 @@ function createOptionsPanel() {
   configAddChangeListener('enableAdBlock', updateDependencyState);
   updateDependencyState();
 
-  pageMain.appendChild(createSection('Video Player',
+  // --- Page 2: Player ---
+  makePage(1).appendChild(createSection('Video Player',
   [createConfigCheckbox('forceHighResVideo'),
   //createConfigCheckbox('enablePlaybackSpeed'),
   createVideoCodecControl(),
@@ -627,20 +656,24 @@ function createOptionsPanel() {
   const interfaceGroup = [createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('autoSelectAccount'), createConfigCheckbox('upgradeThumbnails'), createThumbnailQualityControl(), createLogoControl(), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')];
   // The cast block only exists on webOS 25 (see userScript.js).
   if (isWebOS25()) interfaceGroup.push(createConfigCheckbox('blockWebosCast'));
-  pageMain.appendChild(createSection('Interface', interfaceGroup));
-  elmContainer.appendChild(pageMain);
+  // --- Page 3: Interface ---
+  makePage(2).appendChild(createSection('Interface', interfaceGroup));
 
-  // --- Pages 2-4: built off the critical path ---
+  // --- Pages 4-6: built off the critical path ---
   //
-  // Only the Main page is built up front - building all four inside the keydown
-  // handler cost 170ms on webOS 3, three quarters of it on display:none pages.
-  // The rest build one per animation frame once the panel is up, and
-  // setActivePage() forces a synchronous build if the user beats the chain.
+  // Only the first three pages (the old Main page) are built up front -
+  // building every page inside the keydown handler cost 170ms on webOS 3, most
+  // of it on display:none pages. The rest build one per animation frame once
+  // the panel is up, and setActivePage() forces a synchronous build if the user
+  // beats the chain.
   const pageBuilders = [
     null,
+    null,
+    null,
     function buildSponsorPage() {
-  // --- Page 2: SponsorBlock ---
-    pageSponsor = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-sponsor', style: { display: 'none' }});
+  // --- Page 4: SponsorBlock ---
+    const pageSponsor = makePage(SPONSOR_PAGE);
+    pageSponsor.classList.remove('ytaf-page-sectioned');
     pageSponsor.appendChild(createConfigCheckbox('enableSponsorBlock'));
   
     const elmBlock = createElement('blockquote', {},
@@ -654,19 +687,18 @@ function createOptionsPanel() {
     );
     pageSponsor.appendChild(elmBlock);
     pageSponsor.appendChild(createElement('div', {}, createElement('small', { text: 'Sponsor segments skipping - https://sponsor.ajay.app' })));
-    elmContainer.appendChild(pageSponsor);
 
       },
     function buildShortcutsPage() {
-  // --- Page 3: Shortcuts ---
-    pageShortcuts = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-shortcuts', style: { display: 'none' }});
+  // --- Page 5: Shortcuts ---
+    const pageShortcuts = makePage(4);
+    pageShortcuts.classList.remove('ytaf-page-sectioned');
     shortcutKeys.forEach(key => { pageShortcuts.appendChild(createShortcutControl(key)); });
-    elmContainer.appendChild(pageShortcuts);
   
       },
     function buildUITweaksPage() {
-  // --- Page 4: UI Tweaks ---
-    pageUITweaks = createElement('div', { class: 'ytaf-settings-page', id: 'ytaf-page-ui-tweaks', style: { display: 'none' }});
+  // --- Page 6: UI Tweaks ---
+    const pageUITweaks = makePage(5);
   
     const playerUITweaks = [
         createOpacityControl('videoShelfOpacity'),
@@ -682,8 +714,6 @@ function createOptionsPanel() {
     }
 
     pageUITweaks.appendChild(createSection('Player UI Tweaks', playerUITweaks));
-  
-    elmContainer.appendChild(pageUITweaks);
 
       }
   ];
@@ -746,7 +776,7 @@ function showOptionsPanel(visible) {
     // on screen. Doing it inside the keydown handler is what made opening the
     // panel a 170ms freeze on webOS 3.
     if (optionsPanel.buildDeferredPages) optionsPanel.buildDeferredPages();
-    if (optionsPanel.activePage === 1 && (isWatchPage())) sponsorBlockUI.togglePopup(true);
+    if (optionsPanel.activePage === SPONSOR_PAGE && (isWatchPage())) sponsorBlockUI.togglePopup(true);
     else sponsorBlockUI.togglePopup(false);
     
     // Find best initial focus
@@ -1551,15 +1581,13 @@ function initGlobalStyles() {
 function updateLogoState() {
   const theme = configRead('uiTheme');
   const isOled = configRead('enableOledCareMode');
-  const [logoBlue, logoRed, logoDark] = ['.logo-blue', '.logo-red', '.logo-dark'].map(c => document.querySelector(`.ytaf-logo${c}`));
-  if (!logoBlue || !logoRed || !logoDark) return;
-
-  if (isOled) { logoBlue.style.display = 'none'; logoRed.style.display = 'none'; logoDark.style.display = ''; }
-  else {
-    logoDark.style.display = 'none';
-    if (theme === 'classic-red') { logoRed.style.display = ''; logoBlue.style.display = 'none'; }
-    else { logoRed.style.display = 'none'; logoBlue.style.display = ''; }
-  }
+  const wanted = isOled ? 'logo-dark'
+    : theme === 'classic-red' ? 'logo-red'
+    : theme === 'fox' ? 'logo-orange'
+    : 'logo-blue';
+  document.querySelectorAll('.ytaf-logo').forEach((logo) => {
+    logo.style.display = logo.classList.contains(wanted) ? '' : 'none';
+  });
 }
 
 function syncOledShelfOpacity() {
@@ -1586,6 +1614,7 @@ function applyOledMode(enabled) {
 function applyTheme(theme) {
   if (optionsPanel) {
       optionsPanel.classList.toggle('theme-classic-red', theme === 'classic-red');
+      optionsPanel.classList.toggle('theme-fox', theme === 'fox');
   }
   setNotificationTheme(theme);
   updateLogoState();
@@ -1607,6 +1636,14 @@ initLogoStyle();
 // Initial apply (will skip UI elements if they don't exist yet, but handle global styles)
 applyOledMode(configRead('enableOledCareMode'));
 configAddChangeListener('enableOledCareMode', (evt) => applyOledMode(evt.detail.newValue));
+
+// The Fox theme is this fork's default. An install that already stored the
+// old default (blue) is moved to it once; after that the choice is the
+// viewer's.
+if (!configRead('foxThemeApplied')) {
+  configWrite('foxThemeApplied', true);
+  if (configRead('uiTheme') === 'blue-force-field') configWrite('uiTheme', 'fox');
+}
 
 applyTheme(configRead('uiTheme'));
 configAddChangeListener('uiTheme', (evt) => applyTheme(evt.detail.newValue));
