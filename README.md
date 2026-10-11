@@ -29,9 +29,16 @@ page, and the newest ones are also in [`dist/`](dist):
 
 Install it in one of three ways:
 
-- **[webOS Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel)**: add this fork's repo link,
-  `https://raw.githubusercontent.com/foxi69/youtube-webos/main/repo.json`, so updates come from here. It
-  follows this fork's published releases. NicholasBly's repo link would replace this build with NicholasBly's.
+- **[webOS Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel)**: add the repo link for your
+  TV, so updates come from this fork's published releases:
+
+  | TVs | Repo link |
+  |---|---|
+  | webOS 22 and newer | `https://raw.githubusercontent.com/foxi69/youtube-webos/main/repo-webos22.json` |
+  | webOS 3-6 (or any TV) | `https://raw.githubusercontent.com/foxi69/youtube-webos/main/repo.json` |
+
+  Add only one of them: both builds install as the same app, and Homebrew Channel offers the update from the link
+  you added. NicholasBly's repo link would replace this build with NicholasBly's.
 - **[Device Manager app](https://github.com/webosbrew/dev-manager-desktop)**: install the downloaded `.ipk`.
 - **[webOS TV CLI tools](https://webostv.developer.lge.com/develop/tools/cli-installation)**:
   `ares-install youtube...ipk` (see [Development TV setup](#development-tv-setup)).
@@ -246,8 +253,8 @@ Releases are drafted automatically and published only after a test on the TV:
 2. Download the `.ipk` from the draft on the [Releases](https://github.com/foxi69/youtube-webos/releases)
    page and install it on the TV.
 3. If it works, open the draft and press **Publish release**. That creates the tag and runs
-   [Update Homebrew Repository](.github/workflows/build_repo.yml), which points `repo.json` at the new
-   release, so Homebrew Channel offers the update.
+   [Update Homebrew Repository](.github/workflows/build_repo.yml), which points `repo.json` (legacy) and
+   `repo-webos22.json` (webOS 22+) at the new release, so Homebrew Channel offers the update.
 
 More pushes with the same version refresh the same draft. Drafts of other versions are deleted, so only the
 current test build is listed.

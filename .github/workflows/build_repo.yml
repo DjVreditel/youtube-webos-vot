@@ -67,8 +67,6 @@ jobs:
               print("No .ipk files found in the latest release")
               sys.exit(1)
               
-          packages = []
-          
           def create_package(asset, is_modern=False):
               ipk_url = asset['browser_download_url']
               print(f"Downloading IPK from {ipk_url}")
@@ -89,15 +87,15 @@ jobs:
               title = app_info.get('title')
               description = app_info.get('description', title)
               
-              # Overrides for modern build
-              # Only when both builds are released side by side: with the webOS 22+
-              # build alone it is the app itself, and Homebrew Channel matches the
-              # id against the installed app, which is youtube.leanback.v4.
-              if is_modern and standard_asset:
-                  pkg_id = f"{pkg_id}.webos22"
+              # Both .ipk files install as the same app (assets/appinfo.json), and
+              # Homebrew Channel matches a repository entry to the installed app
+              # by id. So each build gets its own repository file with the real
+              # id: a webOS 22+ TV that follows repo-webos22.json is offered the
+              # 22+ package as its update, never the legacy one.
+              if is_modern:
                   title = f"{title} (webOS 22+)"
                   description = "YouTube AdFree for webOS 22 and newer. Lighter optimized build supporting newer hardware."
-              
+
               manifest = {
                   "id": pkg_id,
                   "version": app_info.get('version'),
@@ -121,33 +119,29 @@ jobs:
                   "manifest": manifest
               }
 
-          if standard_asset:
-              print("Processing Standard Asset...")
-              pkg = create_package(standard_asset)
-              if pkg: packages.append(pkg)
-              
-          if modern_asset:
-              print("Processing Modern (webOS 22+) Asset...")
-              pkg = create_package(modern_asset, is_modern=True)
-              if pkg: packages.append(pkg)
-          
-          repo_data = {
-              "paging": {
-                  "page": 1,
-                  "count": len(packages),
-                  "maxPage": 1,
-                  "itemsTotal": len(packages)
-              },
-              "packages": packages
-          }
-          
-          with open('repo.json', 'w') as f:
-              json.dump(repo_data, f, indent=2)
-          
-          print("repo.json generated successfully!")
+          def write_repo(path, pkg):
+              data = {
+                  "paging": {"page": 1, "count": 1, "maxPage": 1, "itemsTotal": 1},
+                  "packages": [pkg]
+              }
+              with open(path, 'w') as f:
+                  json.dump(data, f, indent=2)
+              print(f"{path} generated")
+
+          # repo.json: the legacy package (webOS 3 and newer), which runs on every
+          # TV, so a link that was added before the split keeps working.
+          # repo-webos22.json: the lighter webOS 22+ package.
+          legacy_pkg = create_package(standard_asset) if standard_asset else None
+          modern_pkg = create_package(modern_asset, is_modern=True) if modern_asset else None
+          if not legacy_pkg and not modern_pkg:
+              sys.exit(1)
+          write_repo('repo.json', legacy_pkg or modern_pkg)
+          if modern_pkg:
+              write_repo('repo-webos22.json', modern_pkg)
+
         shell: python
         
-      - name: Commit and Push repo.json
+      - name: Commit and Push the repository files
         run: |
           git config --global user.name 'GitHub Actions'
           git config --global user.email 'actions@github.com'
@@ -157,7 +151,7 @@ jobs:
           git checkout main
           
           # Add and commit changes
-          git add repo.json
+          git add repo*.json
           
           # Only commit if there are changes
           if git diff --staged --quiet; then

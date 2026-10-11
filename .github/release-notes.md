@@ -13,9 +13,9 @@ a settings panel in a new Fox look. Built on [NicholasBly/youtube-webos](https:/
 
 The official YouTube app has to be uninstalled first.
 
-- **[Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel)**: add
-  `https://raw.githubusercontent.com/foxi69/youtube-webos/main/repo.json` as a repository, so updates come from
-  this fork. If the default webosbrew repository offers YouTube AdFree 0.5.3 as an "update", ignore it: that
+- **[Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel)**: add one repository, so updates
+  come from this fork: `https://raw.githubusercontent.com/foxi69/youtube-webos/main/repo-webos22.json` on webOS 22
+  and newer, `https://raw.githubusercontent.com/foxi69/youtube-webos/main/repo.json` on webOS 3-6. If the default webosbrew repository offers YouTube AdFree 0.5.3 as an "update", ignore it: that
   is the older webosbrew build under the same app id.
 - **[Device Manager](https://github.com/webosbrew/dev-manager-desktop)**: install the downloaded `.ipk`.
 - **[webOS TV CLI tools](https://webostv.developer.lge.com/develop/tools/cli-installation)**:
