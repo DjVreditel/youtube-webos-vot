@@ -217,8 +217,12 @@ Releases are drafted automatically and published only after a test on the TV:
    [Update Homebrew Repository](.github/workflows/build_repo.yml), which points `repo.json` at the new
    release, so Homebrew Channel offers the update.
 
-More pushes with the same version refresh the same draft. After a version is published, a new draft starts
-when the version in `package.json` changes.
+More pushes with the same version refresh the same draft. Drafts of other versions are deleted, so only the
+current test build is listed.
+
+**Version rule:** the version in `package.json` is raised only after the previous version has been tested and
+published. Until then every change goes into the current version and its draft. After publishing, the next
+change bumps the version, which starts a new draft.
 
 ## Staying up to date with upstream
 
