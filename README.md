@@ -98,9 +98,10 @@ Review changes made since 0.3.8 [here](https://github.com/NicholasBly/youtube-we
 
 ## Installation
 
-- **This fork:** install the `.ipk` (webOS 22 and newer) from the
-  [Releases](https://github.com/foxi69/youtube-webos/releases) page, or the newest one in
-  [`dist/`](dist), with the [Device Manager app](https://github.com/webosbrew/dev-manager-desktop)
+- **This fork:** install an `.ipk` from the
+  [Releases](https://github.com/foxi69/youtube-webos/releases) page, or the newest ones in
+  [`dist/`](dist): `..._all_webOS22+.ipk` for webOS 22 and newer (2022+ TVs, lighter and faster),
+  or `..._all.ipk` for webOS 3-6 (2016-2021 TVs, also runs on newer ones). Install it with the [Device Manager app](https://github.com/webosbrew/dev-manager-desktop)
   or `ares-install`. With [webOS Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel),
   add this fork's repo link instead, so updates come from here:
   `https://raw.githubusercontent.com/foxi69/youtube-webos/main/repo.json`
@@ -169,8 +170,8 @@ npm run build:modern && npm run package
 
 Releases are drafted automatically and published only after a test on the TV:
 
-1. Every push to `main` runs [Draft release](.github/workflows/release.yml). It builds the webOS 22+
-   `.ipk` and puts it in a **draft** release `v<version>` (version from `package.json`), with that
+1. Every push to `main` runs [Draft release](.github/workflows/release.yml). It builds both `.ipk`
+   files (webOS 22+ and legacy webOS 3-6) and puts them in a **draft** release `v<version>` (version from `package.json`), with that
    version's CHANGELOG section as notes. Drafts are visible only to the repository's owner and
    collaborators.
 2. Download the `.ipk` from the draft on the [Releases](https://github.com/foxi69/youtube-webos/releases)

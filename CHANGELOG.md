@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.8.6] - 2026/10/11
 
+Ships both packages again: `_webOS22+.ipk` for webOS 22 and newer, and the legacy `.ipk` for webOS 3-6.
+
 ## Added
 
 + **SponsorBlock: Periodically Check for New Segments** (on by default). Segments are often submitted after a video is uploaded. While a video plays, it is checked again every 15 minutes, or with a 5/10/20/30 minute back-off while it has no segments or the servers fail. A check that comes due during a pause runs on resume. New segments show up on the bar and are skipped without reopening the video, and "Skip Segments Once" remembers what it already skipped. From Yasich217's fork.
