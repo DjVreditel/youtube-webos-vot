@@ -29,6 +29,7 @@ Fixes and features collected from the other forks of youtube-webos (webosbrew up
 + SponsorBlock: when both servers fail, the request is retried after 2s and 4s. A 404 counts as "no segments" and is not retried, and malformed API entries are dropped.
 + Settings panel: the old Main tab grew taller than a 1080p screen and its bottom rows could not be reached. It is now split into **Filters**, **Player** and **Interface** tabs, six tabs in all. A page that is still too tall scrolls instead of being cut off.
 + Settings panel: a setting whose name wraps to two lines in the two-column Filters section ("Remove "Most Relevant" Shelf") no longer hangs its second line to the left of the first.
++ The "Press [GREEN] to open the settings" hint at startup showed a fixed 2s after launch for 3s, so on a TV still showing the splash or the account picker it was never seen. It now waits until YouTube shows a real page, and stays up for 6s.
 + Settings panel: the remote's Back button closes it.
 + Shortcuts: a seek bound to a colour button no longer jumps twice. Keys the mod synthesises (the screensaver keep-alive and the play/pause Back) can no longer trigger a binding.
 + OLED black overlay: notifications show above it again, and the clock is hidden under it.

@@ -1685,4 +1685,23 @@ configAddChangeListener('videoShelfOpacity', () => {
 syncAdblockHook();
 syncTrackingBlock();
 
-setTimeout(() => showNotification('Press [GREEN] to open SponsorBlock configuration screen'), 2000);
+// Startup hint. It used to fire a fixed 2s after the script loaded and stay
+// 3s, so on a TV still showing the splash or the account picker it came and
+// went unseen. Wait instead until YouTube shows a real page (a
+// WEB_PAGE_TYPE_* class on <body> that is not the account selector), then
+// show it a little longer. Gives up waiting after 30s and shows it anyway.
+(function showStartupHint() {
+  const startedAt = Date.now();
+  const pageReady = () => {
+    const cls = (document.body && document.body.className) || '';
+    return cls.indexOf('WEB_PAGE_TYPE_') !== -1 && cls.indexOf(SELECTORS.ACCOUNT_SELECTOR) === -1;
+  };
+  const check = () => {
+    if (pageReady() || Date.now() - startedAt > 30000) {
+      setTimeout(() => showNotification('Press [GREEN] to open the settings', 6000), 1000);
+      return;
+    }
+    setTimeout(check, 500);
+  };
+  setTimeout(check, 1000);
+})();
