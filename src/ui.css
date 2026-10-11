@@ -178,6 +178,16 @@
   flex: 1;
 }
 
+/* Wrapped lines line up under the first one, with a little more leading than
+   the single-line rows use. The left margin is the gap the old non-breaking
+   space gave. */
+.ytaf-ui-container label .label-text {
+  flex: 1;
+  min-width: 0;
+  margin-left: 0.6vh;
+  line-height: 1.1;
+}
+
 .ytaf-ui-container label .color-picker-controls {
   display: flex;
   align-items: center;

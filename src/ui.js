@@ -242,7 +242,11 @@ const createElement = (tag, props = {}, ...children) => {
 function createConfigCheckbox(key) {
   const elmInput = createElement('input', { type: 'checkbox', checked: configRead(key), events: { change: (evt) => configWrite(key, evt.target.checked) }});
   
-  const labelContent = createElement('div', { class: 'label-content', style: { fontSize: '2.1vh' } }, elmInput, `\u00A0${configGetDesc(key)}`);
+  // The text sits in its own element: as a bare text node with a leading
+  // non-breaking space, a label that wrapped to two lines (two-column
+  // sections) indented only its first line, so the second hung to the left.
+  const labelText = createElement('span', { class: 'label-text', text: configGetDesc(key) });
+  const labelContent = createElement('div', { class: 'label-content', style: { fontSize: '2.1vh' } }, elmInput, labelText);
   const elmLabel = createElement('label', {}, labelContent);
   
   // elmInput.addEventListener('focus', () => elmLabel.classList.add('focused'));
