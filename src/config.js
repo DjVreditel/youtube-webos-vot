@@ -19,6 +19,13 @@ export const segmentTypes = {
  * pointing at the other file and matching its intrinsic width - see
  * applyLogoStyle() in ui.js.
  */
+/** Settings panel themes, in the order the Theme control and the logo cycle them. */
+export const uiThemes = {
+  fox: 'Fox',
+  'blue-force-field': 'Blue',
+  'classic-red': 'Red'
+};
+
 export const logoStyles = {
   default: 'Default',
   premium: 'Premium',

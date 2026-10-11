@@ -1,6 +1,6 @@
 /*global navigate*/
 import './spatial-navigation-polyfill.js';
-import { logoStyles, thumbnailQualityModes, videoCodecModes } from './config.js';
+import { logoStyles, thumbnailQualityModes, videoCodecModes, uiThemes } from './config.js';
 import { configAddChangeListener, configRead, configWrite, configGetDesc, segmentTypes, configGetDefault, shortcutActions, sbModes, sbModesHighlight, forcePreviewModes } from './config.js';
 import './ui.css';
 import './auto-login.js';
@@ -242,7 +242,11 @@ const createElement = (tag, props = {}, ...children) => {
 function createConfigCheckbox(key) {
   const elmInput = createElement('input', { type: 'checkbox', checked: configRead(key), events: { change: (evt) => configWrite(key, evt.target.checked) }});
   
-  const labelContent = createElement('div', { class: 'label-content', style: { fontSize: '2.1vh' } }, elmInput, `\u00A0${configGetDesc(key)}`);
+  // The text sits in its own element: as a bare text node with a leading
+  // non-breaking space, a label that wrapped to two lines (two-column
+  // sections) indented only its first line, so the second hung to the left.
+  const labelText = createElement('span', { class: 'label-text', text: configGetDesc(key) });
+  const labelContent = createElement('div', { class: 'label-content', style: { fontSize: '2.1vh' } }, elmInput, labelText);
   const elmLabel = createElement('label', {}, labelContent);
   
   // elmInput.addEventListener('focus', () => elmLabel.classList.add('focused'));
@@ -572,7 +576,7 @@ function createOptionsPanel() {
       evt.preventDefault(); 
       evt.stopPropagation(); 
       // Fox -> blue -> red -> Fox.
-      const order = ['fox', 'blue-force-field', 'classic-red'];
+      const order = Object.keys(uiThemes);
       const next = order[(order.indexOf(configRead('uiTheme')) + 1) % order.length];
       configWrite('uiTheme', next);
       const activeTab = tabBtns[activePage];
@@ -653,7 +657,9 @@ function createOptionsPanel() {
   createConfigCheckbox('hideEndcards'),
   createConfigCheckbox('enableScrollSeek'),
   createConfigCheckbox('enableReturnYouTubeDislike')]));
-  const interfaceGroup = [createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('autoSelectAccount'), createConfigCheckbox('upgradeThumbnails'), createThumbnailQualityControl(), createLogoControl(), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')];
+  // The logo in the header also cycles the theme, but a remote cannot focus
+  // it, so the setting needs a row of its own to be reachable on a TV.
+  const interfaceGroup = [createAlignedCycleControl('uiTheme', uiThemes), createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('autoSelectAccount'), createConfigCheckbox('upgradeThumbnails'), createThumbnailQualityControl(), createLogoControl(), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')];
   // The cast block only exists on webOS 25 (see userScript.js).
   if (isWebOS25()) interfaceGroup.push(createConfigCheckbox('blockWebosCast'));
   // --- Page 3: Interface ---
@@ -1679,4 +1685,23 @@ configAddChangeListener('videoShelfOpacity', () => {
 syncAdblockHook();
 syncTrackingBlock();
 
-setTimeout(() => showNotification('Press [GREEN] to open SponsorBlock configuration screen'), 2000);
+// Startup hint. It used to fire a fixed 2s after the script loaded and stay
+// 3s, so on a TV still showing the splash or the account picker it came and
+// went unseen. Wait instead until YouTube shows a real page (a
+// WEB_PAGE_TYPE_* class on <body> that is not the account selector), then
+// show it a little longer. Gives up waiting after 30s and shows it anyway.
+(function showStartupHint() {
+  const startedAt = Date.now();
+  const pageReady = () => {
+    const cls = (document.body && document.body.className) || '';
+    return cls.indexOf('WEB_PAGE_TYPE_') !== -1 && cls.indexOf(SELECTORS.ACCOUNT_SELECTOR) === -1;
+  };
+  const check = () => {
+    if (pageReady() || Date.now() - startedAt > 30000) {
+      setTimeout(() => showNotification('Press [GREEN] to open the settings', 6000), 1000);
+      return;
+    }
+    setTimeout(check, 500);
+  };
+  setTimeout(check, 1000);
+})();
