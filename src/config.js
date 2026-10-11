@@ -100,7 +100,10 @@ export const videoCodecModes = {
 };
 
 const configOptions = new Map([
-  ['uiTheme', { default: 'blue-force-field', desc: 'UI Theme' }],
+  ['uiTheme', { default: 'fox', desc: 'UI Theme' }],
+  // Set once the Fox theme has been made the default for an existing install,
+  // so a later switch back to blue or red sticks. Not shown in the panel.
+  ['foxThemeApplied', { default: false, desc: 'Fox theme applied once' }],
   ['enableAdBlock', { default: true, desc: 'Ad Blocking' }],
   ['enableTrackingBlock', { default: false, desc: 'Reduce Telemetry & Tracking' }],
   ['enableReturnYouTubeDislike', { default: true, desc: 'Return YouTube Dislike' }],

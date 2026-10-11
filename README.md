@@ -62,6 +62,9 @@ Every coloured button and number key can be set to any of these actions on the *
 
 ## Settings
 
+The panel has three themes: **Fox** (orange, the default), **Blue** and **Red**. Click the fox logo in the
+panel header to switch between them. OLED-Care Mode turns any of them true black.
+
 The settings panel opens with 🟩 Green and has six tabs. Defaults are in the right-hand column. A setting
 marked *webOS 25* or *guest* only appears there.
 
@@ -203,17 +206,13 @@ other forks of the project; credits are in [CHANGELOG.md](CHANGELOG.md).
 - UI fixes:
   - full description panel navigation;
   - multiline titles and video shelf opacity;
-  - themes, YouTube logo style, emoji fix for webOS 3-4.
+  - Fox, Blue and Red panel themes, YouTube logo style, emoji fix for webOS 3-4.
 
-<img width="642" height="752" alt="Settings panel" src="https://github.com/user-attachments/assets/046b0361-0648-4750-ab97-0b64b553ec17" />
+![Settings panel, Fox theme](screenshots/foxi69/tab-2-player.png)
 
-<img width="642" height="631" alt="Settings panel, SponsorBlock" src="https://github.com/user-attachments/assets/61963e1b-8211-439a-9f66-50b669940233" />
+![Themes: Fox, Blue, Red, Fox with OLED-Care](screenshots/foxi69/themes.png)
 
-<img width="642" height="576" alt="Settings panel, Shortcuts" src="https://github.com/user-attachments/assets/877a22b6-6814-457b-926c-cac50ed36077" />
-
-<img width="1280" height="720" alt="Video with SponsorBlock segments" src="https://github.com/user-attachments/assets/84c8b6b3-4c82-4a63-9100-b236f2dd3225" />
-
-![Segment Skipped](https://github.com/NicholasBly/youtube-webos/blob/main/screenshots/2_sm_new.png?raw=true)
+More screenshots of every tab are in [`screenshots/foxi69/`](screenshots/foxi69).
 
 ## Where this fork comes from
 

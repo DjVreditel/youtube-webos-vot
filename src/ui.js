@@ -11,6 +11,7 @@ import { initLogoStyle } from './logo-style.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { sendKey, REMOTE_KEYS, COLOR_CODE_MAP, isGuestMode, isWatchPage, isShortsPage, isSearchPage, SELECTORS, getVideo, SYNTHETIC_KEY_FLAG } from './utils.js';
 import { syncAdblockHook, initTrackingBlock, destroyTrackingBlock } from './adblock.js';
+import logoOrangeUrl from './icons/logo-orange.png';
 import logoBlueUrl from './icons/logo-blue.png';
 import logoRedUrl from './icons/logo-red.png';
 import logoDarkUrl from './icons/logo-dark.png';
@@ -570,14 +571,19 @@ function createOptionsPanel() {
   const toggleTheme = (evt) => { 
       evt.preventDefault(); 
       evt.stopPropagation(); 
-      configWrite('uiTheme', configRead('uiTheme') === 'blue-force-field' ? 'classic-red' : 'blue-force-field'); 
+      // Fox -> blue -> red -> Fox.
+      const order = ['fox', 'blue-force-field', 'classic-red'];
+      const next = order[(order.indexOf(configRead('uiTheme')) + 1) % order.length];
+      configWrite('uiTheme', next);
       const activeTab = tabBtns[activePage];
       if (activeTab) activeTab.focus();
   };
-  const createLogo = (src, cls) => createElement('img', { src, alt: 'Logo', class: `ytaf-logo ${cls}`, title: 'Click to switch theme', style: cls !== 'logo-blue' ? { display: 'none' } : {}, events: { click: toggleTheme }});
+  // All start hidden; updateLogoState() shows the one for the current theme.
+  const createLogo = (src, cls) => createElement('img', { src, alt: 'Logo', class: `ytaf-logo ${cls}`, title: 'Click to switch theme', style: { display: 'none' }, events: { click: toggleTheme }});
   
   const elmHeading = createElement('h1', {},
     createElement('span', { text: 'YouTube Extended' }),
+    createLogo(logoOrangeUrl, 'logo-orange'),
     createLogo(logoBlueUrl, 'logo-blue'),
     createLogo(logoRedUrl, 'logo-red'),
     createLogo(logoDarkUrl, 'logo-dark')
@@ -1575,15 +1581,13 @@ function initGlobalStyles() {
 function updateLogoState() {
   const theme = configRead('uiTheme');
   const isOled = configRead('enableOledCareMode');
-  const [logoBlue, logoRed, logoDark] = ['.logo-blue', '.logo-red', '.logo-dark'].map(c => document.querySelector(`.ytaf-logo${c}`));
-  if (!logoBlue || !logoRed || !logoDark) return;
-
-  if (isOled) { logoBlue.style.display = 'none'; logoRed.style.display = 'none'; logoDark.style.display = ''; }
-  else {
-    logoDark.style.display = 'none';
-    if (theme === 'classic-red') { logoRed.style.display = ''; logoBlue.style.display = 'none'; }
-    else { logoRed.style.display = 'none'; logoBlue.style.display = ''; }
-  }
+  const wanted = isOled ? 'logo-dark'
+    : theme === 'classic-red' ? 'logo-red'
+    : theme === 'fox' ? 'logo-orange'
+    : 'logo-blue';
+  document.querySelectorAll('.ytaf-logo').forEach((logo) => {
+    logo.style.display = logo.classList.contains(wanted) ? '' : 'none';
+  });
 }
 
 function syncOledShelfOpacity() {
@@ -1610,6 +1614,7 @@ function applyOledMode(enabled) {
 function applyTheme(theme) {
   if (optionsPanel) {
       optionsPanel.classList.toggle('theme-classic-red', theme === 'classic-red');
+      optionsPanel.classList.toggle('theme-fox', theme === 'fox');
   }
   setNotificationTheme(theme);
   updateLogoState();
@@ -1631,6 +1636,14 @@ initLogoStyle();
 // Initial apply (will skip UI elements if they don't exist yet, but handle global styles)
 applyOledMode(configRead('enableOledCareMode'));
 configAddChangeListener('enableOledCareMode', (evt) => applyOledMode(evt.detail.newValue));
+
+// The Fox theme is this fork's default. An install that already stored the
+// old default (blue) is moved to it once; after that the choice is the
+// viewer's.
+if (!configRead('foxThemeApplied')) {
+  configWrite('foxThemeApplied', true);
+  if (configRead('uiTheme') === 'blue-force-field') configWrite('uiTheme', 'fox');
+}
 
 applyTheme(configRead('uiTheme'));
 configAddChangeListener('uiTheme', (evt) => applyTheme(evt.detail.newValue));

@@ -618,3 +618,138 @@
 .ytaf-settings-section .shortcut-control-row {
   margin: 0 0 0.2vh;
 }
+
+/* ---------------------------------------------------------------------------
+   Fox theme (default)
+
+   Warm near-black with a soft orange glow at the top, orange accents and amber
+   cycle arrows. Mirrors every theme-classic-red rule above, and sits last so it
+   wins over the base (blue) rules at equal specificity.
+   --------------------------------------------------------------------------- */
+
+.ytaf-ui-container.theme-fox {
+  background-color: #17110c;
+  background-image: radial-gradient(ellipse at top, rgba(255, 122, 26, 0.2), transparent 65%);
+  background-size: 100% 100%;
+  background-position: 0 0;
+  border-color: rgba(255, 122, 26, 0.45);
+}
+
+.ytaf-ui-container.theme-fox h1 {
+  color: #ff8c2a;
+  border-bottom-color: rgba(255, 122, 26, 0.3);
+}
+
+.ytaf-ui-container.theme-fox > div::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.ytaf-ui-container.theme-fox > div::-webkit-scrollbar-thumb {
+  background: #ff7a1a;
+}
+
+.ytaf-ui-container.theme-fox input[type='checkbox'] {
+  background: #2a1d14;
+  border-color: #6b4a33;
+}
+
+.ytaf-ui-container.theme-fox input[type='checkbox']:checked {
+  background: #ff7a1a;
+  border-color: #ff8c2a;
+}
+
+.ytaf-ui-container.theme-fox input[type='checkbox']:focus {
+  outline: 0.19vh solid #ff8c2a;
+  border-color: #ff8c2a;
+}
+
+.ytaf-ui-container.theme-fox .shortcut-control-row:focus,
+.ytaf-ui-container.theme-fox label:focus-within {
+  background: rgba(255, 122, 26, 0.12);
+  box-shadow: 0 0 0 0.19vh rgba(255, 140, 42, 0.6);
+  outline: none;
+}
+
+.ytaf-ui-container.theme-fox blockquote {
+  border-left-color: #ff7a1a;
+  background: rgba(255, 122, 26, 0.05);
+}
+
+.ytaf-ui-container.theme-fox small {
+  border-top-color: #4a3528;
+}
+
+.ytaf-notification-container.theme-fox .message {
+  background: #1f1610;
+  border-color: rgba(255, 122, 26, 0.4);
+  border-left-color: #ff7a1a;
+}
+
+.ytaf-ui-container.oled-care.theme-fox {
+  background: #000000;
+  border-color: rgba(255, 122, 26, 0.4);
+}
+
+
+.ytaf-notification-container.oled-care.theme-fox .message {
+  border-color: #ff7a1a;
+  border-left-color: #ff7a1a;
+}
+
+.ytaf-ui-container.theme-fox .ytaf-tab-menu {
+  border-bottom-color: rgba(255, 122, 26, 0.3);
+}
+
+.ytaf-ui-container.theme-fox .ytaf-tab-btn {
+  color: #b08060;
+}
+
+.ytaf-ui-container.theme-fox .ytaf-tab-btn.active {
+  color: #ff8c2a;
+  background: rgba(255, 122, 26, 0.15);
+}
+
+.ytaf-ui-container.theme-fox .ytaf-tab-btn:focus {
+  background: rgba(255, 122, 26, 0.3);
+  box-shadow: 0 0 0 0.19vh #ff8c2a;
+  color: #ffffff;
+}
+
+.ytaf-ui-container.theme-fox .shortcut-label {
+  color: #f0e0d0;
+}
+
+.ytaf-ui-container.theme-fox .shortcut-value-container .arrow-btn {
+  color: #ffb347;
+}
+
+.ytaf-ui-container.theme-fox .reset-color-btn {
+  background: #3a2a1f;
+  border-color: #6b4a33;
+}
+
+.ytaf-ui-container.theme-fox .reset-color-btn:focus {
+  outline: 0.19vh solid #ff8c2a;
+}
+
+.ytaf-ui-container.theme-fox input[type='color'] {
+  border-color: #6b4a33;
+}
+
+.ytaf-ui-container.theme-fox .ytaf-settings-section {
+  border-color: #4a3528;
+}
+
+.ytaf-ui-container.theme-fox .ytaf-settings-section > .section-title {
+  color: #d9b89c;
+}
+
+/* OLED-Care keeps its grey checkboxes in the Fox theme too. */
+.ytaf-ui-container.oled-care.theme-fox input[type='checkbox'] {
+  background: #000;
+  border-color: #555;
+}
+
+.ytaf-ui-container.oled-care.theme-fox input[type='checkbox']:checked {
+  background: #555;
+}

@@ -17,6 +17,7 @@ Fixes and features collected from the other forks of youtube-webos (webosbrew up
 + **Block webOS Cast Service** toggle (webOS 25 only). From trigrab's fork.
 + **Auto Login: always ask who is watching**: turn off "Auto Login" to get the account picker on every launch while the other nag-screen bypasses stay on. From foxi69's NicholasBly PR #191.
 + **Toggle Audio-Only Mode** shortcut action: hides the picture and keeps the sound, which suits music on OLED panels. It switches off when you leave the watch page. From jesvijonathan's fork via anikettuli's NicholasBly PR #146.
++ **Fox theme and fox logo**: the settings panel has a new orange Fox theme, which is now the default, and a fox-head logo in place of the upstream one. The logo is recoloured for the Blue, Red and OLED looks. Click it to cycle Fox, Blue and Red. Installs that had the old blue default switch to Fox once.
 + **SponsorBlock: Periodically Check for New Segments** (on by default). Segments are often submitted after a video is uploaded. While a video plays, it is checked again every 15 minutes, or with a 5/10/20/30 minute back-off while it has no segments or the servers fail. A check that comes due during a pause runs on resume. New segments show up on the bar and are skipped without reopening the video, and "Skip Segments Once" remembers what it already skipped. From Yasich217's fork.
 
 ## Fixes
