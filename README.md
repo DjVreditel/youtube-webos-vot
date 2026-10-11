@@ -98,9 +98,14 @@ Review changes made since 0.3.8 [here](https://github.com/NicholasBly/youtube-we
 
 ## Installation
 
-- **This fork:** install the `.ipk` from the [`dist/`](dist) folder (webOS 22 and newer) with the
-  [Device Manager app](https://github.com/webosbrew/dev-manager-desktop) or `ares-install`.
-  Note that the Homebrew Channel repo link below installs **NicholasBly's** build, which would replace this one.
+- **This fork:** install the `.ipk` (webOS 22 and newer) from the
+  [Releases](https://github.com/foxi69/youtube-webos/releases) page, or the newest one in
+  [`dist/`](dist), with the [Device Manager app](https://github.com/webosbrew/dev-manager-desktop)
+  or `ares-install`. With [webOS Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel),
+  add this fork's repo link instead, so updates come from here:
+  `https://raw.githubusercontent.com/foxi69/youtube-webos/main/repo.json`
+  (it follows this fork's published releases). The NicholasBly link below would replace this build with
+  NicholasBly's.
 
 Upstream (NicholasBly) builds:
 
@@ -159,6 +164,23 @@ npm run build && npm run package
 # webOS 22+ only build (lighter, what this fork ships)
 npm run build:modern && npm run package
 ```
+
+## Releases
+
+Releases are drafted automatically and published only after a test on the TV:
+
+1. Every push to `main` runs [Draft release](.github/workflows/release.yml). It builds the webOS 22+
+   `.ipk` and puts it in a **draft** release `v<version>` (version from `package.json`), with that
+   version's CHANGELOG section as notes. Drafts are visible only to the repository's owner and
+   collaborators.
+2. Download the `.ipk` from the draft on the [Releases](https://github.com/foxi69/youtube-webos/releases)
+   page and install it on the TV.
+3. If it works, open the draft and press **Publish release**. That creates the tag and runs
+   [Update Homebrew Repository](.github/workflows/build_repo.yml), which points `repo.json` at the new
+   release, so Homebrew Channel offers the update.
+
+More pushes with the same version refresh the same draft. After a version is published, a new draft
+starts when the version in `package.json` changes.
 
 ## Staying up to date with upstream
 

@@ -90,7 +90,10 @@ jobs:
               description = app_info.get('description', title)
               
               # Overrides for modern build
-              if is_modern:
+              # Only when both builds are released side by side: with the webOS 22+
+              # build alone it is the app itself, and Homebrew Channel matches the
+              # id against the installed app, which is youtube.leanback.v4.
+              if is_modern and standard_asset:
                   pkg_id = f"{pkg_id}.webos22"
                   title = f"{title} (webOS 22+)"
                   description = "YouTube AdFree for webOS 22 and newer. Lighter optimized build supporting newer hardware."
