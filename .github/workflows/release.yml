@@ -1,41 +1,110 @@
-name: Build & Release
+name: Draft release
+
+# Every push to main builds the webOS 22+ package and puts it in a DRAFT
+# release for the version in package.json (tag v<version>). Drafts are visible
+# only to people with write access, so nothing is published yet:
+#
+#   1. Download the .ipk from the draft on the Releases page and test it on
+#      the TV.
+#   2. If it is good, open the draft and press "Publish release".
+#
+# Publishing creates the tag and runs "Update Homebrew Repository"
+# (build_repo.yml), which points repo.json at the new release.
+#
+# Later pushes to main with the same version refresh the same draft. Once a
+# version is published, nothing happens until package.json gets a new version
+# number - that starts the next draft.
 
 on:
   push:
-    branches:
-      - '!*'
-    tags:
-      - 'v*.*'
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: draft-release
+  cancel-in-progress: false
 
 jobs:
-  build-and-release:
+  draft:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Read version
+        id: version
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether this version is already published
+        id: state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if gh release view "$TAG" --json isDraft --jq .isDraft > draft.txt 2>/dev/null; then
+            if [ "$(cat draft.txt)" = "false" ]; then
+              echo "$TAG is already published - bump the version in package.json to start a new draft." | tee -a "$GITHUB_STEP_SUMMARY"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        if: steps.state.outputs.skip == 'false'
         with:
           node-version: lts/*
           cache: npm
 
-      - run: npm ci
-      - run: npm run build
-      - run: npm run package
-      - run: npm run manifest
+      - name: Build the webOS 22+ package
+        if: steps.state.outputs.skip == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          npm ci
+          # dist/ also holds committed .ipk files; start clean so none of them
+          # ends up inside the new package.
+          rm -rf dist out
+          npm run build:modern
+          npx ares-package -n dist -o out
+          mv "out/youtube.leanback.v4_${VERSION}_all.ipk" "out/youtube.leanback.v4_${VERSION}_all_webOS22+.ipk"
+          sha256sum out/*.ipk | tee -a "$GITHUB_STEP_SUMMARY"
 
-      - name: Create release
-        uses: ncipollo/release-action@v1
-        with:
-          name: 'Release ${{ github.ref }}'
-          prerelease: true
-          draft: false
-          allowUpdates: true
-          omitNameDuringUpdate: true
-          omitBodyDuringUpdate: true
-          omitDraftDuringUpdate: true
-          omitPrereleaseDuringUpdate: true
-          artifacts: '*.ipk,*.manifest.json'
+      - name: Write release notes
+        if: steps.state.outputs.skip == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          {
+            echo "**Draft for testing** - built from ${GITHUB_SHA::7}. Install \`youtube.leanback.v4_${VERSION}_all_webOS22+.ipk\` on a webOS 22+ TV; if it works, press *Publish release*."
+            echo
+            # This version's section of CHANGELOG.md, without its heading.
+            awk -v v="$VERSION" '
+              index($0, "## [" v "]") == 1 { on = 1; next }
+              on && /^## \[/ { exit }
+              on { print }
+            ' CHANGELOG.md | tr -d '\r'
+          } > notes.md
+
+      - name: Create or refresh the draft release
+        if: steps.state.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [ "${{ steps.state.outputs.exists }}" = "true" ]; then
+            gh release edit "$TAG" --draft --target "$GITHUB_SHA" --title "$VERSION" --notes-file notes.md
+            gh release upload "$TAG" out/*.ipk --clobber
+          else
+            gh release create "$TAG" out/*.ipk --draft --target "$GITHUB_SHA" --title "$VERSION" --notes-file notes.md
+          fi
+          echo "Draft release $TAG is ready: ${{ github.server_url }}/${{ github.repository }}/releases" | tee -a "$GITHUB_STEP_SUMMARY"
