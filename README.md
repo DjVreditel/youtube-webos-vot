@@ -34,7 +34,8 @@ requests and the other forks of the project (credits in
 - Ad blocking holds up against YouTube's "property locker" (no more playback
   stall a few seconds in)
 - SponsorBlock: Non-Music segments are actually fetched, muted segments mute,
-  failed requests are retried
+  failed requests are retried, and segments submitted while you watch are
+  picked up during playback
 - Back closes the settings panel, plus a dozen smaller fixes
 
 ## Features from upstream (NicholasBly)

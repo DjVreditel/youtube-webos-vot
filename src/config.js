@@ -112,6 +112,7 @@ const configOptions = new Map([
   ['removeMostRelevant', { default: false, desc: 'Remove "Most Relevant" Shelf' }],
   ['enableSponsorBlock', { default: true, desc: 'SponsorBlock' }],
   ['enableMutedSegments', { default: false, desc: 'Allow segments that mute audio' }],
+  ['sbPeriodicRefresh', { default: true, desc: 'Periodically Check for New Segments' }],
   ['skipSegmentsOnce', { default: false, desc: 'Skip Segments Once' }],
   ['sbFullVideoLabel', { default: false, desc: 'Show an icon when a video is entirely an advertisement' }],
   ['sbShowTimeWithSkips', { default: false, desc: 'Show time with skips removed' }],
