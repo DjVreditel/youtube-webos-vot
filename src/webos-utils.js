@@ -25,8 +25,12 @@ export function getWebOSVersion() {
   const platformMatch = ua.match(/webOS\.TV-(\d{4})/);
   if (platformMatch) {
     const year = parseInt(platformMatch[1], 10);
-    if (WEBOS_YEAR_MAP[year]) {
-      cachedWebOSVersion = WEBOS_YEAR_MAP[year];
+    // Since 2022 the webOS version is the platform year (webOS 22, 23, ...),
+    // so 2026 and later TVs need no table entry - without this they fell
+    // through to the Chrome check and were treated as a simulator.
+    const version = WEBOS_YEAR_MAP[year] || (year > 2025 ? year - 2000 : undefined);
+    if (version) {
+      cachedWebOSVersion = version;
       console.info(`[WebOSUtils] Detected webOS ${cachedWebOSVersion} via platform year: ${year}`);
       return cachedWebOSVersion;
     }
@@ -71,4 +75,4 @@ export function isWebOS25() {
 export function isLegacyWebOS() {
   const version = getWebOSVersion();
   return version >= 3 && version <= 6;
-}
+}

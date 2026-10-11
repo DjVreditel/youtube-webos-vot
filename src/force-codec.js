@@ -316,7 +316,10 @@ function installHooks() {
  *   "reload to apply" message is worth showing.
  */
 function applyMode(interactive) {
-  const wanted = configRead('forceVideoCodec');
+  let wanted = configRead('forceVideoCodec');
+  // A stored value this build does not know (an older or newer build's
+  // option) would match no codec at all and refuse every video format.
+  if (wanted !== 'no_av1' && PINNED_MODES.indexOf(wanted) === -1) wanted = 'auto';
 
   if (wanted === 'auto') {
     mode = 'auto';

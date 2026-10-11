@@ -2,12 +2,16 @@
 // MUST stay first: perf_mon installs "inner" probes underneath every other hook.
 import './perf_mon.js';
 
-import 'whatwg-fetch';
+// polyfills.js before whatwg-fetch: the fetch polyfill decides at load time
+// whether URLSearchParams exists, and on webOS 3 a URLSearchParams body was
+// otherwise sent as "[object Object]".
 import './polyfills.js';
+import 'whatwg-fetch';
 import './domrect-polyfill';
 import './adblock.js';
 import './hooks/json-stringify';
 import './force-codec.js';
+import './subtitle-translate.js';
 
 import { SELECTORS } from './utils';
 import { handleLaunch, extractLaunchParams } from './launch.js';
@@ -56,4 +60,4 @@ document.addEventListener(
 if (isWebOS25() && simulatorMode === false) {
   console.info('[Main] Enabling webOS Google Cast Block');
   initBlockWebOSCast();
-}
+}

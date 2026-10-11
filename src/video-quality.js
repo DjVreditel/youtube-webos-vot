@@ -12,6 +12,10 @@ const TARGET_QUALITIES = new Set([
 const IS_WEBOS_25 = isWebOS25();
 const QUALITY_KEY = 'yt-player-quality';
 const ONE_YEAR_MS = 31536000000; // 365 * 24 * 60 * 60 * 1000
+// The record is rewritten this long before it expires, so Force Max Quality
+// does not quietly stop working a year after it was first switched on.
+const RENEW_BEFORE_MS = 30 * 24 * 60 * 60 * 1000;
+let cachedQualityExpiration = 0;
 
 // Caching: In-memory cache for localStorage & Config
 let cachedQualitySettings = null;
@@ -126,7 +130,8 @@ function setLocalStorageQuality() {
   const now = Date.now();
   if (now - lastWriteTime < 2000) return false;
 
-  if (cachedQualitySettings && cachedQualitySettings.quality === 4320) {
+  const isOurs = (q) => q && q.quality === 4320 && q.previousQuality === 4320;
+  if (isOurs(cachedQualitySettings) && cachedQualityExpiration - now > RENEW_BEFORE_MS) {
     return false; 
   }
   
@@ -138,14 +143,13 @@ function setLocalStorageQuality() {
           const parsed = JSON.parse(stored);
           if (parsed && parsed.data) {
              cachedQualitySettings = JSON.parse(parsed.data);
+             cachedQualityExpiration = Number(parsed.expiration) || 0;
           }
         } catch { /* ignore */ }
       }
     }
 
-    if (cachedQualitySettings && 
-        cachedQualitySettings.quality === 4320 && 
-        cachedQualitySettings.previousQuality === 4320) {
+    if (isOurs(cachedQualitySettings) && cachedQualityExpiration - now > RENEW_BEFORE_MS) {
         return false; 
     }
 
@@ -159,6 +163,7 @@ function setLocalStorageQuality() {
     
     window.localStorage.setItem(QUALITY_KEY, JSON.stringify(qualityObj));
     cachedQualitySettings = innerData;
+    cachedQualityExpiration = qualityObj.expiration;
     lastWriteTime = now;
     
     DEBUG && console.info('[VideoQuality] Set localStorage quality to 4320p');
@@ -168,6 +173,26 @@ function setLocalStorageQuality() {
     DEBUG && console.warn('[VideoQuality] Failed to set localStorage quality:', e);
     return false;
   }
+}
+
+/**
+ * Switching the option off drops the 4320p record this module wrote, so the
+ * app goes back to choosing the quality itself instead of staying pinned.
+ * A record the viewer set through YouTube's own menu is left alone.
+ */
+function clearLocalStorageQuality() {
+  try {
+    const stored = window.localStorage.getItem(QUALITY_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      const data = parsed && parsed.data ? JSON.parse(parsed.data) : null;
+      if (data && data.quality === 4320 && data.previousQuality === 4320) {
+        window.localStorage.removeItem(QUALITY_KEY);
+      }
+    }
+  } catch { /* ignore */ }
+  cachedQualitySettings = null;
+  cachedQualityExpiration = 0;
 }
 
 function setQualityOnPlayer() {
@@ -433,6 +458,8 @@ export function initVideoQuality() {
             cachedQualitySettings = null;
             setLocalStorageQuality();
             qualitySetForVideo.clear();
+          } else {
+            clearLocalStorageQuality();
           }
         };
         configCleanup = configAddChangeListener('forceHighResVideo', onChange) || 
@@ -500,4 +527,4 @@ function setupListeners() {
     window.addEventListener('beforeunload', destroyVideoQuality);
 }
 
-setupListeners();
+setupListeners();

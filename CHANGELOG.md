@@ -4,6 +4,37 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.8.5] - 2026/10/11
+
+Fixes and features collected from the other forks of youtube-webos (webosbrew upstream and the NicholasBly fork network), ported onto this codebase. This release ships the webOS 22+ package only.
+
+## Added
+
++ **Auto-Translate Subtitles** (Video Player): pick a language (Hungarian, English, German, Serbian, Turkish and about 30 more). It is pinned to the top of the TV's Auto-translate menu, and on videos with no track in that language a ready-made "<Language> (auto-translated)" track is added. The TV client only gets about 16 translation languages where the web client gets about 125; the server translates any of them. Based on the forks of DavidVodus, relianceai and ZUI-WebOS.
++ **Yellow button can be bound** on the Shortcuts page. It defaults to None, so YouTube's own search binding keeps working until you claim it. The key listener moved to window capture so it runs before YouTube's handler. From garbsclassic's fork.
++ **Sleep Timer** shortcut action: each press steps through 15/30/60/90/120 min and then off; when it runs out the video is paused. Idea from MickLesk's fork.
++ **Magic Remote: Scroll Wheel Seeks on Progress Bar** (Video Player, off by default): while the progress bar is focused, each wheel notch seeks 10s. From jesvijonathan's fork.
++ **Block webOS Cast Service** toggle (webOS 25 only). From trigrab's fork.
++ **Auto Login: always ask who is watching**: turn off "Auto Login" to get the account picker on every launch while the other nag-screen bypasses stay on. From foxi69's NicholasBly PR #191.
++ **Toggle Audio-Only Mode** shortcut action: hides the picture and keeps the sound, which suits music on OLED panels. It switches off when you leave the watch page. From jesvijonathan's fork via anikettuli's NicholasBly PR #146.
+
+## Fixes
+
++ AdBlock: `isInlinePlaybackNoAd` is now set on a copy of the request instead of in place. YouTube's "property locker" and frozen request bodies made the old write fail silently, which brought back the SABR backoff that stalls playback a few seconds in. From webosbrew upstream and marceldenzer's fork.
++ Cast: the webOS Cast service is no longer blocked when the app was started by a cast (DIAL / Cast Connect) launch, so casting to the TV works again. From trigrab's fork.
++ SponsorBlock: "Non-Music Section" segments were never fetched because the request used the wrong category name (`musicofftopic` instead of `music_offtopic`). From mirijanristic's fork.
++ SponsorBlock: "Allow segments that mute audio" did nothing. Segments marked `mute` now mute the audio while you are inside them, and your own mute state comes back afterwards.
++ SponsorBlock: when both servers fail, the request is retried after 2s and 4s. A 404 counts as "no segments" and is not retried, and malformed API entries are dropped.
++ Settings panel: the remote's Back button closes it.
++ Shortcuts: a seek bound to a colour button no longer jumps twice. Keys the mod synthesises (the screensaver keep-alive and the play/pause Back) can no longer trigger a binding.
++ OLED black overlay: notifications show above it again, and the clock is hidden under it.
++ Return YouTube Dislike: a count just under a million showed as "1000k".
++ Force Video Codec: an unknown stored value no longer refuses every video codec.
++ Force Max Quality: the stored 4320p record is renewed 30 days before it expires, so the option no longer stops working after a year. Turning the option off removes the record, so YouTube picks the quality itself again.
++ webOS 2026+ TVs were detected as a simulator, which also switched off the webOS 25 fixes. From garbsclassic's and mirijanristic's forks.
++ Turning off Ad Blocking at runtime also removed the JSON.parse hooks installed after it, such as Force Video Codec.
++ Legacy (webOS 3-6): the fetch hook (Tracking Block) failed because `EventTarget` cannot be constructed before Chrome 64. Polyfills now load before whatwg-fetch, so a URLSearchParams body is no longer sent as "[object Object]".
+
 ## [0.8.4] - 2026/09/29
 
 ## Added
@@ -1765,4 +1796,4 @@ SponsorBlock Optimizations:
 [0.1.1]: https://github.com/webosbrew/youtube-webos/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/webosbrew/youtube-webos/compare/0.0.2...v0.1.0
 [0.0.2]: https://github.com/webosbrew/youtube-webos/compare/0.0.1...0.0.2
-[0.0.1]: https://github.com/webosbrew/youtube-webos/releases/tag/0.0.1
+[0.0.1]: https://github.com/webosbrew/youtube-webos/releases/tag/0.0.1
