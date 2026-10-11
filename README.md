@@ -240,7 +240,8 @@ Releases are drafted automatically and published only after a test on the TV:
 1. Every push to `main` runs [Draft release](.github/workflows/release.yml).
    - It builds both `.ipk` files (webOS 22+ and legacy webOS 3-6).
    - It puts them in a **draft** release `v<version>`, with the version taken from `package.json`.
-   - The release notes are that version's CHANGELOG section.
+   - The release notes are [`.github/release-notes.md`](.github/release-notes.md) (download, install, credits)
+     with that version's CHANGELOG section as "What's new", so they are ready to publish as they are.
    - Drafts are visible only to the repository's owner and collaborators.
 2. Download the `.ipk` from the draft on the [Releases](https://github.com/foxi69/youtube-webos/releases)
    page and install it on the TV.

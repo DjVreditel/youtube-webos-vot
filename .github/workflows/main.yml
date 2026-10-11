@@ -20,12 +20,19 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npm run build
-      - run: npm run package
+
+      # dist/ also holds the committed .ipk files: clear them first, or they
+      # would be packed into the new .ipk. `npm run package` writes into
+      # dist/, so the package goes to out/ instead, where the upload finds it.
+      - name: Build and package
+        run: |
+          rm -rf dist out
+          npm run build
+          npx ares-package -n dist -o out
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: youtube_adfree_ipk
-          path: |
-            ${{github.workspace}}/youtube.leanback.v4_*_all.ipk
+          path: out/youtube.leanback.v4_*_all.ipk
+          if-no-files-found: error

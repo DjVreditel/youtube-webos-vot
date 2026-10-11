@@ -94,19 +94,30 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
+          # The notes are what the published release shows, so they are
+          # written for the people installing it: .github/release-notes.md
+          # (download, install, credits) with this version's CHANGELOG.md
+          # section in place of @CHANGELOG@, its headings one level down.
+          awk -v v="$VERSION" '
+            index($0, "## [" v "]") == 1 { on = 1; next }
+            on && /^## \[/ { exit }
+            on { sub(/^## /, "### "); print }
+          ' CHANGELOG.md | tr -d '\r' > changes.md
+          {
+            # Hidden once published; tells a tester which commit the draft is.
+            echo "<!-- built from ${GITHUB_SHA::7} -->"
+            sed "s/@VERSION@/$VERSION/g" .github/release-notes.md | tr -d '\r' |
+              awk '$0 == "@CHANGELOG@" { while ((getline l < "changes.md") > 0) print l; next } { print }'
+          } > notes.md
           {
             echo "**Draft for testing** - built from ${GITHUB_SHA::7}. If it works on the TV, press *Publish release*."
             echo
-            echo "- \`youtube.leanback.v4_${VERSION}_all_webOS22+.ipk\` - webOS 22 and newer (2022+ TVs), lighter and faster"
-            echo "- \`youtube.leanback.v4_${VERSION}_all.ipk\` - webOS 3-6 (2016-2021 TVs); also runs on newer ones"
+            echo "<details><summary>Release notes</summary>"
             echo
-            # This version's section of CHANGELOG.md, without its heading.
-            awk -v v="$VERSION" '
-              index($0, "## [" v "]") == 1 { on = 1; next }
-              on && /^## \[/ { exit }
-              on { print }
-            ' CHANGELOG.md | tr -d '\r'
-          } > notes.md
+            cat notes.md
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create or refresh the draft release
         if: steps.state.outputs.skip == 'false'
@@ -116,10 +127,10 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           if [ "${{ steps.state.outputs.exists }}" = "true" ]; then
-            gh release edit "$TAG" --draft --target "$GITHUB_SHA" --title "$VERSION" --notes-file notes.md
+            gh release edit "$TAG" --draft --target "$GITHUB_SHA" --title "YouTube AdFree $VERSION" --notes-file notes.md
             gh release upload "$TAG" out/*.ipk --clobber
           else
-            gh release create "$TAG" out/*.ipk --draft --target "$GITHUB_SHA" --title "$VERSION" --notes-file notes.md
+            gh release create "$TAG" out/*.ipk --draft --target "$GITHUB_SHA" --title "YouTube AdFree $VERSION" --notes-file notes.md
           fi
           echo "Draft release $TAG is ready: ${{ github.server_url }}/${{ github.repository }}/releases" | tee -a "$GITHUB_STEP_SUMMARY"
 
