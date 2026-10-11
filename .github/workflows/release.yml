@@ -1,11 +1,12 @@
 name: Draft release
 
-# Every push to main builds the webOS 22+ package and puts it in a DRAFT
-# release for the version in package.json (tag v<version>). Drafts are visible
+# Every push to main builds both packages - the webOS 22+ one and the legacy
+# one for webOS 3-6 - and puts them in a DRAFT release for the version in
+# package.json (tag v<version>). Drafts are visible
 # only to people with write access, so nothing is published yet:
 #
-#   1. Download the .ipk from the draft on the Releases page and test it on
-#      the TV.
+#   1. Download the .ipk for your TV from the draft on the Releases page and
+#      test it.
 #   2. If it is good, open the draft and press "Publish release".
 #
 # Publishing creates the tag and runs "Update Homebrew Repository"
@@ -64,18 +65,25 @@ jobs:
           node-version: lts/*
           cache: npm
 
-      - name: Build the webOS 22+ package
+      - name: Build both packages
         if: steps.state.outputs.skip == 'false'
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           npm ci
-          # dist/ also holds committed .ipk files; start clean so none of them
-          # ends up inside the new package.
-          rm -rf dist out
+          # dist/ also holds committed .ipk files; start clean before each
+          # build so none of them ends up inside a new package.
+          rm -rf dist out legacy
           npm run build:modern
           npx ares-package -n dist -o out
           mv "out/youtube.leanback.v4_${VERSION}_all.ipk" "out/youtube.leanback.v4_${VERSION}_all_webOS22+.ipk"
+
+          rm -rf dist
+          npm run build
+          npx ares-package -n dist -o legacy
+          mv "legacy/youtube.leanback.v4_${VERSION}_all.ipk" out/
+
+          ls -l out
           sha256sum out/*.ipk | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Write release notes
@@ -84,7 +92,10 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           {
-            echo "**Draft for testing** - built from ${GITHUB_SHA::7}. Install \`youtube.leanback.v4_${VERSION}_all_webOS22+.ipk\` on a webOS 22+ TV; if it works, press *Publish release*."
+            echo "**Draft for testing** - built from ${GITHUB_SHA::7}. If it works on the TV, press *Publish release*."
+            echo
+            echo "- \`youtube.leanback.v4_${VERSION}_all_webOS22+.ipk\` - webOS 22 and newer (2022+ TVs), lighter and faster"
+            echo "- \`youtube.leanback.v4_${VERSION}_all.ipk\` - webOS 3-6 (2016-2021 TVs); also runs on newer ones"
             echo
             # This version's section of CHANGELOG.md, without its heading.
             awk -v v="$VERSION" '
