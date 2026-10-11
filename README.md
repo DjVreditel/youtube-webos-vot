@@ -6,16 +6,20 @@ Ad-free YouTube for LG webOS TVs, with extra features and fixes on top of
 ## Where this fork comes from
 
 ```
-webosbrew/youtube-webos      the original project
-  └─ NicholasBly/youtube-webos   rewritten, many features      ← this fork's upstream
-       └─ foxi69/youtube-webos   this fork: upstream + the changes below
+FriedChickenButt/youtube-webos       the original project (inactive since 2024)
+  └─ webosbrew/youtube-webos           the community-maintained continuation
+       └─ NicholasBly/youtube-webos      rewritten, many features      ← this fork's upstream
+            └─ foxi69/youtube-webos        this fork: upstream + the changes below
 ```
 
 "Upstream" is the repository a fork was copied from and keeps taking updates
-from. This fork's upstream is **NicholasBly/youtube-webos**; NicholasBly's is
-**webosbrew/youtube-webos**. Upstream changes are merged in regularly (see
-[Staying up to date with upstream](#staying-up-to-date-with-upstream)), and
-everything this fork adds stays on top of them.
+from. This fork's direct upstream is **NicholasBly/youtube-webos**; above it are
+**webosbrew/youtube-webos** and the original **FriedChickenButt/youtube-webos**
+(whose history webosbrew fully contains). NicholasBly's changes are merged in
+regularly (see [Staying up to date with upstream](#staying-up-to-date-with-upstream)),
+and everything this fork adds stays on top of them. Work further up the chain
+and on every other fork is reported by the fork watch, because NicholasBly's
+rewrite means it has to be ported rather than merged.
 
 ## What this fork adds
 
@@ -177,9 +181,9 @@ One-time setup on GitHub:
 ### New work on other forks
 
 The [Fork watch](.github/workflows/fork-watch.yml) workflow runs every day as
-well. It looks at every fork of NicholasBly/youtube-webos and
-webosbrew/youtube-webos that was pushed to since its last run, and at the pull
-requests on those two repositories. When it finds new commits or pull
+well. It looks at every fork of FriedChickenButt/youtube-webos,
+webosbrew/youtube-webos and NicholasBly/youtube-webos that was pushed to since
+its last run, and at the pull requests on those three repositories. When it finds new commits or pull
 requests, it opens an issue labelled `fork-watch` with links to them, so you
 get a GitHub notification. These are only suggestions: nothing is merged, you
 pick what is worth porting. Commits NicholasBly already has are left out

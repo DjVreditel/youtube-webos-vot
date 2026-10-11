@@ -32,7 +32,7 @@ API = 'https://api.github.com'
 TOKEN = os.environ.get('GITHUB_TOKEN', '')
 REPO = os.environ.get('GITHUB_REPOSITORY', 'foxi69/youtube-webos')
 ROOTS = [r.strip() for r in os.environ.get(
-    'ROOT_REPOS', 'NicholasBly/youtube-webos,webosbrew/youtube-webos').split(',') if r.strip()]
+    'ROOT_REPOS', 'NicholasBly/youtube-webos,webosbrew/youtube-webos,FriedChickenButt/youtube-webos').split(',') if r.strip()]
 FIRST_RUN_DAYS = int(os.environ.get('FIRST_RUN_DAYS', '7'))
 MAX_BRANCHES = int(os.environ.get('MAX_BRANCHES', '30'))
 MAX_COMMITS_SHOWN = 15
