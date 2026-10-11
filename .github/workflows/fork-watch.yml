@@ -1,8 +1,9 @@
 name: Fork watch
 
 # Once a day, looks for new work in the youtube-webos fork network - new
-# commits on any fork of NicholasBly/youtube-webos or webosbrew/youtube-webos,
-# and pull requests opened or updated on those two repositories - and opens an
+# commits on any fork of NicholasBly/youtube-webos, webosbrew/youtube-webos or
+# the original FriedChickenButt/youtube-webos, and pull requests opened or
+# updated on those three repositories - and opens an
 # issue (label "fork-watch") listing it. Suggestions only: nothing is merged.
 # See tools/fork-watch.py.
 
@@ -26,5 +27,5 @@ jobs:
       - name: Report new work in the fork network
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          ROOT_REPOS: NicholasBly/youtube-webos,webosbrew/youtube-webos
+          ROOT_REPOS: NicholasBly/youtube-webos,webosbrew/youtube-webos,FriedChickenButt/youtube-webos
         run: python3 tools/fork-watch.py

@@ -647,6 +647,7 @@ function createOptionsPanel() {
       ...['Sponsor', 'Intro', 'Outro', 'Interaction', 'SelfPromo', 'MusicOfftopic', 'Filler', 'Hook', 'Preview'].map(s => createSegmentControl(`sbMode_${s.toLowerCase()}`)),
       createSegmentControl('sbMode_highlight'),
       createConfigCheckbox('enableMutedSegments'),
+      createConfigCheckbox('sbPeriodicRefresh'),
   	createConfigCheckbox('skipSegmentsOnce'),
       createConfigCheckbox('sbFullVideoLabel'),
       createConfigCheckbox('sbShowTimeWithSkips')

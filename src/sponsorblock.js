@@ -51,6 +51,27 @@ const FETCH_CATEGORIES = encodeURIComponent(JSON.stringify([
 // answer and is never retried.
 const FETCH_RETRY_DELAYS = [2000, 4000];
 
+/**
+ * Periodic re-check while a video plays ("Periodically Check for New
+ * Segments"). Segments are often submitted hours after upload, so a video
+ * that had none - or only some - when it opened is asked about again: every
+ * 15 minutes while it has segments, and with a 5/10/20/30 minute back-off
+ * while it has none or the servers fail. The timer only fetches while the
+ * video plays; one that comes due during a pause fetches on resume.
+ * From Yasich217's fork.
+ */
+const MINUTE_MS = 60 * 1000;
+const REFRESH_POPULATED_MS = 15 * MINUTE_MS;
+const REFRESH_BACKOFF_MS = [5, 10, 20, 30].map(m => m * MINUTE_MS);
+
+/** Order-independent identity of a segment list, to tell a real change from a re-send. */
+function segmentsSignature(segments) {
+    return segments
+        .map(s => s.UUID || `${s.category}:${s.actionType}:${s.segment[0]}:${s.segment[1]}`)
+        .sort()
+        .join('|');
+}
+
 function isWellFormedSegment(entry) {
     return !!entry &&
         typeof entry.category === 'string' &&
@@ -107,6 +128,11 @@ class SponsorBlockHandler {
         this.hasPerformedChainSkip = false;
         this.skipSegments = [];
         this.muteSegments = [];
+        this.refreshTimer = null;
+        this.refreshPending = false;
+        this.refreshInFlight = false;
+        this.consecutiveEmptyChecks = 0;
+        this.consecutiveFailures = 0;
         this.mutedSegment = null;
         this.mutedBefore = false;
         this.nextSegmentIndex = 0;
@@ -478,6 +504,13 @@ class SponsorBlockHandler {
             configAddChangeListener(key, this.boundConfigUpdate);
             this.configListeners.push({ key, callback: this.boundConfigUpdate });
         }
+
+        const refreshToggled = (evt) => {
+            if (evt.detail.newValue) this.scheduleRefresh();
+            else this.clearRefresh();
+        };
+        configAddChangeListener('sbPeriodicRefresh', refreshToggled);
+        this.configListeners.push({ key: 'sbPeriodicRefresh', callback: refreshToggled });
         
         // Initial setup run
         this.boundConfigUpdate();
@@ -628,7 +661,17 @@ class SponsorBlockHandler {
             const videoData = Array.isArray(data) ? data.find(x => x && x.videoID === this.videoID) : data;
             const segments = videoData && Array.isArray(videoData.segments) ? normalizeSegments(videoData.segments) : [];
 
+            if (data === null) this.consecutiveFailures++;
+
             if (segments.length === 0) {
+                if (configGetAll().sbPeriodicRefresh) {
+                    // Stay alive with nothing to skip: segments submitted
+                    // while this video plays are picked up by the refresh.
+                    this.log('debug', 'No SponsorBlock segments yet, will check again');
+                    if (data !== null) this.consecutiveEmptyChecks++;
+                    this.scheduleRefresh();
+                    return;
+                }
                 this.log('debug', 'No SponsorBlock segments available, cleaning up');
                 this.destroy(); 
                 return;
@@ -636,7 +679,9 @@ class SponsorBlockHandler {
 
             // sort in place is fine
             this.segments = segments.sort((a, b) => a.segment[0] - b.segment[0]);
+            this.segmentsSig = segmentsSignature(this.segments);
             this.highlightSegment = this.segments.find(s => s.category === 'poi_highlight');
+            this.scheduleRefresh();
 
             // Use 'this.video' if start() already found it, or re-query
             const video = this.video || getVideo();
@@ -779,6 +824,7 @@ class SponsorBlockHandler {
 
         this.addEvent(this.video, 'playing', () => {
             if (this.isDestroyed) return;
+            if (this.refreshPending) this.refreshSegments();
             this.resetSegmentTracking();
         });
         this.addEvent(this.video, 'pause', () => {
@@ -1476,6 +1522,93 @@ class SponsorBlockHandler {
         return this.jumpToNextHighlight();
     }
 
+    clearRefresh() {
+        if (this.refreshTimer) { clearTimeout(this.refreshTimer); this.refreshTimer = null; }
+        this.refreshPending = false;
+    }
+
+    scheduleRefresh() {
+        this.clearRefresh();
+        if (this.isDestroyed || !configGetAll().sbPeriodicRefresh) return;
+        let delay;
+        if (this.consecutiveFailures > 0) {
+            delay = REFRESH_BACKOFF_MS[Math.min(this.consecutiveFailures, REFRESH_BACKOFF_MS.length) - 1];
+        } else if (this.segments && this.segments.length > 0) {
+            delay = REFRESH_POPULATED_MS;
+        } else {
+            delay = REFRESH_BACKOFF_MS[Math.min(Math.max(1, this.consecutiveEmptyChecks), REFRESH_BACKOFF_MS.length) - 1];
+        }
+        this.refreshTimer = setTimeout(() => {
+            this.refreshTimer = null;
+            this.refreshSegments();
+        }, delay);
+    }
+
+    async refreshSegments() {
+        if (this.isDestroyed || this.refreshInFlight) return;
+        const video = this.video || getVideo();
+        // No fetching for a paused or backgrounded player; 'playing' picks it up.
+        if (!video || video.paused) {
+            this.refreshPending = true;
+            return;
+        }
+        this.refreshPending = false;
+        this.refreshInFlight = true;
+        const videoID = this.videoID;
+        try {
+            const hash = sha256(videoID);
+            const data = hash ? await this.fetchSegments(hash.substring(0, 4)) : null;
+            if (this.isDestroyed || this.videoID !== videoID) return;
+            if (data === null) {
+                this.consecutiveFailures++;
+                return;
+            }
+            this.consecutiveFailures = 0;
+            const videoData = Array.isArray(data) ? data.find(x => x && x.videoID === videoID) : data;
+            const segments = videoData && Array.isArray(videoData.segments) ? normalizeSegments(videoData.segments) : [];
+            if (segments.length === 0) {
+                this.consecutiveEmptyChecks++;
+                return;
+            }
+            this.consecutiveEmptyChecks = 0;
+            segments.sort((a, b) => a.segment[0] - b.segment[0]);
+            const sig = segmentsSignature(segments);
+            if (sig === this.segmentsSig) return;
+            this.applyRefreshedSegments(segments, sig);
+        } catch (e) {
+            this.consecutiveFailures++;
+            this.log('warn', 'Refresh failed', e);
+        } finally {
+            this.refreshInFlight = false;
+            if (!this.isDestroyed) this.scheduleRefresh();
+        }
+    }
+
+    /** Swaps in a changed segment list mid-video, keeping "skip once" memory by UUID. */
+    applyRefreshedSegments(segments, sig) {
+        const before = this.segments || [];
+        const skippedUUIDs = new Set();
+        if (this.skippedSegmentIndices) {
+            this.skippedSegmentIndices.forEach(i => { if (before[i] && before[i].UUID) skippedUUIDs.add(before[i].UUID); });
+            this.skippedSegmentIndices.clear();
+            segments.forEach((s, i) => { if (s.UUID && skippedUUIDs.has(s.UUID)) this.skippedSegmentIndices.add(i); });
+        }
+        const added = segments.length - before.length;
+
+        this.segments = segments;
+        this.segmentsSig = sig;
+        this.highlightSegment = this.segments.find(s => s.category === 'poi_highlight');
+        const video = this.video || getVideo();
+        if (video && video.duration && !isNaN(video.duration)) this.processSegments(video.duration);
+        this.rebuildSkipSegments();
+        sponsorBlockUI.updateSegments(this.segments.filter(s => !isFullVideoSegment(s)));
+        this.lastOverlayHash = null;
+        this.drawOverlay();
+        this.updateLabels();
+        this.log('info', `Segments updated (${before.length} -> ${segments.length})`);
+        if (added > 0) showNotification(`SponsorBlock: ${added} new segment${added === 1 ? '' : 's'}`);
+    }
+
     async fetchSegments(hashPrefix) {
         if (this.isDestroyed) return null;
 
@@ -1533,6 +1666,7 @@ class SponsorBlockHandler {
     destroy() {
         this.isDestroyed = true;
         this.log('info', 'Destroying instance.');
+        this.clearRefresh();
 
         this.toggleTimeListener(false);
         
