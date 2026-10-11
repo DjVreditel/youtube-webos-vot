@@ -62,8 +62,8 @@ Every coloured button and number key can be set to any of these actions on the *
 
 ## Settings
 
-The panel has three themes: **Fox** (orange, the default), **Blue** and **Red**. Click the fox logo in the
-panel header to switch between them. OLED-Care Mode turns any of them true black.
+The panel has three themes: **Fox** (orange, the default), **Blue** and **Red**. Pick one with **UI Theme** on the
+Interface tab, or with a mouse, click the fox logo in the panel header. OLED-Care Mode turns any of them true black.
 
 The settings panel opens with 🟩 Green and has six tabs. Defaults are in the right-hand column. A setting
 marked *webOS 25* or *guest* only appears there.
@@ -97,6 +97,7 @@ All filters except Ad Blocking need Ad Blocking on.
 
 | Setting | Default |
 |---|---|
+| **UI Theme** (Fox, Blue, Red) | Fox |
 | Bypass Nag Screens | On |
 | **Auto Login** (off: always ask who is watching) | On |
 | Max Thumbnail Quality | Off |

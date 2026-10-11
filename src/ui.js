@@ -1,6 +1,6 @@
 /*global navigate*/
 import './spatial-navigation-polyfill.js';
-import { logoStyles, thumbnailQualityModes, videoCodecModes } from './config.js';
+import { logoStyles, thumbnailQualityModes, videoCodecModes, uiThemes } from './config.js';
 import { configAddChangeListener, configRead, configWrite, configGetDesc, segmentTypes, configGetDefault, shortcutActions, sbModes, sbModesHighlight, forcePreviewModes } from './config.js';
 import './ui.css';
 import './auto-login.js';
@@ -572,7 +572,7 @@ function createOptionsPanel() {
       evt.preventDefault(); 
       evt.stopPropagation(); 
       // Fox -> blue -> red -> Fox.
-      const order = ['fox', 'blue-force-field', 'classic-red'];
+      const order = Object.keys(uiThemes);
       const next = order[(order.indexOf(configRead('uiTheme')) + 1) % order.length];
       configWrite('uiTheme', next);
       const activeTab = tabBtns[activePage];
@@ -653,7 +653,9 @@ function createOptionsPanel() {
   createConfigCheckbox('hideEndcards'),
   createConfigCheckbox('enableScrollSeek'),
   createConfigCheckbox('enableReturnYouTubeDislike')]));
-  const interfaceGroup = [createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('autoSelectAccount'), createConfigCheckbox('upgradeThumbnails'), createThumbnailQualityControl(), createLogoControl(), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')];
+  // The logo in the header also cycles the theme, but a remote cannot focus
+  // it, so the setting needs a row of its own to be reachable on a TV.
+  const interfaceGroup = [createAlignedCycleControl('uiTheme', uiThemes), createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('autoSelectAccount'), createConfigCheckbox('upgradeThumbnails'), createThumbnailQualityControl(), createLogoControl(), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')];
   // The cast block only exists on webOS 25 (see userScript.js).
   if (isWebOS25()) interfaceGroup.push(createConfigCheckbox('blockWebosCast'));
   // --- Page 3: Interface ---
