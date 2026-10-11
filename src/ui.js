@@ -98,6 +98,9 @@ function resolveCached(cacheKey, selectors) {
 }
 
 window.addEventListener('ytaf-page-update', (e) => {
+    // Audio-only ends with the watch page, so home-screen previews are not
+    // left invisible.
+    if (!e.detail.isWatch && !e.detail.isShorts) document.documentElement.classList.remove('ytaf-audio-only');
     if (e.detail.isWatch) {
         cachedSelectors.comments = null;
         cachedSelectors.description = null;
@@ -120,7 +123,8 @@ const ACTION_SCOPES = {
     toggle_description: 'VIDEO',
     save_to_playlist: 'VIDEO',
     sb_skip_prev: 'VIDEO',
-    sb_manual_skip: 'VIDEO'
+    sb_manual_skip: 'VIDEO',
+    audio_only: 'VIDEO'
     // speed_up: 'VIDEO',
     // speed_down: 'VIDEO',
     // speed_reset: 'VIDEO'
@@ -620,7 +624,7 @@ function createOptionsPanel() {
   createConfigCheckbox('hideEndcards'),
   createConfigCheckbox('enableScrollSeek'),
   createConfigCheckbox('enableReturnYouTubeDislike')]));
-  const interfaceGroup = [createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('upgradeThumbnails'), createThumbnailQualityControl(), createLogoControl(), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')];
+  const interfaceGroup = [createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('autoSelectAccount'), createConfigCheckbox('upgradeThumbnails'), createThumbnailQualityControl(), createLogoControl(), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications')];
   // The cast block only exists on webOS 25 (see userScript.js).
   if (isWebOS25()) interfaceGroup.push(createConfigCheckbox('blockWebosCast'));
   pageMain.appendChild(createSection('Interface', interfaceGroup));
@@ -1329,6 +1333,15 @@ function handleShortcutAction(action) {
             showNotification('SponsorBlock not loaded');
         }
         break;
+    case 'audio_only': {
+        // The picture is hidden, the sound keeps playing - for music and
+        // podcasts on an OLED panel. A class on <html> rather than a style on
+        // the element, so it survives YouTube replacing the <video>. From
+        // jesvijonathan's fork via anikettuli's NicholasBly PR #146.
+        const on = document.documentElement.classList.toggle('ytaf-audio-only');
+        showNotification(`Audio-Only Mode ${on ? 'Enabled' : 'Disabled'}`);
+        break;
+    }
     case 'sb_manual_skip':
         try {
           if (window.sponsorblock) {
@@ -1428,6 +1441,7 @@ function initGlobalStyles() {
         :root { --ytaf-oled-opacity: 1; }
 
         html.ytaf-oled-blackout .webOs-watch { display: none !important; }
+        html.ytaf-audio-only video { visibility: hidden !important; }
 
         html.ytaf-hide-logo ytlr-redux-connect-ytlr-logo-entity,
         html.ytaf-hide-logo ytlr-logo-entity { visibility: hidden !important; }

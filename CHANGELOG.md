@@ -15,6 +15,8 @@ Fixes and features collected from the other forks of youtube-webos (webosbrew up
 + **Sleep Timer** shortcut action: each press steps through 15/30/60/90/120 min and then off; when it runs out the video is paused. Idea from MickLesk's fork.
 + **Magic Remote: Scroll Wheel Seeks on Progress Bar** (Video Player, off by default): while the progress bar is focused, each wheel notch seeks 10s. From jesvijonathan's fork.
 + **Block webOS Cast Service** toggle (webOS 25 only). From trigrab's fork.
++ **Auto Login: always ask who is watching**: turn off "Auto Login" to get the account picker on every launch while the other nag-screen bypasses stay on. From foxi69's NicholasBly PR #191.
++ **Toggle Audio-Only Mode** shortcut action: hides the picture and keeps the sound, which suits music on OLED panels. It switches off when you leave the watch page. From jesvijonathan's fork via anikettuli's NicholasBly PR #146.
 
 ## Fixes
 

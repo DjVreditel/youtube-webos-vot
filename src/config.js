@@ -53,6 +53,7 @@ export const shortcutActions = {
   save_to_playlist: 'Save / Watch Later',
   oled_toggle: 'Toggle OLED Black Overlay',
   sleep_timer: 'Sleep Timer (15/30/60/90/120 min, off)',
+  audio_only: 'Toggle Audio-Only Mode',
   sb_manual_skip: 'Manual Skip / Jump to Highlight',
   config_menu: 'Open/Close Settings'
   //speed_up: 'Playback Speed +',
@@ -127,6 +128,7 @@ const configOptions = new Map([
   ['hideEndcards', { default: false, desc: 'Hide Endcards' }],
   ['enableScrollSeek', { default: false, desc: 'Magic Remote: Scroll Wheel Seeks on Progress Bar' }],
   ['enableAutoLogin', { default: true, desc: 'Bypass Nag Screens' }],
+  ['autoSelectAccount', { default: true, desc: 'Auto Login (off: always ask who is watching)' }],
   ['logoStyle', { default: 'default', desc: 'YouTube Logo' }],
   ['showWatch', { default: false, desc: 'Display Time in UI' }],
   ['enableOledCareMode', { default: false, desc: 'OLED-Care Mode (True Black UI)' }],
