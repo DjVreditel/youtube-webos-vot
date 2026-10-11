@@ -169,8 +169,20 @@ lists the conflicting files - then sync by hand as below.
 One-time setup on GitHub:
 
 1. **Actions** tab → enable workflows (they are off by default on forks).
+   This turns on both *Sync upstream* and *Fork watch* below.
 2. **Settings → Actions → General → Workflow permissions** → tick
    *Allow GitHub Actions to create and approve pull requests*.
+
+### New work on other forks
+
+The [Fork watch](.github/workflows/fork-watch.yml) workflow runs every day as
+well. It looks at every fork of NicholasBly/youtube-webos and
+webosbrew/youtube-webos that was pushed to since its last run, and at the pull
+requests on those two repositories. When it finds new commits or pull
+requests, it opens an issue labelled `fork-watch` with links to them, so you
+get a GitHub notification. These are only suggestions: nothing is merged, you
+pick what is worth porting. Commits NicholasBly already has are left out
+(the sync pull request brings them in), and so are bot commits.
 
 ### By hand
 

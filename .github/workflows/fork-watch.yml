@@ -1,0 +1,30 @@
+name: Fork watch
+
+# Once a day, looks for new work in the youtube-webos fork network - new
+# commits on any fork of NicholasBly/youtube-webos or webosbrew/youtube-webos,
+# and pull requests opened or updated on those two repositories - and opens an
+# issue (label "fork-watch") listing it. Suggestions only: nothing is merged.
+# See tools/fork-watch.py.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '41 5 * * *'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Report new work in the fork network
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ROOT_REPOS: NicholasBly/youtube-webos,webosbrew/youtube-webos
+        run: python3 tools/fork-watch.py
