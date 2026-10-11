@@ -1,11 +1,11 @@
 .ytaf-ui-container {
   position: fixed;
-  top: 5vh;
+  top: 3vh;
   left: 30%;
   transform: translateX(-50%);
   width: 95vw;
   max-width: 41.6vw;
-  max-height: 95vh;
+  max-height: 94vh;
   color: #ffffff;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 4.44vh;
@@ -349,14 +349,15 @@
 }
 
 .ytaf-tab-btn {
-  flex: 1;
-  margin: 0 0.5vh;
+  flex: 1 1 auto;
+  margin: 0 0.3vh;
   background: transparent;
   border: none;
   color: #5599aa;
   font-size: 2.1vh;
   font-weight: 600;
-  padding: 1vh 2vh;
+  padding: 1vh 1vh;
+  white-space: nowrap;
   border-radius: 0.75vh;
   cursor: pointer;
   outline: none;
@@ -490,28 +491,33 @@
    These trims apply to that page alone - the other tabs keep the roomier
    spacing, since they have space to spare. Total saving is ~4.5vh, comfortably
    more than the ~3.2vh a new row costs. */
-#ytaf-page-main label {
+.ytaf-page-sectioned label {
   padding-top: 0.75vh;
   padding-bottom: 0.75vh;
   margin-bottom: 0.1vh;
 }
 
-#ytaf-page-main .ytaf-settings-section {
+.ytaf-page-sectioned .ytaf-settings-section {
   margin-bottom: 0.6vh;
 }
 
-#ytaf-page-main .ytaf-settings-section > .section-title,
-#ytaf-page-main h2 {
+.ytaf-page-sectioned .ytaf-settings-section > .section-title,
+.ytaf-page-sectioned h2 {
   margin-top: 0.9vh;
   margin-bottom: 0.35vh;
 }
 
-/* Last-resort safety net: if a future row still overflows, scroll rather than
-   clip. The container hides overflow, so without this a row would simply be
-   unreachable. */
+/* Last-resort safety net: if a page still overflows, scroll rather than clip.
+   The container hides overflow, so without this a row would simply be
+   unreachable. `flex: 1 1 auto` with min-height 0 lets the page shrink to the
+   room under the header (a 0% basis did not, so the container clipped it), and
+   the max-height backs that up on engines with older flexbox. */
 .ytaf-ui-container > div.ytaf-settings-page {
   overflow-y: auto;
   overflow-x: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: calc(94vh - 15vh);
 }
 
 /* ---------------------------------------------------------------------------
@@ -555,25 +561,25 @@
    The negative side margins the single-column rows use to bleed their focus
    highlight past the section padding are removed here - at half width they
    would push the second column out of the row and force a wrap. */
-#ytaf-page-main .ytaf-section-2col {
+.ytaf-page-sectioned .ytaf-section-2col {
   display: flex;
   flex-wrap: wrap;
   align-items: stretch;
 }
 
-#ytaf-page-main .ytaf-section-2col > .section-title {
+.ytaf-page-sectioned .ytaf-section-2col > .section-title {
   flex: none;
   width: 100%;
 }
 
-#ytaf-page-main .ytaf-section-2col > label {
+.ytaf-page-sectioned .ytaf-section-2col > label {
   flex: none;
   width: 50%;
 }
 
 /* An odd number of rows (guest mode adds a seventh) leaves the last one alone
    on its row - let it keep half width so the column edge stays straight. */
-#ytaf-page-main .ytaf-section-2col > label:last-child {
+.ytaf-page-sectioned .ytaf-section-2col > label:last-child {
   margin-bottom: 0.25vh;
 }
 

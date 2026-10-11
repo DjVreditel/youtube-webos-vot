@@ -62,53 +62,84 @@ Every coloured button and number key can be set to any of these actions on the *
 
 ## Settings
 
-The settings panel opens with 🟩 Green and has four tabs.
+The settings panel opens with 🟩 Green and has six tabs. Defaults are in the right-hand column. A setting
+marked *webOS 25* or *guest* only appears there.
 
-**Main**
-- *Cosmetic Filtering:*
-  - Ad Blocking
-  - Reduce Telemetry & Tracking
-  - Remove Shorts (Global)
-  - Remove Live Videos (Global)
-  - Remove Top Live Games
-  - Remove "Most Relevant" Shelf
-  - Guest Mode: Hide Sign-in Buttons (only when not signed in)
-- *Video Player:*
-  - Force Max Quality
-  - Force Video Codec (Auto, AV1, VP9, AVC, HEVC, Avoid AV1)
-  - **Auto-Translate Subtitles**: pick a language
-  - Hide Endcards
-  - **Magic Remote: Scroll Wheel Seeks on Progress Bar**
-  - Return YouTube Dislike
-- *Interface:*
-  - Bypass Nag Screens
-  - **Auto Login (off: always ask who is watching)**
-  - Max Thumbnail Quality and Thumbnail Strategy
-  - YouTube Logo (default, Premium, hidden)
-  - Display Time in UI
-  - OLED-Care Mode (True Black UI)
-  - Disable Notifications
-  - **Block webOS Cast Service** (webOS 25 only)
+**Filters**
+
+| Setting | Default |
+|---|---|
+| Ad Blocking | On |
+| Reduce Telemetry & Tracking | Off |
+| Remove Shorts (Global) | Off |
+| Remove Live Videos (Global) | Off |
+| Remove Top Live Games | Off |
+| Remove "Most Relevant" Shelf | Off |
+| Guest Mode: Hide Sign-in Buttons (*guest*: only when not signed in) | Off |
+
+All filters except Ad Blocking need Ad Blocking on.
+
+**Player**
+
+| Setting | Default |
+|---|---|
+| Force Max Quality | Off |
+| Force Video Codec (Auto, AV1, VP9, AVC, HEVC, Avoid AV1) | Auto |
+| **Auto-Translate Subtitles** (pick a language) | Off |
+| Hide Endcards | Off |
+| **Magic Remote: Scroll Wheel Seeks on Progress Bar** | Off |
+| Return YouTube Dislike | On |
+
+**Interface**
+
+| Setting | Default |
+|---|---|
+| Bypass Nag Screens | On |
+| **Auto Login** (off: always ask who is watching) | On |
+| Max Thumbnail Quality | Off |
+| Thumbnail Strategy (Original, Fast) | Original |
+| YouTube Logo (Default, Premium, Hidden) | Default |
+| Display Time in UI | Off |
+| OLED-Care Mode (True Black UI) | Off |
+| Disable Notifications | Off |
+| **Block webOS Cast Service** (*webOS 25*) | On |
 
 **SponsorBlock**
-- SponsorBlock on/off.
-- A mode for each category: Auto Skip, Manual Skip, Show in Seek Bar, or Disable. Each category also has its own colour.
-  - Categories: Sponsor, Intro, Outro, Interaction, Self Promotion, Non-Music, Filler, Hook, Preview.
-  - Highlight has its own modes: auto skip to start, ask, show in seek bar, disable.
-- Allow segments that mute audio.
-- **Periodically Check for New Segments.**
-- Skip Segments Once.
-- Show an icon when a video is entirely an advertisement.
-- Show time with skips removed.
 
-**Shortcuts**: the action of keys 0-9 and of the Red, Green, Yellow and Blue buttons.
+| Setting | Default |
+|---|---|
+| SponsorBlock | On |
+| Sponsor, Intro, Outro, Interaction Reminder, Self Promotion, Non-Music Section | Auto Skip |
+| Preview/Recap, Filler/Tangents, Hook/Greetings | Show in Seek Bar |
+| Highlight (Auto Skip to Start, Ask, Show in Seek Bar, Disable) | Show in Seek Bar |
+| Allow segments that mute audio | Off |
+| **Periodically Check for New Segments** | On |
+| Skip Segments Once | Off |
+| Show an icon when a video is entirely an advertisement | Off |
+| Show time with skips removed | Off |
+
+Each category can be set to Auto Skip, Manual Skip, Show in Seek Bar or Disable, and has its own colour.
+
+**Shortcuts**
+
+| Key | Default |
+|---|---|
+| 🟥 Red | Toggle OLED Black Overlay |
+| 🟩 Green | Open/Close Settings |
+| 🟨 Yellow | None (YouTube's search) |
+| 🟦 Blue | Manual Skip / Jump to Highlight |
+| 5 | Skip to Next Chapter |
+| 0-4, 6-9 | None |
 
 **UI Tweaks**
-- Video shelf opacity
-- Force Previews
-- Fix Multiline Titles
-- New Liquid Glass UI
-- Emoji + Characters Fix (webOS 3-4)
+
+| Setting | Default |
+|---|---|
+| Video shelf opacity (needs OLED-Care Mode) | 100% |
+| Force Previews (Disabled, Force On, Force Off) | Disabled |
+| Fix Multiline Titles | On |
+| New Liquid Glass UI | Off |
+| Emoji + Characters Fix (webOS 3-4 only) | On |
 
 **Auto-Translate Subtitles** offers about 30 languages: Hungarian, English, German, Spanish, French, Italian,
 Portuguese, Dutch, Polish, Czech, Slovak, Romanian, Croatian, Serbian, Slovenian, Bulgarian, Greek, Turkish,
