@@ -181,13 +181,18 @@ One-time setup on GitHub:
 ### New work on other forks
 
 The [Fork watch](.github/workflows/fork-watch.yml) workflow runs every day as
-well. It looks at every fork of FriedChickenButt/youtube-webos,
-webosbrew/youtube-webos and NicholasBly/youtube-webos that was pushed to since
-its last run, and at the pull requests on those three repositories. When it finds new commits or pull
+well. It walks the whole fork tree of FriedChickenButt/youtube-webos,
+webosbrew/youtube-webos and NicholasBly/youtube-webos (forks of forks
+included), looks at every fork that was pushed to since its last run, and at
+the pull requests on those three repositories. It remembers what it already
+reported, so a commit made days before it was pushed (up to 30 days) is still
+caught, and nothing is reported twice. When it finds new commits or pull
 requests, it opens an issue labelled `fork-watch` with links to them, so you
 get a GitHub notification. These are only suggestions: nothing is merged, you
 pick what is worth porting. Commits NicholasBly already has are left out
-(the sync pull request brings them in), and so are bot commits.
+(the sync pull request brings them in), and so are bot commits. It cannot
+see private forks, or copies that were uploaded as new repositories instead
+of being forked.
 
 ### By hand
 
