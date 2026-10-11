@@ -1,8 +1,43 @@
-# youtube-webos
+# youtube-webos (foxi69 fork)
 
-An upgraded fork of webosbrew's youtube-webos with extended features and fixes.
+Ad-free YouTube for LG webOS TVs, with extra features and fixes on top of
+[NicholasBly/youtube-webos](https://github.com/NicholasBly/youtube-webos).
 
-## Added Features
+## Where this fork comes from
+
+```
+webosbrew/youtube-webos      the original project
+  └─ NicholasBly/youtube-webos   rewritten, many features      ← this fork's upstream
+       └─ foxi69/youtube-webos   this fork: upstream + the changes below
+```
+
+"Upstream" is the repository a fork was copied from and keeps taking updates
+from. This fork's upstream is **NicholasBly/youtube-webos**; NicholasBly's is
+**webosbrew/youtube-webos**. Upstream changes are merged in regularly (see
+[Staying up to date with upstream](#staying-up-to-date-with-upstream)), and
+everything this fork adds stays on top of them.
+
+## What this fork adds
+
+On top of upstream 0.8.4, collected from webosbrew, NicholasBly's open pull
+requests and the other forks of the project (credits in
+[CHANGELOG.md](CHANGELOG.md)):
+
+- **Auto-Translate Subtitles** - pick a language (Hungarian, English, German and
+  ~30 more); it is offered as a ready-made "auto-translated" subtitle track
+- **Auto Login: always ask who is watching** - account picker on every launch,
+  other nag-screen bypasses stay on
+- **Bindable yellow button**, **Sleep Timer** and **Audio-Only Mode** shortcut
+  actions
+- **Magic Remote scroll wheel** seeks on the progress bar
+- **Block webOS Cast Service** toggle; casting to the TV works again
+- Ad blocking holds up against YouTube's "property locker" (no more playback
+  stall a few seconds in)
+- SponsorBlock: Non-Music segments are actually fetched, muted segments mute,
+  failed requests are retried
+- Back closes the settings panel, plus a dozen smaller fixes
+
+## Features from upstream (NicholasBly)
 - Full support for webOS 3, 4, 5, 6, 22, 23, 24, and 25 (2016 and newer LG TVs) (webOS 1 and 2 currently not supported)
 - Enhanced AdBlock Engine: New schema-based filtering system (cleaner Home, Search, and Shorts)
 - Filter out QR code + Shop button overlays during video playback
@@ -58,6 +93,12 @@ Review changes made since 0.3.8 [here](https://github.com/NicholasBly/youtube-we
 
 ## Installation
 
+- **This fork:** install the `.ipk` from the [`dist/`](dist) folder (webOS 22 and newer) with the
+  [Device Manager app](https://github.com/webosbrew/dev-manager-desktop) or `ares-install`.
+  Note that the Homebrew Channel repo link below installs **NicholasBly's** build, which would replace this one.
+
+Upstream (NicholasBly) builds:
+
 - Use [webOS Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel) - app is available via repo link: https://raw.githubusercontent.com/NicholasBly/youtube-webos/main/repo.json
 - Use [Device Manager app](https://github.com/webosbrew/dev-manager-desktop) - see [Releases](https://github.com/NicholasBly/youtube-webos/releases) for a
   prebuilt `.ipk` binary file. A webOS22+ .ipk is available for users on 2022+ TVs, supporting webOS22-25. These are lighter, more optimized builds for newer hardware, without translation layers needed for older TVs.
@@ -97,7 +138,7 @@ luna-send-pub -n 1 'luna://com.webos.service.eim/deleteDevice' '{"appId":"youtub
 - Clone the repository
 
 ```sh
-git clone https://github.com/NicholasBly/youtube-webos.git
+git clone https://github.com/foxi69/youtube-webos.git
 ```
 
 - Enter the folder and build the App, this will generate a `*.ipk` file.
@@ -109,7 +150,46 @@ cd youtube-webos
 npm install
 
 npm run build && npm run package
+
+# webOS 22+ only build (lighter, what this fork ships)
+npm run build:modern && npm run package
 ```
+
+## Staying up to date with upstream
+
+### Automatically
+
+The [Sync upstream](.github/workflows/sync-upstream.yml) workflow runs every day
+(or on demand: **Actions → Sync upstream → Run workflow**). When NicholasBly has
+new commits, it merges them into the `upstream-sync` branch and opens a pull
+request into `main`. Your own changes are never overwritten: you review the
+pull request, test, and merge it. If the merge has conflicts, the run fails and
+lists the conflicting files - then sync by hand as below.
+
+One-time setup on GitHub:
+
+1. **Actions** tab → enable workflows (they are off by default on forks).
+2. **Settings → Actions → General → Workflow permissions** → tick
+   *Allow GitHub Actions to create and approve pull requests*.
+
+### By hand
+
+```sh
+git remote add upstream https://github.com/NicholasBly/youtube-webos.git   # once
+git fetch upstream
+git checkout main
+git merge upstream/main        # resolve any conflicts, then commit
+npm ci && npm run build:modern && npm run package   # rebuild and test
+git push origin main
+```
+
+GitHub's **Sync fork** button on the repository page does the same merge, but
+only when there are no conflicts and it cannot rebuild the `.ipk`.
+
+The original webosbrew project can be followed the same way
+(`git remote add webosbrew https://github.com/webosbrew/youtube-webos.git`),
+but NicholasBly's codebase is a rewrite, so its changes have to be ported by
+hand rather than merged.
 
 ## Development TV setup
 
