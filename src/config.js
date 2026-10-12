@@ -129,7 +129,9 @@ const configOptions = new Map([
   ['foxThemeApplied', { default: false, desc: 'Fox theme applied once' }],
   ['enableAdBlock', { default: true, desc: 'Ad Blocking' }],
   ['enableTrackingBlock', { default: false, desc: 'Reduce Telemetry & Tracking' }],
-  ['enableReturnYouTubeDislike', { default: true, desc: 'Return YouTube Dislike' }],
+  // Off until switched on: every video opened sends its id to
+  // returnyoutubedislikeapi.com, a third party.
+  ['enableReturnYouTubeDislike', { default: false, desc: 'Return YouTube Dislike' }],
   ['upgradeThumbnails', { default: false, desc: 'Max Thumbnail Quality' }],
   ['thumbnailQualityMode', { default: 'safe', desc: 'Thumbnail Strategy' }],
   ['removeGlobalShorts', { default: false, desc: 'Remove Shorts (Global)' }],

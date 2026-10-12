@@ -52,7 +52,9 @@ function sameOriginURL(candidate, expectedOrigin) {
 }
 
 export function handleLaunch(params) {
-  console.info('handleLaunch', params);
+  // Only the names: the values can hold a search, a voice query or a cast
+  // pairing code.
+  console.info('handleLaunch', params && typeof params === 'object' ? Object.keys(params) : typeof params);
   let ytURL = getYTURL();
   let { target, contentTarget = target } = params ?? {};
 

@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+Fixes from the security audit of 0.8.7 (SECURITY_AUDIT.md).
+
+## Changed
+
++ **Return YouTube Dislike is off by default.** Every video opened sends its id to returnyoutubedislikeapi.com, a third party, so it is now switched on by choice. Applies to new installs; a TV that already has saved settings keeps the switch as it was.
++ SponsorBlock asks the official server (sponsor.ajay.app) first, and the community mirror (sponsorblock.inf.re) only when the official one fails.
++ The launch and relaunch log lines name the launch parameters without their values, which can hold a search, a voice query or a cast pairing code.
+
+## Fixes
+
++ Return YouTube Dislike: the video id is URL-encoded in the API request.
+
+## Tests
+
++ The bench tests press keys as trusted events, as the remote does: the app ignores untrusted key events, so the panel tests had never opened the panel. `jsdom` is a dev dependency.
++ The bench tests follow the six-tab settings panel, the thumbnail upgrade done inside the response, the "4.3k" dislike format, and JSON.parse staying hooked as a pass-through. The tests of the spatial-navigation polyfill, removed in 0.8.6, are gone.
+
 ## [0.8.7] - 2026/10/12
 
 No more "Are you still watching?" pauses, a clock that can show the date and stay on during playback, remaining time and end time, muted previews, and about 5.6 KB smaller packages. Features from MickLesk's fork, mirijanristic's fork and the webosbrew/youtube-webos issue tracker, found in a review of the whole youtube-webos fork network (178 repositories). Ships both packages: `_webOS22+.ipk` for webOS 22 and newer, and the legacy `.ipk` for webOS 3-6.

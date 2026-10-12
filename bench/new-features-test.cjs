@@ -5,7 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const { JSDOM, VirtualConsole } = require('jsdom');
-const { applyChrome38Downgrade, UA, setUserAgent } = require('./chrome38-env.cjs');
+const { applyChrome38Downgrade, UA, setUserAgent, dispatchTrusted } = require('./chrome38-env.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const bundlePath = process.argv[2] || ROOT + '/dist/webOSUserScripts/userScript.js';
@@ -193,16 +193,17 @@ const shelfItems = (r) => r.contents.tvBrowseRenderer.content.tvSurfaceContentRe
     await wait(300);
     const e = new win.KeyboardEvent('keydown', { bubbles: true, cancelable: true });
     Object.defineProperty(e, 'keyCode', { get: () => 404, configurable: true });
-    win.document.body.dispatchEvent(e);
+    dispatchTrusted(win.document.body, e);
     for (let i = 0; i < 20; i++) pump();
-    const main = win.document.querySelector('#ytaf-page-main');
+    const filters = win.document.querySelector('#ytaf-page-filters');
+    const ui = win.document.querySelector('#ytaf-page-interface');
     t('[panel] Remove Live Videos row present',
-      !!main && /Remove Live Videos/.test(main.textContent), main && main.textContent.slice(0, 80));
+      !!filters && /Remove Live Videos/.test(filters.textContent), filters && filters.textContent.slice(0, 80));
     t('[panel] YouTube Logo is now a selector, not a checkbox',
-      !!main && /YouTube Logo/.test(main.textContent) &&
-      !/Hide YouTube Logo/.test(main.textContent));
+      !!ui && /YouTube Logo/.test(ui.textContent) &&
+      !/Hide YouTube Logo/.test(ui.textContent));
     const css = Array.from(win.document.querySelectorAll('style')).map((s) => s.textContent).join('\n');
-    t('[panel] page-1 density rules shipped', /#ytaf-page-main label/.test(css));
+    t('[panel] sectioned-page density rules shipped', /\.ytaf-page-sectioned label/.test(css));
     t('[panel] settings page can scroll rather than clip', /overflow-y:\s*auto/.test(css));
   }
 

@@ -9,7 +9,7 @@
  */
 const fs = require('fs');
 const { JSDOM, VirtualConsole } = require('jsdom');
-const { applyChrome38Downgrade, UA, setUserAgent } = require('./chrome38-env.cjs');
+const { applyChrome38Downgrade, UA, setUserAgent, dispatchTrusted } = require('./chrome38-env.cjs');
 
 const bundlePath = process.argv[2] || 'dist/webOSUserScripts/userScript.js';
 const GREEN = 404;
@@ -39,7 +39,7 @@ function boot() {
 function key(win, code) {
   const e = new win.KeyboardEvent('keydown', { bubbles: true, cancelable: true });
   Object.defineProperty(e, 'keyCode', { get: () => code, configurable: true });
-  win.document.body.dispatchEvent(e);
+  dispatchTrusted(win.document.body, e);
 }
 
 let pass = 0, fail = 0;
@@ -47,7 +47,11 @@ const t = (name, ok, extra) => {
   if (ok) { pass++; console.log('PASS ' + name); }
   else { fail++; console.log('FAIL ' + name + (extra ? '\n     ' + extra : '')); }
 };
-const PAGES = ['#ytaf-page-main', '#ytaf-page-sponsor', '#ytaf-page-shortcuts', '#ytaf-page-ui-tweaks'];
+// One per tab, in tab order (SETTINGS_PAGES in src/ui.js).
+const PAGES = ['#ytaf-page-filters', '#ytaf-page-player', '#ytaf-page-interface',
+  '#ytaf-page-sponsor', '#ytaf-page-shortcuts', '#ytaf-page-ui-tweaks'];
+const SPONSOR = 3;
+const SHORTCUTS = 4;
 
 setTimeout(() => {
   // ---- Case 1: user hits a tab BEFORE the idle chain gets there ----
@@ -56,22 +60,22 @@ setTimeout(() => {
     key(win, GREEN);
     const panel = win.document.querySelector('.ytaf-ui-container');
     t('panel exists after keypress', !!panel);
-    t('only Main built synchronously',
-      win.document.querySelectorAll(PAGES[1]).length === 0,
-      'sponsor page count ' + win.document.querySelectorAll(PAGES[1]).length);
+    t('only the first page built synchronously',
+      win.document.querySelectorAll(PAGES[SPONSOR]).length === 0,
+      'sponsor page count ' + win.document.querySelectorAll(PAGES[SPONSOR]).length);
 
     const tabs = panel.querySelectorAll('.ytaf-tab-btn');
-    t('four tab buttons', tabs.length === 4, 'got ' + tabs.length);
+    t('one tab button per page', tabs.length === PAGES.length, 'got ' + tabs.length);
 
-    // No frames pumped yet: jump straight to Shortcuts (page 3).
+    // No frames pumped yet: jump straight to Shortcuts (the fifth tab).
     let threw = null;
-    try { tabs[2].click(); } catch (e) { threw = e; }
+    try { tabs[SHORTCUTS].click(); } catch (e) { threw = e; }
     t('tab press before idle build does not throw', !threw, threw && threw.message);
-    const shortcuts = win.document.querySelector(PAGES[2]);
+    const shortcuts = win.document.querySelector(PAGES[SHORTCUTS]);
     t('Shortcuts page built on demand', !!shortcuts);
     t('Shortcuts page is the visible one', shortcuts && shortcuts.style.display === 'block',
       shortcuts && shortcuts.style.display);
-    t('Main page hidden after tab switch',
+    t('first page hidden after tab switch',
       win.document.querySelector(PAGES[0]).style.display === 'none');
     // Don't pin an exact element count - adding a setting legitimately changes
     // it. What matters is that an on-demand build is fully populated, which the
@@ -100,8 +104,8 @@ setTimeout(() => {
       const el = win.document.querySelector(s);
       return el ? el.getElementsByTagName('*').length : -1;
     });
-    t('all four pages built after idle frames',
-      counts.length === 4 && counts.every((n) => n > 10), JSON.stringify(counts));
+    t('every page built after idle frames',
+      counts.length === PAGES.length && counts.every((n) => n > 10), JSON.stringify(counts));
     // The deferred build must produce the same tree an all-synchronous one
     // would: every page's elements accounted for, nothing dropped or doubled.
     const pageSum = counts.reduce((a, b) => a + b, 0);
@@ -113,7 +117,7 @@ setTimeout(() => {
     // Walk every tab, forwards then backwards.
     const tabs = panel.querySelectorAll('.ytaf-tab-btn');
     let ok = true, detail = '';
-    for (const order of [[1, 2, 3, 0], [3, 1, 0, 2]]) {
+    for (const order of [[1, 2, 3, 4, 5, 0], [5, 3, 1, 0, 4, 2]]) {
       for (const i of order) {
         tabs[i].click();
         const shown = PAGES.map((s) => win.document.querySelector(s).style.display);

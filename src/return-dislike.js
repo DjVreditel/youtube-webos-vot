@@ -183,7 +183,7 @@ class ReturnYouTubeDislike {
 
       // One deadline for headers and body, and the timer is always cleared.
       const response = await fetchJsonWithTimeout(
-        `https://returnyoutubedislikeapi.com/votes?videoId=${videoID}`, 8000, fetchOptions);
+        `https://returnyoutubedislikeapi.com/votes?videoId=${encodeURIComponent(videoID)}`, 8000, fetchOptions);
 
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 

@@ -9,7 +9,7 @@
  */
 const fs = require('fs');
 const { JSDOM, VirtualConsole } = require('jsdom');
-const { applyChrome38Downgrade, UA, setUserAgent } = require('./chrome38-env.cjs');
+const { applyChrome38Downgrade, UA, setUserAgent, dispatchTrusted } = require('./chrome38-env.cjs');
 
 const bundlePath = process.argv[2] || 'dist/webOSUserScripts/userScript.js';
 const label = process.argv[3] || 'panel';
@@ -47,7 +47,7 @@ setTimeout(async () => {
   const t0 = process.hrtime.bigint();
   const evt = new win.KeyboardEvent('keydown', { bubbles: true, cancelable: true });
   Object.defineProperty(evt, 'keyCode', { get: () => GREEN, configurable: true });
-  win.document.body.dispatchEvent(evt);
+  dispatchTrusted(win.document.body, evt);
   const openMs = Number(process.hrtime.bigint() - t0) / 1e6;
   const openCreated = created - before;
 

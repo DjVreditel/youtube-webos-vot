@@ -1,20 +1,19 @@
 /**
- * Loads the MODERN bundle in a webOS 25-shaped window and asserts it survives
- * evaluation.
+ * Loads the MODERN bundle in a webOS 23-shaped window and asserts it survives
+ * evaluation and the settings panel opens.
  *
  * This exists because the suite only ever smoke-tested the legacy bundle, and a
- * modern-only crash shipped: spatial-navigation.modern.js seals its API object,
- * ui.js assigned a property that only the legacy polyfill had, and webOS 25 died
- * with "Cannot add property trackFocus, object is not extensible".
+ * modern-only crash shipped once ("Cannot add property trackFocus, object is
+ * not extensible", from the spatial-navigation shim that 0.8.6 removed).
  *
  * No Chromium 38 downgrade here - the point is to exercise the code paths that
- * ONLY run on a modern engine (the modern spatial-nav shim, no polyfills.js, no
- * emoji-font.js, no buffer-limit).
+ * ONLY run on a modern engine (no polyfills.js, no emoji-font.js, no
+ * buffer-limit).
  */
 const fs = require('fs');
 const path = require('path');
 const { JSDOM, VirtualConsole } = require('jsdom');
-const { UA, setUserAgent } = require('./chrome38-env.cjs');
+const { UA, setUserAgent, dispatchTrusted } = require('./chrome38-env.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const bundlePath = process.argv[2] || ROOT + '/dist/webOSUserScripts/userScript.js';
@@ -54,19 +53,16 @@ setTimeout(() => {
   t('no jsdomError during load', errors.length === 0, errors[0]);
   t('JSON.parse hooked', win.JSON.parse.toString().indexOf('native code') === -1);
   t('JSON.stringify hooked', win.JSON.stringify.toString().indexOf('native code') === -1);
-  t('spatial navigation installed', !!win.__spatialNavigation__);
+  t('no spatial-navigation shim shipped', !win.__spatialNavigation__);
 
-  const sn = win.__spatialNavigation__;
-  t('__spatialNavigation__ is sealed (as the shim intends)', sn && !Object.isExtensible(sn));
-  t('keyMode was applied by ui.js', sn && sn.keyMode === 'NONE', sn && sn.keyMode);
-  t('trackFocus exists on the sealed object', sn && 'trackFocus' in sn);
-  t('trackFocus was turned off by ui.js', sn && sn.trackFocus === false, sn && String(sn.trackFocus));
-
-  // Writing it must not throw even though the object is sealed.
-  let setThrew = null;
-  try { sn.trackFocus = true; } catch (e) { setThrew = e; }
-  t('trackFocus is writable on the sealed object', !setThrew, setThrew && setThrew.message);
-  t('trackFocus round-trips', sn && sn.trackFocus === true);
+  // The green key opens the settings panel, which moves focus by itself.
+  const green = new win.KeyboardEvent('keydown', { bubbles: true, cancelable: true });
+  Object.defineProperty(green, 'keyCode', { get: () => 404, configurable: true });
+  let keyThrew = null;
+  try { dispatchTrusted(win.document.body, green); } catch (e) { keyThrew = e; }
+  t('green key opens the settings panel without throwing',
+    !keyThrew && !!win.document.querySelector('.ytaf-ui-container'), keyThrew && keyThrew.message);
+  t('no error while opening the panel', errors.length === 0, errors[0]);
 
   // The legacy-only modules must be aliased out of this build.
   const src = fs.readFileSync(bundlePath, 'utf8');

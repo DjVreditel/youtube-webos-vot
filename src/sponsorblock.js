@@ -8,9 +8,11 @@ import { getVideo } from './utils.js';
 import { fetchJsonWithTimeout } from './fetch-timeout.js';
 import './sponsorblock.css';
 
+// The official server first. The community mirror is only asked when the
+// official one fails, so the video hash prefixes normally go to one operator.
 const SPONSORBLOCK_CONFIG = {
-    primaryAPI: 'https://sponsorblock.inf.re/api',
-    fallbackAPI: 'https://sponsor.ajay.app/api',
+    primaryAPI: 'https://sponsor.ajay.app/api',
+    fallbackAPI: 'https://sponsorblock.inf.re/api',
     timeout: 5000,
 };
 

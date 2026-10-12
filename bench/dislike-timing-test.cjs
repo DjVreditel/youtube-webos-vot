@@ -101,9 +101,9 @@ const t = (n, ok, extra) => { if (ok) { pass++; console.log('PASS ' + n); }
       resolveFetch({ ok: true, status: 200, json: () => Promise.resolve({ dislikes: 4321 }) });
     }
     await wait(120); pump(); await wait(60);
-    t('slow API: value filled in when the fetch lands', valueOf(win) === '4.3K', valueOf(win));
+    t('slow API: value filled in when the fetch lands', valueOf(win) === '4.3k', valueOf(win));
     t('slow API: aria-label updated too',
-      factoid(win) && factoid(win).getAttribute('aria-label') === '4.3K Dislikes',
+      factoid(win) && factoid(win).getAttribute('aria-label') === '4.3k Dislikes',
       factoid(win) && factoid(win).getAttribute('aria-label'));
   }
 

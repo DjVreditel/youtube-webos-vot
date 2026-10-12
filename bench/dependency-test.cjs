@@ -5,7 +5,7 @@
  */
 const fs = require('fs');
 const { JSDOM, VirtualConsole } = require('jsdom');
-const { applyChrome38Downgrade, UA, setUserAgent } = require('./chrome38-env.cjs');
+const { applyChrome38Downgrade, UA, setUserAgent, dispatchTrusted } = require('./chrome38-env.cjs');
 
 const bundlePath = process.argv[2] || 'dist/webOSUserScripts/userScript.js';
 
@@ -67,12 +67,16 @@ setTimeout(() => {
     t('ads NOT filtered with Ad Blocking off', items.length === 2, 'items ' + items.length);
   }
 
-  // --- Both off: hook should come off entirely ---
+  // --- Both off: the hook passes responses through untouched ---
+  // It is not taken out of JSON.parse: hooks installed after it
+  // (force-codec.js, subtitle-translate.js) wrap it, so src/adblock.js turns
+  // it into a pass-through instead of writing the original back over them.
   {
-    const { win } = boot({ enableAdBlock: false, enableLegacyEmojiFix: false,
-                           hideGuestSignInPrompts: false, hideEndcards: false });
-    t('JSON.parse unhooked when nothing needs it',
-      win.JSON.parse.toString().indexOf('native code') !== -1);
+    const { win, NS } = boot({ enableAdBlock: false, enableLegacyEmojiFix: false,
+                               hideGuestSignInPrompts: false, hideEndcards: false });
+    const text = emojiPayload(NS);
+    t('JSON.parse passes responses through when nothing needs it',
+      NS(win.JSON.parse(text)) === text);
   }
 
   // --- Ad Blocking ON: everything works as before ---
@@ -106,9 +110,9 @@ setTimeout(() => {
     const { win, pump } = boot({ enableAdBlock: false, enableTrackingBlock: true });
     const e = new win.KeyboardEvent('keydown', { bubbles: true, cancelable: true });
     Object.defineProperty(e, 'keyCode', { get: () => 404, configurable: true });
-    win.document.body.dispatchEvent(e);
+    dispatchTrusted(win.document.body, e);
     for (let i = 0; i < 20; i++) pump();
-    const inputs = win.document.querySelectorAll('#ytaf-page-main input[type=checkbox]');
+    const inputs = win.document.querySelectorAll('#ytaf-page-filters input[type=checkbox]');
     // Cosmetic Filtering order: Ad Block, Tracking Block, Shorts, LiveGames, MostRelevant
     const tracking = inputs[1];
     t('Tracking Block checkbox disabled when Ad Blocking is off',

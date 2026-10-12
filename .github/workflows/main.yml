@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+# Checkout and the artifact upload are all this needs; the artifact upload
+# uses the Actions runtime token, not GITHUB_TOKEN.
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest

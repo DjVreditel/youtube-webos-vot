@@ -1,6 +1,6 @@
 /**
- * Behaviour of thumbnail-quality.js and return-dislike.js after the hot-path
- * changes: the tile tracker must still find the same elements, and the dislike
+ * Behaviour of thumbnail-quality.js and return-dislike.js: thumbnail URLs are
+ * upgraded in the parsed response and verified by probes, and the dislike
  * panel must still be detected by focus and navigate the same way.
  */
 const fs = require('fs');
@@ -33,8 +33,10 @@ function boot(cfg, html, url) {
   win.Element.prototype.scrollIntoView = function () {};
   // jsdom never loads images, so the module's WebP feature-detect would await a
   // promise that never settles and no upgrade would ever run. Resolve it as
-  // "no webp", which is the Chromium 38 answer anyway.
-  win.Image = class { set src(_v) { setTimeout(() => this.onerror && this.onerror(), 0); } };
+  // "no webp", which is the Chromium 38 answer anyway. Tiles on screen are
+  // probed by loading the image (thumbnail-quality.js imageExists), not by a
+  // HEAD request, so image loads count as probes too.
+  win.Image = class { set src(v) { probed.push(v); setTimeout(() => this.onerror && this.onerror(), 0); } };
   win.localStorage.setItem('ytaf-configuration', win.JSON.stringify(Object.assign({
     enableAdBlock: true, enableLegacyEmojiFix: false, enableSponsorBlock: false,
     enableReturnYouTubeDislike: false, upgradeThumbnails: false, enableAutoLogin: false
@@ -50,53 +52,52 @@ const t = (n, ok, extra) => { if (ok) { pass++; console.log('PASS ' + n); }
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
 setTimeout(async () => {
-  // ---- thumbnail-quality: does the tracker still find every shape? ----
+  // ---- thumbnail-quality: URLs are rewritten in the parsed response ----
+  // The module works inside adblock.js's JSON.parse hook, on the response
+  // before the app sees it, and verifies unproven rungs with background probes.
+  const pad = 'z'.repeat(600);
+  const tileResponse = (NS, ids) => NS({
+    responseContext: { _pad: pad },
+    contents: { anything: { items: ids.map((id) => ({ tileRenderer: { header: { tileHeaderRenderer: {
+      thumbnail: { thumbnails: [{ url: 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg', width: 480, height: 360 }] }
+    } } } })) } }
+  });
+  const urlsOf = (out) => out.contents.anything.items.map(
+    (it) => it.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0].url);
+  const html = '<!doctype html><html><body class="WEB_PAGE_TYPE_BROWSE"><ytlr-app></ytlr-app></body></html>';
+
   {
-    const { win, probed, pump } = boot({ upgradeThumbnails: true },
-      '<!doctype html><html><body class="WEB_PAGE_TYPE_BROWSE"><ytlr-app></ytlr-app></body></html>');
-    await tick(); pump(); await tick();
-    const d = win.document;
-    const app = d.querySelector('ytlr-app');
-
-    const mk = (tag, parentTag) => {
-      const host = d.createElement(parentTag || 'div');
-      const el = d.createElement(tag);
-      el.style.backgroundImage = 'url("https://i.ytimg.com/vi/abc123XYZ_-/hqdefault.jpg")';
-      host.appendChild(el);
-      return { host, el };
-    };
-    // All three clauses of 'ytlr-thumbnail-details, ytlr-surface-page, thumbnail image'
-    const a = mk('ytlr-thumbnail-details');
-    const b = mk('ytlr-surface-page');
-    const c = mk('image', 'thumbnail');            // descendant clause
-    const nested = d.createElement('div');          // found via querySelectorAll
-    const nestedInner = d.createElement('ytlr-thumbnail-details');
-    nestedInner.style.backgroundImage = 'url("https://i.ytimg.com/vi/nested00000/hqdefault.jpg")';
-    nested.appendChild(d.createElement('div')).appendChild(nestedInner);
-    const notAThumb = d.createElement('image');     // <image> with NO <thumbnail> ancestor
-    notAThumb.style.backgroundImage = 'url("https://i.ytimg.com/vi/skipme00000/hqdefault.jpg")';
-
-    for (const n of [a.host, b.host, c.host, nested, notAThumb]) app.appendChild(n);
-    await tick(); await new Promise((r) => setTimeout(r, 60)); pump(); await tick();
-    await new Promise((r) => setTimeout(r, 60)); pump(); await tick();
-
-    const probedIds = probed.join(' ');
-    t('tracks <ytlr-thumbnail-details>', probedIds.indexOf('abc123XYZ_-') !== -1);
-    t('tracks nested thumbnails via querySelectorAll', probedIds.indexOf('nested00000') !== -1);
-    t('does NOT track <image> without a <thumbnail> ancestor',
-      probedIds.indexOf('skipme00000') === -1);
-    // The source tile is already hqdefault, and getThumbnailUrl() returns null
-    // when the rewritten path equals the original - so only the two higher
-    // qualities are probed. Asserting that keeps the no-op skip honest.
-    t('probes the higher qualities only',
-      /maxresdefault/.test(probedIds) && /sddefault/.test(probedIds) &&
-      probed.filter((u) => /hqdefault/.test(u)).length === 0,
+    const { win, probed } = boot({ upgradeThumbnails: true, thumbnailQualityMode: 'eager' }, html);
+    await tick();
+    const out = win.JSON.parse(tileResponse(win.JSON.stringify, ['abc123XYZ_-']));
+    t('eager mode: tile rewritten to maxresdefault',
+      urlsOf(out)[0] === 'https://i.ytimg.com/vi/abc123XYZ_-/maxresdefault.jpg', urlsOf(out)[0]);
+    await new Promise((r) => setTimeout(r, 1500));
+    t('eager mode: the unproven rung is verified', probed.some((u) => /abc123XYZ_-\/maxresdefault/.test(u)),
       'probed: ' + probed.slice(0, 4).join(' | '));
+  }
 
-    // Removal must untrack without throwing.
-    let threw = null;
-    try { app.removeChild(a.host); await tick(); } catch (e) { threw = e; }
-    t('removal untracks cleanly', !threw, threw && threw.message);
+  {
+    const { win, probed } = boot({ upgradeThumbnails: true, thumbnailQualityMode: 'safe' }, html);
+    await tick();
+    const out = win.JSON.parse(tileResponse(win.JSON.stringify, ['safe0000000']));
+    t('safe mode: unproven rung is not drawn',
+      urlsOf(out)[0] === 'https://i.ytimg.com/vi/safe0000000/hqdefault.jpg', urlsOf(out)[0]);
+    await new Promise((r) => setTimeout(r, 1500));
+    t('safe mode: a probe asks for the higher rung',
+      probed.some((u) => /safe0000000\/maxresdefault/.test(u)), 'probed: ' + probed.slice(0, 4).join(' | '));
+    t('safe mode: the rung it already has is never probed',
+      !probed.some((u) => /hqdefault/.test(u)), 'probed: ' + probed.join(' | '));
+  }
+
+  {
+    const { win, probed } = boot({ upgradeThumbnails: false, thumbnailQualityMode: 'eager' }, html);
+    await tick();
+    const out = win.JSON.parse(tileResponse(win.JSON.stringify, ['off00000000']));
+    await new Promise((r) => setTimeout(r, 1500));
+    t('switched off: response left alone and nothing probed',
+      /off00000000\/hqdefault/.test(urlsOf(out)[0]) && !probed.some((u) => /off00000000/.test(u)),
+      urlsOf(out)[0] + ' / probed: ' + probed.join(' | '));
   }
 
   // ---- return-dislike: panel detection + navigation ----

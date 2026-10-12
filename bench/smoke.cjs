@@ -83,7 +83,8 @@ const done = () => {
        'style tags holding bundle CSS: ' + bundleSheets.length);
   push('Element#matches polyfilled', typeof win.Element.prototype.matches === 'function');
   push('Node#isConnected polyfilled', 'isConnected' in win.Node.prototype);
-  push('spatial navigation installed', !!win.__spatialNavigation__);
+  // The panel navigates by itself since 0.8.6; the polyfill is no longer shipped.
+  push('no spatial-navigation polyfill shipped', !win.__spatialNavigation__);
 
   // Exercise the hooked JSON.parse with a realistic YouTube payload.
   let parseOk = true, parseErr = '';

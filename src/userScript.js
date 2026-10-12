@@ -48,7 +48,8 @@ if (typeof initBufferLimit === 'function' && getWebOSVersion() <= 4) {
 document.addEventListener(
   'webOSRelaunch',
   (evt) => {
-    console.info('RELAUNCH:', evt, window.launchParams);
+    // Only the names, as handleLaunch logs them.
+    console.info('RELAUNCH:', evt.detail && typeof evt.detail === 'object' ? Object.keys(evt.detail) : typeof evt.detail);
 	resetActiveBypass();
     if (document.body && document.body.classList.contains(SELECTORS.ACCOUNT_SELECTOR)) {
         console.info('[Main] Relaunch detected on Account Selector. Triggering bypass.');

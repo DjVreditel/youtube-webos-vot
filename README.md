@@ -19,8 +19,9 @@ the best of the other forks of the project (see [What this fork adds](#what-this
 
 The official YouTube app has to be uninstalled first.
 
-**Pick the package for your TV.** Both are on the [Releases](https://github.com/foxi69/youtube-webos/releases)
-page, and the newest ones are also in [`dist/`](dist):
+**Pick the package for your TV** from the [Releases](https://github.com/foxi69/youtube-webos/releases) page. The
+packages in [`dist/`](dist) hold the same files, but their SHA-256 differs from the one in `repo.json`, so only a
+Releases download can be checked against it:
 
 | File | TVs |
 |---|---|
@@ -109,7 +110,7 @@ All filters except Ad Blocking need Ad Blocking on.
 | **Show Remaining Time and End Time** | Off |
 | Hide Endcards | Off |
 | **Magic Remote: Scroll Wheel Seeks on Progress Bar** | Off |
-| Return YouTube Dislike | On |
+| Return YouTube Dislike (sends the id of every video you open to returnyoutubedislikeapi.com) | Off |
 
 **Interface**
 
@@ -235,7 +236,7 @@ other forks of the project; credits are in [CHANGELOG.md](CHANGELOG.md).
   - auto, manual and seek-bar-only modes per category, and Skip Segments Once;
   - full-video label and time with skips removed;
   - new segments picked up during playback.
-- Return YouTube Dislike in the description panel.
+- Return YouTube Dislike in the description panel (off by default).
 - Force Max Quality, Force Video Codec and Max Thumbnail Quality.
 - Auto-Translate Subtitles.
 - Bypass Nag Screens: account picker, Premium and other upsell screens, and "Are you still watching?".

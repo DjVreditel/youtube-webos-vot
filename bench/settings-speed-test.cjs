@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const { JSDOM, VirtualConsole } = require('jsdom');
-const { applyChrome38Downgrade, UA, setUserAgent } = require('./chrome38-env.cjs');
+const { applyChrome38Downgrade, UA, setUserAgent, dispatchTrusted } = require('./chrome38-env.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const bundlePath = process.argv[2] || ROOT + '/dist/webOSUserScripts/userScript.js';
@@ -131,7 +131,7 @@ const subOf = (row) => {
     const e = new win.KeyboardEvent('keydown', { bubbles: true, cancelable: true });
     Object.defineProperty(e, 'keyCode', { get: () => code, configurable: true });
     Object.defineProperty(e, 'key', { get: () => ({13:'Enter',39:'ArrowRight',37:'ArrowLeft'})[code], configurable: true });
-    row.dispatchEvent(e);
+    dispatchTrusted(row, e);
     return e;
   };
   row.setAttribute('tabindex', '0');

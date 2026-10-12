@@ -154,3 +154,28 @@ function sealDomCollectionPrototypes(win) {
 module.exports.sealDomCollectionPrototypes = sealDomCollectionPrototypes;
 module.exports.UA = UA;
 module.exports.setUserAgent = setUserAgent;
+
+// jsdom's wrapper <-> implementation helpers. Internal, so their path moved
+// between major versions (30 put the generated code under lib/generated/idl).
+function jsdomUtils() {
+  for (const p of ['jsdom/lib/generated/idl/utils.js', 'jsdom/lib/jsdom/living/generated/utils.js']) {
+    try { return require(p); } catch { /* try the next layout */ }
+  }
+  throw new Error('jsdom internals not found: dispatchTrusted needs updating for this jsdom');
+}
+
+/**
+ * Dispatches `event` on `target` as a trusted event, the way a key press on the
+ * remote arrives. The app ignores key events with isTrusted false (src/ui.js
+ * isSyntheticKey), so page script cannot trigger its shortcuts; jsdom's
+ * dispatchEvent() always marks the event untrusted, so a test pressing a key
+ * that way is ignored. jsdom's internal dispatch keeps the flag as set here.
+ */
+function dispatchTrusted(target, event) {
+  const { implForWrapper } = jsdomUtils();
+  const eventImpl = implForWrapper(event);
+  eventImpl.isTrusted = true;
+  return implForWrapper(target)._dispatch(eventImpl);
+}
+
+module.exports.dispatchTrusted = dispatchTrusted;
