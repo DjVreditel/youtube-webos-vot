@@ -194,10 +194,14 @@ other forks of the project; credits are in [CHANGELOG.md](CHANGELOG.md).
 - *0.8.6:* Remove Upcoming / Members-Only Videos filters, Load Rows Ahead, Smooth (SD) thumbnails, Turn On
   Translated Subtitles Automatically, typing in search with a USB/Bluetooth keyboard, Jump to Live, Show Video
   Quality on Start, a pointer button for the settings, Disable Animations and UI Brightness.
+- *0.8.7:* no "Are you still watching?" pause, no paid-promotion banner, a clock with the date that can stay on
+  during playback, remaining time and end time, Mute Video Previews and Don't Turn On Subtitles by Themselves;
+  about 5.6 KB smaller packages.
 
 **Fixed**
 - Ad blocking holds up against YouTube's "property locker"; previously playback could stall a few seconds in.
-- Casting from a phone to the TV works again.
+- webOS 25: the webOS Cast service is no longer blocked when a cast starts the app. Casting can still fail while
+  the app is open; see *Known issues* in [CHANGELOG.md](CHANGELOG.md).
 - SponsorBlock:
   - Non-Music segments are actually fetched;
   - muted segments now mute;
