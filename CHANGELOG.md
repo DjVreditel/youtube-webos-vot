@@ -63,6 +63,7 @@ Bug fixes and features from mirijanristic's fork and from the NicholasBly/youtub
 + The screensaver fix lost the video when YouTube swapped the player between videos or loaded it late. It follows the new one now. From mirijanristic's fork.
 + Force Max Quality: turning it off from the home screen kept the forced quality, and a slowly loading player was never found. Both are fixed. From mirijanristic's fork.
 + Return YouTube Dislike: Enter in the description panel acted on the wrong item after YouTube updated the panel. It acts on the selected item now. From mirijanristic's fork.
++ Return YouTube Dislike: when a dislike request ended after a newer one had started, it dropped the newer request's cancel handle, and on webOS 3/4 a late answer could still be written after the video was left. Each request now only touches its own state.
 
 ### Older and newer TVs
 

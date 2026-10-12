@@ -169,30 +169,39 @@ class ReturnYouTubeDislike {
         if (this.abortController) this.abortController.abort();
         this.abortController = new AbortController();
     }
+    // This request's own controller and video: a newer request replaces
+    // this.abortController and this.videoID while this one is still running.
+    const controller = HAS_ABORT_CONTROLLER ? this.abortController : null;
+    const videoID = this.videoID;
+    // Without AbortController (webOS 3/4) an older request is never cancelled,
+    // so its late answer must not land on the video shown now.
+    const isStale = () => !this.active || this.videoID !== videoID;
     
     try {
       const fetchOptions = {};
-      if (HAS_ABORT_CONTROLLER && this.abortController) fetchOptions.signal = this.abortController.signal;
+      if (controller) fetchOptions.signal = controller.signal;
 
       // One deadline for headers and body, and the timer is always cleared.
       const response = await fetchJsonWithTimeout(
-        `https://returnyoutubedislikeapi.com/votes?videoId=${this.videoID}`, 8000, fetchOptions);
+        `https://returnyoutubedislikeapi.com/votes?videoId=${videoID}`, 8000, fetchOptions);
 
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-      const data = response.data;
-      this.dislikesCount = data?.dislikes || 0;
-      this.dislikesValue = this.dislikesCount;
-      this.fetchAttempts = 0;
-      
-      dislikeCache.set(this.videoID, { dislikes: this.dislikesCount, timestamp: Date.now() });
+      const dislikes = response.data?.dislikes || 0;
+      dislikeCache.set(videoID, { dislikes, timestamp: Date.now() });
       if (dislikeCache.size > 50) dislikeCache.delete(dislikeCache.keys().next().value);
+      if (isStale()) return;
+
+      this.dislikesCount = dislikes;
+      this.dislikesValue = dislikes;
+      this.fetchAttempts = 0;
 
       // The panel may already be on screen showing the placeholder.
       this.updateDislikeDisplay();
       
     } catch (error) {
       if (!HAS_ABORT_CONTROLLER || error.name !== 'AbortError') this.log('error', 'Fetch error:', error);
+      if (isStale()) return;
       this.dislikesCount = 0;
       this.dislikesValue = null;   // unknown, NOT zero - never cached
 
@@ -206,7 +215,9 @@ class ReturnYouTubeDislike {
         }, delay, 'rydRetry');
       }
     } finally {
-      if (HAS_ABORT_CONTROLLER) this.abortController = null;
+      // Only drop our own controller: clearing a newer request's one would
+      // leave destroy() unable to cancel it.
+      if (controller && this.abortController === controller) this.abortController = null;
     }
   }
 
