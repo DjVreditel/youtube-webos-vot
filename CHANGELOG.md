@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+## Added
+
++ **Clock in UI** (Interface) now has three choices: Off, Time, or Date and Time. The date is the TV language's short form ("Oct 12, 2:05 PM", "okt. 12. 7:15"). It replaces the Display Time in UI switch; a clock you had on stays on, showing the time (NicholasBly/youtube-webos#126).
+
+## Fixes
+
++ Reduce Telemetry & Tracking blanks `trackingParams` at every depth of a response, with one pass over the response text before it is parsed, instead of walking the parsed response down to depth 15 afterwards. `clickTrackingParams` stays, so endcards still open. From mirijanristic's fork.
+
+## Changed
+
++ Every stylesheet of the app goes into the page as one `<style>`, written once, instead of one per file: about 5.6 KB smaller packages and less CSS parsing at startup. The CSS itself is unchanged. From mirijanristic's fork.
++ The JSON.parse and JSON.stringify hooks keep their `try`/`catch` in a small function of its own, since webOS 3's engine does not optimise a function that contains one; the hooks run on every parse and stringify the app makes. From mirijanristic's fork.
++ The Noto Sans Arabic and Noto Sans Math fonts that the webOS 3 and 4 emoji fix falls back to come in through a link of their own, and only on those TVs; webOS 5 and 6 no longer download them.
+
 ## [0.8.6] - 2026/10/12
 
 Bug fixes and features from mirijanristic's fork and from the NicholasBly/youtube-webos issue tracker, each checked against this codebase first. Ships both packages: `_webOS22+.ipk` for webOS 22 and newer, and the legacy `.ipk` for webOS 3-6.

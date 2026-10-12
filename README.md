@@ -119,7 +119,7 @@ All filters except Ad Blocking need Ad Blocking on.
 | Max Thumbnail Quality | Off |
 | Thumbnail Strategy (Original, Fast, **Smooth (SD)**) | Original |
 | YouTube Logo (Default, Premium, Hidden) | Default |
-| Display Time in UI | Off |
+| Clock in UI | Off (or Time, Date and Time) |
 | OLED-Care Mode (True Black UI) | Off |
 | Disable Notifications | Off |
 | **Load Rows Ahead** | On |
@@ -237,7 +237,7 @@ other forks of the project; credits are in [CHANGELOG.md](CHANGELOG.md).
   - OLED-Care Mode (true-black UI);
   - Audio-Only Mode;
   - Sleep Timer.
-- Smart clock that hides in fullscreen and when the description panel is open.
+- Smart clock (time, or date and time) that hides in fullscreen and when the description panel is open.
 - UI fixes:
   - full description panel navigation;
   - multiline titles and video shelf opacity;

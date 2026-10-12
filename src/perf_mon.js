@@ -288,7 +288,7 @@ export {};
     [/shortsKeepAliveTimer|shortsBufferTimer|isPlayerHidden|playerCtrlObs/, 'screensaver-fix.js'],
     [/previewbar|skipSegment|sponsorTimes|segmentsFor|barTypes/, 'sponsorblock.js'],
     [/ryd-dislike-factoid|returnyoutubedislike|dislikeCount/, 'return-dislike.js'],
-    [/hookedParse|SCHEMA_REGISTRY|walkAndProcess|adPlacements|trackingParams/, 'adblock.js'],
+    [/hookedParse|SCHEMA_REGISTRY|walkAndProcess|adPlacements|trackingParams|TRACKING_PARAMS_RE/, 'adblock.js'],
     [/twemoji|EMOJI_RE|processTextNode/, 'emoji-font.js'],
     [/setPlaybackQualityRange|yt-player-quality/, 'video-quality.js'],
     [/ytaf-hide-logo|ytaf-fix-titles|oled-theme-active|ytaf-remove-borders|configWrite/, 'ui.js'],
@@ -378,7 +378,8 @@ export {};
     removeEndcardsOptimized: ['adblock.js', 'Clears endcard arrays on PLAYER responses', 'light'],
     removePlayerAdsOptimized: ['adblock.js', 'Strips playerAds and adPlacements', 'light'],
     findObjects: ['adblock.js', 'Recursive needle search (fallback path only)', 'heavy'],
-    walkAndProcess: ['adblock.js', 'Deep walk: trackingParams strip + emoji wrap', 'heavy'],
+    walkAndProcess: ['adblock.js', 'Deep walk: emoji wrap on frameworkUpdates', 'medium'],
+    stripTrackingParams: ['adblock.js', 'One regex pass blanking trackingParams in the JSON text', 'light'],
     findAndProcessText: ['adblock.js', 'Entry to the emoji text walk', 'medium'],
     processTextFieldsInPlace: ['adblock.js', 'Rewrites text runs for the emoji font', 'medium'],
     splitIntoRuns: ['adblock.js', 'Splits a string into emoji and text runs', 'medium'],
@@ -1766,7 +1767,7 @@ export {};
     hideEndcards: false,
     enableAutoLogin: true,
     hideLogo: false,
-    showWatch: false,
+    clockMode: 'off',
     enableOledCareMode: false,
     videoShelfOpacity: 100,
     fixMultilineTitles: true,
@@ -2019,13 +2020,13 @@ export {};
       lamp: 'TRACK',
       module: 'adblock.js',
       pages: ALL_PAGES,
-      cost: 'heavy',
+      cost: 'light',
       expect:
         'XHR and fetch to log_event, ptracking, stats/atr and stats/qoe are cancelled, AND ' +
-        'walkAndProcess deep-walks every parsed response to depth 15 to strip trackingParams.',
-      fns: ['initTrackingBlock', 'telemetryFetchHandler', 'walkAndProcess'],
+        'stripTrackingParams blanks every trackingParams in the response text before the parse.',
+      fns: ['initTrackingBlock', 'telemetryFetchHandler', 'stripTrackingParams'],
       perPage: {
-        home: 'Heavy: home responses are the largest, and each one gets a full depth-15 walk.',
+        home: 'Light: one native regex pass over each response text, at any depth.',
         watch: 'Player and next responses walked; watchtime stats are deliberately left alone.'
       },
       probe: function () {
@@ -2434,8 +2435,11 @@ export {};
     },
 
     {
-      key: 'showWatch',
-      label: 'Display Time in UI',
+      key: 'clockMode',
+      label: 'Clock in UI',
+      enabledWhen: function (v) {
+        return v === 'time' || v === 'datetime';
+      },
       lamp: 'CLOCK',
       module: 'watch.js',
       pages: ALL_PAGES,
@@ -2963,7 +2967,7 @@ export {};
           (worstType ? ', worst on ' + worstType + ' responses' : '') +
           '.',
         suggestion: cfgGet('enableTrackingBlock')
-          ? 'Reduce Telemetry is on, which forces a depth-15 walkAndProcess over every response. Test with it off to separate the two costs.'
+          ? 'Reduce Telemetry is on, which adds a regex pass over every response text. Test with it off to separate the two costs.'
           : 'Check whether responses are falling through to applyFallbackFilters — that path deep-searches instead of using a schema path.'
       };
     },

@@ -92,35 +92,44 @@ function withNoAdFlag(value: any, path: string[]): any {
   return root;
 }
 
-function stringify(value: any, replacer?: any, space?: any): string {
-  try {
-    if (value !== null && typeof value === 'object') {
-      let path: string[] | null = null;
-      // (1) The shape YouTube actually sends - no traversal at all.
-      const rootPc = (value as any).playbackContext;
-      if (rootPc && typeof rootPc === 'object' && rootPc.contentPlaybackContext) {
-        path = [];
-      } else if (
-        (value as any).context &&
-        typeof (value as any).context === 'object'
-      ) {
-        // (2) Looks like an InnerTube request, but not the expected shape.
-        path = findCtxPath(value);
-      }
+/** `value`, or a copy of it with the flag set when it is a player request. */
+function withFlagIfPlayerRequest(value: any): any {
+  let path: string[] | null = null;
+  // (1) The shape YouTube actually sends - no traversal at all.
+  const rootPc = value.playbackContext;
+  if (rootPc && typeof rootPc === 'object' && rootPc.contentPlaybackContext) {
+    path = [];
+  } else if (value.context && typeof value.context === 'object') {
+    // (2) Looks like an InnerTube request, but not the expected shape.
+    path = findCtxPath(value);
+  }
+  if (!path) return value;
 
-      if (path) {
-        let ctx = value;
-        for (const key of path) ctx = ctx[key];
-        if (ctx.playbackContext.contentPlaybackContext.isInlinePlaybackNoAd !== true) {
-          value = withNoAdFlag(value, path);
-          if (DEBUG) console.info('[JSON.stringify] Set isInlinePlaybackNoAd');
-        }
-      }
-    }
+  let ctx = value;
+  for (const key of path) ctx = ctx[key];
+  if (ctx.playbackContext.contentPlaybackContext.isInlinePlaybackNoAd === true) return value;
+  if (DEBUG) console.info('[JSON.stringify] Set isInlinePlaybackNoAd');
+  return withNoAdFlag(value, path);
+}
+
+// The try/catch sits alone here, not in stringify(): the engine of webOS 3
+// (V8 3.28) does not optimise a function that contains one, and stringify()
+// runs on every JSON.stringify the app makes. (From mirijanristic's fork.)
+function withFlagSafely(value: any): any {
+  try {
+    return withFlagIfPlayerRequest(value);
   } catch (e) {
     // our logic must never break YouTube's serialization
+    return value;
   }
+}
 
+function stringify(value: any, replacer?: any, space?: any): string {
+  // Only InnerTube request bodies carry either key; everything else is
+  // serialized without another call.
+  if (value !== null && typeof value === 'object' && (value.playbackContext || value.context)) {
+    value = withFlagSafely(value);
+  }
   return originalStringify(value, replacer, space);
 }
 

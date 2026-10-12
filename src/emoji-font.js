@@ -252,6 +252,14 @@ if (document.characterSet === 'UTF-8' && getWebOSVersion() <= 4) {
   // only apply on legacy webOS where this module actually loads.
   document.documentElement.classList.add('ytaf-legacy-emoji');
 
+  // The Noto fonts the rules in emoji-font.css fall back to. A <link>, not an
+  // @import in that file: styles.js joins every stylesheet of the bundle into
+  // one <style>, where an @import that is not first is ignored.
+  const notoFonts = document.createElement('link');
+  notoFonts.rel = 'stylesheet';
+  notoFonts.href = 'https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic&family=Noto+Sans+Math&display=swap';
+  (document.head || document.documentElement).appendChild(notoFonts);
+
   // Hook into configurations
   manageObserverState();
   configAddChangeListener('enableLegacyEmojiFix', manageObserverState);

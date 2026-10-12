@@ -71,8 +71,16 @@ const done = () => {
   push('no exception during evaluation', !threw, threw && (threw.stack || String(threw)).split('\n').slice(0, 4).join(' | '));
   push('JSON.parse was hooked', win.JSON.parse.toString().indexOf('native code') === -1);
   push('JSON.stringify was hooked', win.JSON.stringify.toString().indexOf('native code') === -1);
-  push('CSS injected by style-loader', win.document.querySelectorAll('style').length > 0,
-       'style tags: ' + win.document.querySelectorAll('style').length);
+  // The bundle's stylesheets (src/styles.js) in one <style>: the panel's
+  // (ui.css), SponsorBlock's and the clock's (watch.css) rules together.
+  const styleTags = Array.prototype.slice.call(win.document.querySelectorAll('style'));
+  const bundleSheets = styleTags.filter((s) => s.textContent.indexOf('.ytaf-ui-container') !== -1 ||
+    s.textContent.indexOf('#previewbar') !== -1 || s.textContent.indexOf('.webOs-watch{') !== -1);
+  push('CSS injected as one <style>', bundleSheets.length === 1 &&
+       bundleSheets[0].textContent.indexOf('.ytaf-ui-container') !== -1 &&
+       bundleSheets[0].textContent.indexOf('#previewbar') !== -1 &&
+       bundleSheets[0].textContent.indexOf('.webOs-watch{') !== -1,
+       'style tags holding bundle CSS: ' + bundleSheets.length);
   push('Element#matches polyfilled', typeof win.Element.prototype.matches === 'function');
   push('Node#isConnected polyfilled', 'isConnected' in win.Node.prototype);
   push('spatial navigation installed', !!win.__spatialNavigation__);

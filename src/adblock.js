@@ -117,6 +117,26 @@ function mayNeedEmojiWork(text) {
   return NEEDS_TEXT_WORK_RE.test(text) || ESCAPED_EMOJI_RE.test(text);
 }
 
+// A trackingParams value is an opaque token without quotes or escapes; one
+// with a backslash in it is not matched and stays as sent. The leading quote
+// keeps clickTrackingParams out of it: stripping that breaks clicking endcards.
+// A key inside a string value cannot match: its quotes are escaped there.
+const TRACKING_PARAMS_KEY = '"trackingParams"';
+const TRACKING_PARAMS_RE = /"trackingParams"\s*:\s*"[^"\\]*"/g;
+const TRACKING_PARAMS_EMPTY = '"trackingParams":""';
+
+/**
+ * The JSON text with every string trackingParams blanked, at any depth: one
+ * native pass over the text before the parse, where the walk of the parsed
+ * tree stopped at depth 15 and cost more than the parse itself on a browse
+ * response. The same string comes back when the key does not occur. (From
+ * mirijanristic's fork.)
+ */
+function stripTrackingParams(text) {
+  if (text.indexOf(TRACKING_PARAMS_KEY) === -1) return text;
+  return text.replace(TRACKING_PARAMS_RE, TRACKING_PARAMS_EMPTY);
+}
+
 const IGNORE_ON_SHORTS = new Set(['SEARCH', 'PLAYER', 'ACTION']);
 
 // The badges an item is removed for (hasWantedBadge), as bits of cfgFlags.badgeMask.
@@ -410,36 +430,33 @@ function processTextFieldsInPlace(obj) {
   }
 }
 
-// Depth-limited walk doing emoji text processing (doEmoji) and/or trackingParams
-// stripping (doTracking) in one traversal rather than two.
-function walkAndProcess(obj, doEmoji, doTracking, maxDepth, currentDepth = 0) {
+// Depth-limited walk doing the emoji text processing. trackingParams go in
+// the text, before the parse (stripTrackingParams).
+function walkAndProcess(obj, maxDepth, currentDepth = 0) {
   if (!obj || typeof obj !== 'object' || currentDepth > maxDepth) return;
 
-  if (doTracking && typeof obj.trackingParams === 'string') obj.trackingParams = '';
-  // NOTE: do NOT strip clickTrackingParams here — that breaks clicking endcards.
-
-  if (doEmoji) processTextFieldsInPlace(obj);
+  processTextFieldsInPlace(obj);
 
   const nextDepth = currentDepth + 1;
 
   if (Array.isArray(obj)) {
     for (let i = 0, len = obj.length; i < len; i++) {
       const v = obj[i];
-      if (v && typeof v === 'object') walkAndProcess(v, doEmoji, doTracking, maxDepth, nextDepth);
+      if (v && typeof v === 'object') walkAndProcess(v, maxDepth, nextDepth);
     }
   } else {
     // for-in, not Object.keys(): identical visited set for JSON.parse output,
     // without allocating an array at every node of the response tree.
     for (const k in obj) {
       const v = obj[k];
-      if (v && typeof v === 'object') walkAndProcess(v, doEmoji, doTracking, maxDepth, nextDepth);
+      if (v && typeof v === 'object') walkAndProcess(v, maxDepth, nextDepth);
     }
   }
 }
 
 // Per-item entry point for the filter functions.
 function findAndProcessText(obj, maxDepth = 20) {
-  walkAndProcess(obj, true, false, maxDepth);
+  walkAndProcess(obj, maxDepth);
 }
 
 const telemetryFetchHandler = (evt) => {
@@ -553,16 +570,28 @@ function logSchemaMiss(data, textLength) {
   }
 }
 
+// Four functions on purpose. hookedParse runs on every JSON.parse the app
+// makes and holds only the cheap guards; the try/catch sits alone in
+// filterSafely, since the engine of webOS 3 (V8 3.28) does not optimise a
+// function that contains one; filterResponse is the work itself. (From
+// mirijanristic's fork.)
+
 function hookedParse(text, reviver) {
   // Guards ordered cheapest-first. YouTube parses thousands of small blobs
   // (localStorage reads, config, per-tile metadata) and none of them can be a
   // filterable response, so those calls must cost as close to nothing as
   // possible on top of the native parse.
-  if (!isHooked || !anyFilterEnabled || !text || text.length < 500) {
+  if (!isHooked || !anyFilterEnabled || typeof text !== 'string' || text.length < 500) {
     return origParse.call(this, text, reviver);
   }
+  return parseAndFilter(this, text, reviver);
+}
 
-  const data = origParse.call(this, text, reviver);
+function parseAndFilter(self, text, reviver) {
+  // Blanked in the text, in one native pass, before the parse.
+  if (cfgFlags.enableTrackingBlock) text = stripTrackingParams(text);
+
+  const data = origParse.call(self, text, reviver);
   if (!data || typeof data !== 'object') return data;
   if (
     data.responseContext === undefined &&
@@ -572,70 +601,70 @@ function hookedParse(text, reviver) {
     return data;
   if (data.botguardData) return data;
 
+  filterSafely(data, text);
+  return data;
+}
+
+function filterSafely(data, text) {
   try {
-    const responseType = detectResponseType(data);
-    // Before the Shorts guard below: a browse response parsed while a Short
-    // plays still wants its rows ahead.
-    if (cfgFlags.loadRowsAhead) raiseRowsAhead(data, responseType);
-    if (!anyResponseFilterEnabled) return data;
-
-    // The legacy emoji fix walks every item it filters; a text without an
-    // emoji in it is filtered with the fix left out (one native scan of the
-    // text instead). (From mirijanristic's fork.)
-    const flags = cfgFlags.enableLegacyEmojiFix && !mayNeedEmojiWork(text) ? cfgFlagsNoEmoji : cfgFlags;
-
-    if (isShortsPage() && responseType && IGNORE_ON_SHORTS.has(responseType)) {
-      // The Shorts player gets these unfiltered, but their titles, comments
-      // and descriptions still need the emoji wrapped on webOS 3 and 4, or
-      // they render as boxes there (NicholasBly/youtube-webos#74).
-      if (flags.enableLegacyEmojiFix) {
-        applySchemaFilters(data, responseType, cfgFlagsEmojiOnly);
-        if (data.frameworkUpdates) walkAndProcess(data.frameworkUpdates, true, false, 20);
-      }
-      return data;
-    }
-
-    if (FORCE_FALLBACK) {
-      if (DEBUG) debugLog('FORCE_FALLBACK active. Using fallback filters.');
-      if (!Array.isArray(data)) applyFallbackFilters(data, flags);
-    } else if (responseType && SCHEMA_REGISTRY.paths[responseType]) {
-      if (DEBUG) debugLog(`Schema Match: [${responseType}]`);
-      applySchemaFilters(data, responseType, flags);
-    } else if (responseType === 'ACTION' || responseType === 'PLAYER') {
-      if (DEBUG) debugLog(`Schema Match: [${responseType}]`);
-      applySchemaFilters(data, responseType, flags);
-    } else if(text.length > 10000 && !Array.isArray(data)) {
-      if (DEBUG) logSchemaMiss(data, text.length);
-      applyFallbackFilters(data, flags);
-    } else if ((flags.removeGlobalShorts || flags.removeLiveVideos) && !Array.isArray(data)) {
-      // The guide arrives in its own small response, which matches no content
-      // schema and is under the fallback's size threshold - so without this it
-      // was never looked at. removeBlockedNavEntries() early-returns when the
-      // settings are off, and its search is depth-bounded.
-      removeBlockedNavEntries(data, flags.removeGlobalShorts, flags.removeLiveVideos);
-    }
-
-    // Thumbnail rewriting runs after filtering, so shelves and ad slots that
-    // were just removed are never rewritten, and it reuses the responseType
-    // already resolved above instead of detecting the shape a second time.
-    if (cfgFlags.upgradeThumbnails) upgradeResponseThumbnails(data, responseType);
-
-    if (flags.enableTrackingBlock) {
-        // trackingParams across the whole tree at depth 15, then emoji on
-        // frameworkUpdates as a small targeted walk at depth 20.
-        walkAndProcess(data, false, true, 15);
-        if (DEBUG) debugLog('Stripped trackingParams globally');
-        if (flags.enableLegacyEmojiFix && data.frameworkUpdates) {
-            walkAndProcess(data.frameworkUpdates, true, false, 20);
-        }
-    } else if (flags.enableLegacyEmojiFix && data.frameworkUpdates) {
-        walkAndProcess(data.frameworkUpdates, true, false, 20);
-    }
-
+    filterResponse(data, text);
   } catch (e) {
     if (DEBUG) console.error('[AdBlock] Error during filtering:', e);
   }
-  return data;
+}
+
+function filterResponse(data, text) {
+  const responseType = detectResponseType(data);
+  // Before the Shorts guard below: a browse response parsed while a Short
+  // plays still wants its rows ahead.
+  if (cfgFlags.loadRowsAhead) raiseRowsAhead(data, responseType);
+  if (!anyResponseFilterEnabled) return;
+
+  // The legacy emoji fix walks every item it filters; a text without an
+  // emoji in it is filtered with the fix left out (one native scan of the
+  // text instead). (From mirijanristic's fork.)
+  const flags = cfgFlags.enableLegacyEmojiFix && !mayNeedEmojiWork(text) ? cfgFlagsNoEmoji : cfgFlags;
+
+  if (isShortsPage() && responseType && IGNORE_ON_SHORTS.has(responseType)) {
+    // The Shorts player gets these unfiltered, but their titles, comments
+    // and descriptions still need the emoji wrapped on webOS 3 and 4, or
+    // they render as boxes there (NicholasBly/youtube-webos#74).
+    if (flags.enableLegacyEmojiFix) {
+      applySchemaFilters(data, responseType, cfgFlagsEmojiOnly);
+      if (data.frameworkUpdates) walkAndProcess(data.frameworkUpdates, 20);
+    }
+    return;
+  }
+
+  if (FORCE_FALLBACK) {
+    if (DEBUG) debugLog('FORCE_FALLBACK active. Using fallback filters.');
+    if (!Array.isArray(data)) applyFallbackFilters(data, flags);
+  } else if (responseType && SCHEMA_REGISTRY.paths[responseType]) {
+    if (DEBUG) debugLog(`Schema Match: [${responseType}]`);
+    applySchemaFilters(data, responseType, flags);
+  } else if (responseType === 'ACTION' || responseType === 'PLAYER') {
+    if (DEBUG) debugLog(`Schema Match: [${responseType}]`);
+    applySchemaFilters(data, responseType, flags);
+  } else if (text.length > 10000 && !Array.isArray(data)) {
+    if (DEBUG) logSchemaMiss(data, text.length);
+    applyFallbackFilters(data, flags);
+  } else if ((flags.removeGlobalShorts || flags.removeLiveVideos) && !Array.isArray(data)) {
+    // The guide arrives in its own small response, which matches no content
+    // schema and is under the fallback's size threshold - so without this it
+    // was never looked at. removeBlockedNavEntries() early-returns when the
+    // settings are off, and its search is depth-bounded.
+    removeBlockedNavEntries(data, flags.removeGlobalShorts, flags.removeLiveVideos);
+  }
+
+  // Thumbnail rewriting runs after filtering, so shelves and ad slots that
+  // were just removed are never rewritten, and it reuses the responseType
+  // already resolved above instead of detecting the shape a second time.
+  if (cfgFlags.upgradeThumbnails) upgradeResponseThumbnails(data, responseType);
+
+  // Emoji on frameworkUpdates as a small targeted walk at depth 20.
+  if (flags.enableLegacyEmojiFix && data.frameworkUpdates) {
+    walkAndProcess(data.frameworkUpdates, 20);
+  }
 }
 
 function detectResponseType(data) {

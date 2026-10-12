@@ -782,7 +782,7 @@
 
 /* ---------------------------------------------------------------------------
    Settings button for the Magic Remote pointer (ui.js showPointerButton).
-   Top-right; moved under the clock when Display Time in UI is on. Above the
+   Top-right; moved under the clock when Clock in UI is on. Above the
    panel so it can close it too. */
 #ytaf-pointer-btn {
   position: fixed;

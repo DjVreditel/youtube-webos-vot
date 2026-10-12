@@ -99,15 +99,9 @@ const makeConfig = (env) => {
           {
             test: /\.css$/i,
             use: [
-              { loader: 'style-loader' },
-              {
-                loader: 'css-loader',
-                options: { 
-                  esModule: false, 
-                  importLoaders: 1,
-                  modules: false
-                }
-              },
+              // Every stylesheet handed to src/styles.js, which puts them in
+              // the page as one <style>, written once.
+              path.resolve(__dirname, 'tools/css-collect-loader.cjs'),
               {
                 loader: 'postcss-loader',
                 options: {

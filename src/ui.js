@@ -1,4 +1,4 @@
-import { logoStyles, thumbnailQualityModes, videoCodecModes, uiThemes } from './config.js';
+import { logoStyles, thumbnailQualityModes, videoCodecModes, uiThemes, clockModes } from './config.js';
 import { configAddChangeListener, configRead, configWrite, configGetDesc, segmentTypes, configGetDefault, shortcutActions, sbModes, sbModesHighlight, forcePreviewModes } from './config.js';
 import './ui.css';
 import './auto-login.js';
@@ -757,7 +757,7 @@ function createOptionsPanel() {
   createConfigCheckbox('enableReturnYouTubeDislike')]));
   // The logo in the header also cycles the theme, but a remote cannot focus
   // it, so the setting needs a row of its own to be reachable on a TV.
-  const interfaceGroup = [createAlignedCycleControl('uiTheme', uiThemes), createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('autoSelectAccount'), createConfigCheckbox('upgradeThumbnails'), createThumbnailQualityControl(), createLogoControl(), createConfigCheckbox('showWatch'), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications'), createConfigCheckbox('loadRowsAhead'), createConfigCheckbox('keyboardSearch'), createConfigCheckbox('pointerSettingsButton'), createConfigCheckbox('disableAnimations')];
+  const interfaceGroup = [createAlignedCycleControl('uiTheme', uiThemes), createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('autoSelectAccount'), createConfigCheckbox('upgradeThumbnails'), createThumbnailQualityControl(), createLogoControl(), createAlignedCycleControl('clockMode', clockModes), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications'), createConfigCheckbox('loadRowsAhead'), createConfigCheckbox('keyboardSearch'), createConfigCheckbox('pointerSettingsButton'), createConfigCheckbox('disableAnimations')];
   // The cast block only exists on webOS 25 (see userScript.js).
   if (isWebOS25()) interfaceGroup.push(createConfigCheckbox('blockWebosCast'));
   // --- Page 3: Interface ---
@@ -2001,7 +2001,7 @@ function createPointerButton() {
 function showPointerButton() {
   if (!configRead('pointerSettingsButton') || !document.body) return;
   if (!pointerButton) pointerButton = createPointerButton();
-  pointerButton.classList.toggle('ytaf-below-clock', !!configRead('showWatch'));
+  pointerButton.classList.toggle('ytaf-below-clock', configRead('clockMode') !== 'off');
   pointerButton.classList.add('ytaf-visible');
   clearTimeout(pointerButtonTimer);
   pointerButtonTimer = setTimeout(hidePointerButton, POINTER_BUTTON_HIDE_MS);

@@ -26,6 +26,13 @@ export const uiThemes = {
   'classic-red': 'Red'
 };
 
+/** What the clock in the corner shows (NicholasBly/youtube-webos#126). */
+export const clockModes = {
+  off: 'Off',
+  time: 'Time',
+  datetime: 'Date and Time'
+};
+
 export const logoStyles = {
   default: 'Default',
   premium: 'Premium',
@@ -152,7 +159,7 @@ const configOptions = new Map([
   ['enableAutoLogin', { default: true, desc: 'Bypass Nag Screens' }],
   ['autoSelectAccount', { default: true, desc: 'Auto Login (off: always ask who is watching)' }],
   ['logoStyle', { default: 'default', desc: 'YouTube Logo' }],
-  ['showWatch', { default: false, desc: 'Display Time in UI' }],
+  ['clockMode', { default: 'off', desc: 'Clock in UI' }],
   ['enableOledCareMode', { default: false, desc: 'OLED-Care Mode (True Black UI)' }],
   ['videoShelfOpacity', { default: 100, desc: 'Video shelf opacity' }],
   ['fixMultilineTitles', { default: true, desc: 'Fix Multiline Titles' }],
@@ -212,7 +219,14 @@ function loadStoredConfig() {
 // reference to this object via the configGetAll() snapshot. Reassigning
 // localConfig (e.g. for a future "reset to defaults") would silently desync
 // those holders. Use Object.assign(localConfig, defaultConfig) to reset.
-let localConfig = Object.assign({}, defaultConfig, loadStoredConfig() || {});
+const storedConfig = loadStoredConfig() || {};
+let localConfig = Object.assign({}, defaultConfig, storedConfig);
+
+// The clock was an on/off switch (showWatch) before it could show the date.
+if ('showWatch' in storedConfig) {
+  if (!('clockMode' in storedConfig)) localConfig.clockMode = storedConfig.showWatch ? 'time' : 'off';
+  delete localConfig.showWatch;
+}
 
 // Debounce localStorage writes — rapid input (e.g. color picker drag) was
 // stringifying the entire ~50-key config object on every event.

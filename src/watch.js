@@ -2,8 +2,16 @@ import { configRead, configAddChangeListener, configRemoveChangeListener } from 
 import { debounce } from './utils';
 import './watch.css';
 
+// Intl is supported in Chrome 24+, safe for webOS 3. The date is the locale's
+// short form ("Oct 12, 2:05 PM", "okt. 12. 14:05").
+const CLOCK_FORMATS = {
+  time: { hour: 'numeric', minute: 'numeric' },
+  datetime: { month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric' }
+};
+
 class Watch {
-  constructor() {
+  constructor(mode) {
+    this._formatter = null;
     // Standard properties
     this._watch = null;
     this._timer = null;
@@ -24,6 +32,7 @@ class Watch {
 
     // Initialize
     this.createElement();
+    this.setMode(mode);
     this.startClock();
     this.setupGlobalListeners();
     
@@ -52,19 +61,19 @@ class Watch {
     document.body.appendChild(this._watch);
   }
 
+  /** Time only, or the date with it; shown at once. */
+  setMode(mode) {
+    this._formatter = new Intl.DateTimeFormat(navigator.language, CLOCK_FORMATS[mode] || CLOCK_FORMATS.time);
+    if (this._watch) this._watch.textContent = this._formatter.format(new Date());
+  }
+
   startClock() {
     const nextSeg = (60 - new Date().getSeconds()) * 1000;
-
-    // Intl is supported in Chrome 24+, safe for webOS 3
-    const formatter = new Intl.DateTimeFormat(navigator.language, {
-      hour: 'numeric',
-      minute: 'numeric'
-    });
 
     const setTime = () => {
       if (this._watch) {
         // textContent is faster than innerText
-        this._watch.textContent = formatter.format(new Date());
+        this._watch.textContent = this._formatter.format(new Date());
         
         // Safety check on the minute mark
         this.updateVisibility();
@@ -162,19 +171,19 @@ class Watch {
 
 let watchInstance = null;
 
-function toggleWatch(show) {
-  if (show) {
-    if (!watchInstance) {
-      watchInstance = new Watch();
-    }
+/** 'off', 'time' or 'datetime' (clockModes in config.js). */
+function applyClockMode(mode) {
+  if (mode === 'time' || mode === 'datetime') {
+    if (watchInstance) watchInstance.setMode(mode);
+    else watchInstance = new Watch(mode);
   } else if (watchInstance) {
-      watchInstance.destroy();
-      watchInstance = null;
-    }
+    watchInstance.destroy();
+    watchInstance = null;
+  }
 }
 
-toggleWatch(configRead('showWatch'));
+applyClockMode(configRead('clockMode'));
 
-configAddChangeListener('showWatch', (evt) => {
-  toggleWatch(evt.detail.newValue);
+configAddChangeListener('clockMode', (evt) => {
+  applyClockMode(evt.detail.newValue);
 });
