@@ -815,6 +815,38 @@
   transform: scale(1.1);
 }
 
+/* The ring and hover follow the panel theme, like the logo inside (the fox
+   colours above are the default). One class per logo variant, set by
+   syncPointerButtonTheme() in ui.js. */
+#ytaf-pointer-btn.ytaf-logo-blue {
+  background: rgba(0, 26, 46, 0.85);
+  border-color: #00d4ff;
+}
+
+#ytaf-pointer-btn.ytaf-logo-blue:hover {
+  background: rgba(0, 212, 255, 0.35);
+}
+
+#ytaf-pointer-btn.ytaf-logo-red {
+  background: rgba(26, 26, 26, 0.85);
+  border-color: #ff4444;
+}
+
+#ytaf-pointer-btn.ytaf-logo-red:hover {
+  background: rgba(255, 0, 0, 0.3);
+}
+
+/* OLED-Care: true black, a grey ring for the grey fox. */
+#ytaf-pointer-btn.ytaf-logo-dark {
+  background: #000000;
+  border-color: #555555;
+  box-shadow: none;
+}
+
+#ytaf-pointer-btn.ytaf-logo-dark:hover {
+  background: #222222;
+}
+
 #ytaf-pointer-btn img {
   position: absolute;
   top: 50%;

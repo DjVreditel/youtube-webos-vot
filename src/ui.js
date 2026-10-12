@@ -47,6 +47,9 @@ let playPauseNotificationTimer = null;
 
 // Lazy load variable
 let optionsPanel = null;
+// The Magic Remote settings button (see showPointerButton). Declared up here
+// because applyTheme() runs at load, before that section.
+let pointerButton = null;
 let optionsPanelVisible = false;
 let panelInitBlock = false;
 
@@ -1822,16 +1825,28 @@ function initGlobalStyles() {
     }
 }
 
-function updateLogoState() {
+const LOGO_URLS = {
+  'logo-orange': logoOrangeUrl,
+  'logo-blue': logoBlueUrl,
+  'logo-red': logoRedUrl,
+  'logo-dark': logoDarkUrl
+};
+
+/** The logo variant for the current theme: one of the LOGO_URLS keys. */
+function currentLogoVariant() {
   const theme = configRead('uiTheme');
-  const isOled = configRead('enableOledCareMode');
-  const wanted = isOled ? 'logo-dark'
+  return configRead('enableOledCareMode') ? 'logo-dark'
     : theme === 'classic-red' ? 'logo-red'
     : theme === 'fox' ? 'logo-orange'
     : 'logo-blue';
+}
+
+function updateLogoState() {
+  const wanted = currentLogoVariant();
   document.querySelectorAll('.ytaf-logo').forEach((logo) => {
     logo.style.display = logo.classList.contains(wanted) ? '' : 'none';
   });
+  syncPointerButtonTheme();
 }
 
 // The shelf backdrop's opacity, written as a rule of its own rather than a CSS
@@ -1972,14 +1987,14 @@ window.addEventListener('ytaf-page-update', syncUiBrightness);
 // --- Settings button for the Magic Remote pointer ---
 //
 // Remotes with no colour buttons (the LG MR26, NicholasBly/youtube-webos#189)
-// had no way into the panel. A fox button in the top-right corner shows while
+// had no way into the panel. A fox button in the top-right corner (the logo
+// and colours of the current theme, see syncPointerButtonTheme) shows while
 // the pointer is in use - on a real move, never on its own - and fades a few
 // seconds after the last one, or as soon as webOS hides the pointer. A click
 // opens or closes the panel. It is a plain <div> with no tabindex (tabIndex
 // -1) and takes no focus on click, so neither D-pad navigation nor YouTube's
 // focus model can ever land on it.
 const POINTER_BUTTON_HIDE_MS = 4000;
-let pointerButton = null;
 let pointerButtonTimer = 0;
 let lastPointerX = -1;
 let lastPointerY = -1;
@@ -2007,7 +2022,19 @@ function createPointerButton() {
   }, createElement('img', { src: logoOrangeUrl, alt: '' }));
   btn.setAttribute('role', 'button');
   document.body.appendChild(btn);
+  pointerButton = btn;
+  syncPointerButtonTheme();
   return btn;
+}
+
+// The button follows the panel's theme: the same logo variant as the panel
+// heading, and a class per variant for the ring and hover colours in ui.css.
+function syncPointerButtonTheme() {
+  if (!pointerButton) return;
+  const variant = currentLogoVariant();
+  for (const key of Object.keys(LOGO_URLS)) pointerButton.classList.toggle(`ytaf-${key}`, key === variant);
+  const img = pointerButton.firstChild;
+  if (img && img.getAttribute('src') !== LOGO_URLS[variant]) img.setAttribute('src', LOGO_URLS[variant]);
 }
 
 function showPointerButton() {
