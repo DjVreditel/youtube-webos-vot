@@ -105,6 +105,8 @@ All filters except Ad Blocking need Ad Blocking on.
 | Force Video Codec (Auto, AV1, VP9, AVC, HEVC, Avoid AV1) | Auto |
 | **Auto-Translate Subtitles** (pick a language) | Off |
 | **Turn On Translated Subtitles Automatically** (needs a language above) | Off |
+| **Don't Turn On Subtitles by Themselves** | Off |
+| **Show Remaining Time and End Time** | Off |
 | Hide Endcards | Off |
 | **Magic Remote: Scroll Wheel Seeks on Progress Bar** | Off |
 | Return YouTube Dislike | On |
@@ -114,12 +116,13 @@ All filters except Ad Blocking need Ad Blocking on.
 | Setting | Default |
 |---|---|
 | **UI Theme** (Fox, Blue, Red) | Fox |
-| Bypass Nag Screens | On |
+| Bypass Nag Screens (also "Are you still watching?") | On |
 | **Auto Login** (off: always ask who is watching) | On |
 | Max Thumbnail Quality | Off |
 | Thumbnail Strategy (Original, Fast, **Smooth (SD)**) | Original |
 | YouTube Logo (Default, Premium, Hidden) | Default |
 | Clock in UI | Off (or Time, Date and Time) |
+| **Keep the Clock On During Playback** (needs the clock) | Off |
 | OLED-Care Mode (True Black UI) | Off |
 | Disable Notifications | Off |
 | **Load Rows Ahead** | On |
@@ -162,6 +165,7 @@ Each category can be set to Auto Skip, Manual Skip, Show in Seek Bar or Disable,
 | Video shelf opacity (needs OLED-Care Mode) | 100% |
 | **UI Brightness** (dims menus and thumbnails, never the video) | 100% |
 | Force Previews (Disabled, Force On, Force Off) | Disabled |
+| **Mute Video Previews** | Off |
 | Fix Multiline Titles | On |
 | New Liquid Glass UI | Off |
 | Emoji + Characters Fix (webOS 3-4 only) | On |
@@ -219,7 +223,7 @@ other forks of the project; credits are in [CHANGELOG.md](CHANGELOG.md).
 
 - Support for webOS 3, 4, 5, 6, 22, 23, 24, 25 and newer (2016 and newer LG TVs; webOS 1 and 2 are not supported).
 - Ad blocking with a schema-based filter engine: cleaner Home, Search and Shorts. It also hides QR-code and
-  shop overlays during playback.
+  shop overlays and the "Includes paid promotion" banner during playback.
 - Optional filters: Shorts, live videos, "Most Relevant" shelf, Top Live Games, guest sign-in prompts.
 - [SponsorBlock](https://sponsor.ajay.app/):
   - every segment type, including Hook, Filler and muted segments, plus Highlight;
@@ -230,14 +234,17 @@ other forks of the project; credits are in [CHANGELOG.md](CHANGELOG.md).
 - Return YouTube Dislike in the description panel.
 - Force Max Quality, Force Video Codec and Max Thumbnail Quality.
 - Auto-Translate Subtitles.
-- Bypass Nag Screens: account picker, Premium and other upsell screens. Optionally, always ask who is watching.
+- Bypass Nag Screens: account picker, Premium and other upsell screens, and "Are you still watching?".
+  Optionally, always ask who is watching.
 - Programmable remote: 0-9 and all four colour buttons, Magic Remote wheel seeking.
 - OLED care:
   - OLED black overlay on Red, with keep-alive;
   - OLED-Care Mode (true-black UI);
   - Audio-Only Mode;
   - Sleep Timer.
-- Smart clock (time, or date and time) that hides in fullscreen and when the description panel is open.
+- Smart clock (time, or date and time) that hides in fullscreen and when the description panel is open, or
+  stays on during playback.
+- Remaining time and end time beside the video's duration.
 - UI fixes:
   - full description panel navigation;
   - multiline titles and video shelf opacity;

@@ -9,6 +9,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## Added
 
 + **Clock in UI** (Interface) now has three choices: Off, Time, or Date and Time. The date is the TV language's short form ("Oct 12, 2:05 PM", "okt. 12. 7:15"). It replaces the Display Time in UI switch; a clock you had on stays on, showing the time (NicholasBly/youtube-webos#126).
++ **"Are you still watching?" no longer pauses the video.** The prompt is taken out of the player responses; it is one of the nag screens **Bypass Nag Screens** (on by default) skips. From MickLesk's fork (webosbrew/youtube-webos#86, webosbrew/youtube-webos#250).
++ Ad Blocking also removes the "Includes paid promotion" banner at the start of a video. The shopping and merch QR codes were already removed. From MickLesk's fork (webosbrew/youtube-webos#340, webosbrew/youtube-webos#385).
++ **Don't Turn On Subtitles by Themselves** (Player, off by default): videos that YouTube starts with subtitles on start without them. Turning them on by hand, and Turn On Translated Subtitles Automatically, still work. From MickLesk's fork (webosbrew/youtube-webos#57).
++ **Show Remaining Time and End Time** (Player, off by default): "-41:58 · ends 21:45" in front of the duration under the seek bar, refreshed once a second while the controls are on screen. Live streams show nothing. Idea from MickLesk's fork.
++ **Keep the Clock On During Playback** (Interface, off by default, needs Clock in UI): the clock stays on over the video instead of hiding while it plays. The OLED black overlay and hidden controls still cover it. From DavidVodus's pull request webosbrew/youtube-webos#481 (webosbrew/youtube-webos#419).
++ **Mute Video Previews** (UI Tweaks, off by default): the previews that play on a focused tile start muted; the sound comes back when the video is opened. From MickLesk's fork and webosbrew/youtube-webos#25.
 
 ## Fixes
 

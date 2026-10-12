@@ -38,6 +38,7 @@ class Watch {
     
     this.applyOledMode(configRead('enableOledCareMode'));
     configAddChangeListener('enableOledCareMode', this.onOledChange);
+    configAddChangeListener('clockDuringPlayback', this.updateVisibility);
 
     // Initial check
     this.updateVisibility();
@@ -89,6 +90,13 @@ class Watch {
 
   updateVisibility() {
     if (!this._watch) return;
+
+    // Keep the Clock On During Playback: shown over the video too. The OLED
+    // black overlay and Hide Controls still cover it (ui.css, ui.js).
+    if (configRead('clockDuringPlayback')) {
+      if (this._watch.style.display !== 'block') this._watch.style.display = 'block';
+      return;
+    }
 
     if (!this._cachedPlayer || !this._cachedPlayer.isConnected) {
         this._cachedPlayer = document.querySelector(this._PLAYER_SELECTOR);
@@ -152,6 +160,7 @@ class Watch {
     // If strict cleanup is needed, update the shared debounce to return { run, cancel }.
 
     configRemoveChangeListener('enableOledCareMode', this.onOledChange);
+    configRemoveChangeListener('clockDuringPlayback', this.updateVisibility);
     
     if (this.boundStateChange) {
         window.removeEventListener('yt-player-state-change', this.boundStateChange);

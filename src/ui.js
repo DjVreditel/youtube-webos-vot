@@ -752,12 +752,19 @@ function createOptionsPanel() {
   createVideoCodecControl(),
   createAlignedCycleControl('subtitleTranslateLang', subtitleTranslateLanguages),
   createSubtitleAutoEnableControl(),
+  createConfigCheckbox('disableAutoCaptions'),
+  createConfigCheckbox('showTimeRemaining'),
   createConfigCheckbox('hideEndcards'),
   createConfigCheckbox('enableScrollSeek'),
   createConfigCheckbox('enableReturnYouTubeDislike')]));
   // The logo in the header also cycles the theme, but a remote cannot focus
   // it, so the setting needs a row of its own to be reachable on a TV.
-  const interfaceGroup = [createAlignedCycleControl('uiTheme', uiThemes), createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('autoSelectAccount'), createConfigCheckbox('upgradeThumbnails'), createThumbnailQualityControl(), createLogoControl(), createAlignedCycleControl('clockMode', clockModes), createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications'), createConfigCheckbox('loadRowsAhead'), createConfigCheckbox('keyboardSearch'), createConfigCheckbox('pointerSettingsButton'), createConfigCheckbox('disableAnimations')];
+  // Keep the Clock On During Playback means nothing with the clock off.
+  const elClockDuringPlayback = createConfigCheckbox('clockDuringPlayback');
+  const updateClockRow = () => setState(elClockDuringPlayback, configRead('clockMode') !== 'off');
+  configAddChangeListener('clockMode', updateClockRow);
+  updateClockRow();
+  const interfaceGroup = [createAlignedCycleControl('uiTheme', uiThemes), createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('autoSelectAccount'), createConfigCheckbox('upgradeThumbnails'), createThumbnailQualityControl(), createLogoControl(), createAlignedCycleControl('clockMode', clockModes), elClockDuringPlayback, createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications'), createConfigCheckbox('loadRowsAhead'), createConfigCheckbox('keyboardSearch'), createConfigCheckbox('pointerSettingsButton'), createConfigCheckbox('disableAnimations')];
   // The cast block only exists on webOS 25 (see userScript.js).
   if (isWebOS25()) interfaceGroup.push(createConfigCheckbox('blockWebosCast'));
   // --- Page 3: Interface ---
@@ -811,6 +818,7 @@ function createOptionsPanel() {
         createElement('div', { text: 'Dims the YouTube menus and thumbnails; never the playing video or this panel', style: { color: '#aaa', fontSize: '18px', padding: '4px 12px 12px' } }),
   	  createPreviewControl('forcePreviews'),
   	  createElement('div', { text: 'Forces the video thumbnail preview on/off on app load', style: { color: '#aaa', fontSize: '18px', padding: '4px 12px 12px' } }),
+  	  createConfigCheckbox('mutePreviews'),
   	  createConfigCheckbox('fixMultilineTitles'),
   	  createConfigCheckbox('removeBlackBorders')
     ];
@@ -1925,6 +1933,10 @@ configAddChangeListener('hideEndcards', () => syncAdblockHook());
 configAddChangeListener('upgradeThumbnails', () => syncAdblockHook());
 // Load Rows Ahead raises the continuation threshold inside the same hook.
 configAddChangeListener('loadRowsAhead', () => syncAdblockHook());
+// "Are you still watching?" (Bypass Nag Screens) and the subtitle start state
+// are rewritten in the same hook.
+configAddChangeListener('enableAutoLogin', () => syncAdblockHook());
+configAddChangeListener('disableAutoCaptions', () => syncAdblockHook());
 
 configAddChangeListener('videoShelfOpacity', () => {
   // Cheap update — rewrites the one-rule opacity <style> and toggles the

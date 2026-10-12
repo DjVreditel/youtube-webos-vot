@@ -71,7 +71,10 @@ const CONFIG_KEYS = {
   EMOJI_FIX: 'enableLegacyEmojiFix',
   ENDCARDS: 'hideEndcards',
   THUMBNAILS: 'upgradeThumbnails',
-  ROWS_AHEAD: 'loadRowsAhead'
+  ROWS_AHEAD: 'loadRowsAhead',
+  // "Are you still watching?" is one of the nag screens this switch bypasses.
+  NAG_SCREENS: 'enableAutoLogin',
+  AUTO_CAPTIONS: 'disableAutoCaptions'
 };
 
 // One emoji character: the symbols below in the BMP, or any astral character
@@ -168,7 +171,9 @@ const cfgFlags = {
   enableLegacyEmojiFix: false,
   hideEndcards: false,
   upgradeThumbnails: false,
-  loadRowsAhead: false
+  loadRowsAhead: false,
+  removeYouThere: false,
+  disableAutoCaptions: false
 };
 
 // cfgFlags with the legacy emoji fix off: what the filters get for a response
@@ -202,6 +207,8 @@ function recomputeFilterFlags() {
   cfgFlags.hideEndcards = !!cfgSnapshot[CONFIG_KEYS.ENDCARDS];
   cfgFlags.upgradeThumbnails = !!cfgSnapshot[CONFIG_KEYS.THUMBNAILS];
   cfgFlags.loadRowsAhead = !!cfgSnapshot[CONFIG_KEYS.ROWS_AHEAD];
+  cfgFlags.removeYouThere = !!cfgSnapshot[CONFIG_KEYS.NAG_SCREENS];
+  cfgFlags.disableAutoCaptions = !!cfgSnapshot[CONFIG_KEYS.AUTO_CAPTIONS];
 
   anyResponseFilterEnabled = !!(
     cfgFlags.enableAdBlock ||
@@ -215,7 +222,9 @@ function recomputeFilterFlags() {
     cfgFlags.hideGuestPrompts ||
     cfgFlags.enableLegacyEmojiFix ||
     cfgFlags.hideEndcards ||
-    cfgFlags.upgradeThumbnails
+    cfgFlags.upgradeThumbnails ||
+    cfgFlags.removeYouThere ||
+    cfgFlags.disableAutoCaptions
   );
   anyFilterEnabled = anyResponseFilterEnabled || cfgFlags.loadRowsAhead;
 
@@ -735,6 +744,7 @@ function applySchemaFilters(data, responseType, config) {
     case 'NEXT':
       if (config.enableAdBlock) {
         if (responseType === 'PLAYER') removePlayerAdsOptimized(data);
+        removePaidPromotion(data);
         let overlay = getByPath(data, schema?.overlayPath);
         if (!overlay) {
             overlay = findObjects(data, ['playerOverlayRenderer'], 8).playerOverlayRenderer;
@@ -748,6 +758,8 @@ function applySchemaFilters(data, responseType, config) {
 	  if (config.hideEndcards) {
           removeEndcardsOptimized(data);
       }
+      if (config.removeYouThere) removeYouThere(data);
+      if (config.disableAutoCaptions && responseType === 'PLAYER') disableAutoCaptions(data);
       if (config.hideGuestPrompts) {
          let pivotContents = getByPath(data, schema?.pivotPath);
          if (!pivotContents) {
@@ -1274,6 +1286,59 @@ function removePlayerAdsOptimized(data) {
   if (DEBUG && cleared > 0) debugLog('Cleaned Player Ads/Placements');
 }
 
+/**
+ * "Are you still watching?": the player and watch-next responses carry it as a
+ * youThereRenderer in their messages, and the app pauses the video to show it
+ * after a while without key presses. Without the message it never asks.
+ * (From MickLesk's fork; webosbrew/youtube-webos#86, #250.)
+ */
+function dropYouThereMessages(holder) {
+  const messages = holder && holder.messages;
+  if (!Array.isArray(messages)) return;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i] && messages[i].youThereRenderer) messages.splice(i, 1);
+  }
+}
+
+function removeYouThere(data) {
+  dropYouThereMessages(data);
+  dropYouThereMessages(data.playerResponse);
+}
+
+/**
+ * The "Includes paid promotion" banner over the start of a video. The shopping
+ * and merch QR codes are timelyActionRenderers, removed with the overlay above.
+ * (From MickLesk's fork; webosbrew/youtube-webos#340.)
+ */
+function removePaidPromotion(data) {
+  if (data.paidContentOverlay) delete data.paidContentOverlay;
+  if (data.playerResponse && data.playerResponse.paidContentOverlay) delete data.playerResponse.paidContentOverlay;
+}
+
+/**
+ * Subtitles that start on by themselves: the player response names a default
+ * track and an initial state per audio track. Without the default and with the
+ * state set to off, a video starts without subtitles; turning them on by hand,
+ * and Turn On Translated Subtitles Automatically, still work.
+ * (From MickLesk's fork; webosbrew/youtube-webos#57.)
+ */
+function captionsOff(holder) {
+  const renderer = holder && holder.captions && holder.captions.playerCaptionsTracklistRenderer;
+  const tracks = renderer && renderer.audioTracks;
+  if (!Array.isArray(tracks)) return;
+  for (let i = 0; i < tracks.length; i++) {
+    const track = tracks[i];
+    if (!track || typeof track !== 'object') continue;
+    delete track.defaultCaptionTrackIndex;
+    track.captionsInitialState = 'CAPTIONS_INITIAL_STATE_OFF_RECOMMENDED';
+  }
+}
+
+function disableAutoCaptions(data) {
+  captionsOff(data);
+  captionsOff(data.playerResponse);
+}
+
 function findObjects(haystack, needlesArray, maxDepth = 10) {
   if (!haystack || typeof haystack !== 'object' || maxDepth <= 0 || !needlesArray.length) return {};
   const results = {};
@@ -1324,6 +1389,8 @@ export function parseHookRequired() {
     cfgSnapshot[CONFIG_KEYS.ENDCARDS] ||
     cfgEmojiFixEffective ||
     cfgSnapshot[CONFIG_KEYS.ROWS_AHEAD] ||
+    cfgSnapshot[CONFIG_KEYS.NAG_SCREENS] ||
+    cfgSnapshot[CONFIG_KEYS.AUTO_CAPTIONS] ||
     thumbnailHookRequired()
   );
 }

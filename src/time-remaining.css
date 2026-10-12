@@ -1,0 +1,8 @@
+/* Show Remaining Time and End Time (time-remaining.js supplies the content).
+   Before the duration, which already carries SponsorBlock's
+   "time with skips removed" after it. */
+[idomkey="time-label"] [idomkey="duration"]::before {
+  margin-right: 0.6em;
+  opacity: 0.75;
+  white-space: nowrap;
+}

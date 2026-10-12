@@ -26,6 +26,8 @@ import './screensaver-fix.js';
 import './yt-fixes.css';
 import './comments-fix.js';
 import './watch.js';
+import './mute-previews.js';
+import './time-remaining.js';
 import './lang-settings-fix';
 
 import { initBufferLimit } from './hooks/buffer-limit.js';
