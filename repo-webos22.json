@@ -13,16 +13,16 @@
       "iconUri": "https://raw.githubusercontent.com/foxi69/youtube-webos/main/assets/icon.png",
       "manifest": {
         "id": "youtube.leanback.v4",
-        "version": "0.8.6",
+        "version": "0.8.7",
         "type": "web",
         "title": "YouTube AdFree (webOS 22+)",
         "appDescription": "YouTube AdFree for webOS 22 and newer. Lighter optimized build supporting newer hardware.",
         "iconUri": "https://raw.githubusercontent.com/foxi69/youtube-webos/main/assets/icon.png",
         "sourceUrl": "https://github.com/foxi69/youtube-webos",
         "rootRequired": false,
-        "ipkUrl": "https://github.com/foxi69/youtube-webos/releases/download/v0.8.6/youtube.leanback.v4_0.8.6_all_webOS22%2B.ipk",
+        "ipkUrl": "https://github.com/foxi69/youtube-webos/releases/download/v0.8.7/youtube.leanback.v4_0.8.7_all_webOS22%2B.ipk",
         "ipkHash": {
-          "sha256": "8baecb7818d945b69d70ccebd998e4d9965874cfe77ae20122211267230ce6ed"
+          "sha256": "a962e61c512b046536a2459c8f311742170806fb1ac594306598ef07cc5a6105"
         }
       }
     }
