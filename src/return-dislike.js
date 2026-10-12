@@ -1,5 +1,6 @@
 import { configRead, configAddChangeListener } from './config.js';
 import { SYNTHETIC_KEY_FLAG } from './utils.js';
+import { fetchJsonWithTimeout } from './fetch-timeout.js';
 
 // Global cache for API responses
 const dislikeCache = new Map();
@@ -172,15 +173,14 @@ class ReturnYouTubeDislike {
     try {
       const fetchOptions = {};
       if (HAS_ABORT_CONTROLLER && this.abortController) fetchOptions.signal = this.abortController.signal;
-      
-      const response = await Promise.race([
-        fetch(`https://returnyoutubedislikeapi.com/votes?videoId=${this.videoID}`, fetchOptions),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 8000))
-      ]);
-      
+
+      // One deadline for headers and body, and the timer is always cleared.
+      const response = await fetchJsonWithTimeout(
+        `https://returnyoutubedislikeapi.com/votes?videoId=${this.videoID}`, 8000, fetchOptions);
+
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      
-      const data = await response.json();
+
+      const data = response.data;
       this.dislikesCount = data?.dislikes || 0;
       this.dislikesValue = this.dislikesCount;
       this.fetchAttempts = 0;
@@ -429,11 +429,14 @@ class ReturnYouTubeDislike {
       this.menuItemsMap.clear();
       this.menuItemsCache.forEach((item, index) => { this.menuItemsMap.set(item, index); });
 
-      // Reset index
-      this.focusedIndex = -1;
-      const currentFocused = this.panelElement.querySelector('.' + SELECTORS.focusState);
-      if (currentFocused) {
-          this.focusedIndex = this.menuItemsMap.get(currentFocused) ?? -1;
+      // The item highlighted last, else the first item YouTube marked: the
+      // focus class is on the item's wrapper and on the list as well, ahead of
+      // the item in document order.
+      this.focusedIndex = this.lastFocusedElement ? (this.menuItemsMap.get(this.lastFocusedElement) ?? -1) : -1;
+      if (this.focusedIndex !== -1) return;
+      const marked = this.panelElement.querySelectorAll('.' + SELECTORS.focusState);
+      for (let i = 0; i < marked.length && this.focusedIndex === -1; i++) {
+          this.focusedIndex = this.menuItemsMap.get(marked[i]) ?? -1;
       }
   }
 
@@ -443,7 +446,8 @@ class ReturnYouTubeDislike {
       this.menuItemsCache = []; 
       this.menuItemsMap.clear();
       this.focusedIndex = -1;
-      this.lastFocusedElement = null;
+      // lastFocusedElement is kept: the cache refresh takes the index from it
+      // when the item is still in the panel.
       
       this.setTimeout(() => {
           if (!this.active || !this.panelElement) return;
@@ -620,12 +624,14 @@ class ReturnYouTubeDislike {
       }
 
       if (isEnter) {
-          const current = this.menuItemsCache[this.focusedIndex];
+          // The item that has the focus, not the cached index: after YouTube
+          // changed the panel the index can point at another item.
+          const current = document.activeElement;
           // Only intercept Enter when the menuitem container is *itself* the
           // active element. With focus on a focusable descendant the real Enter
           // must reach YouTube: a synthetic keydown on the parent targets the
           // wrong node and is rejected anyway for isTrusted=false.
-          if (current && current === document.activeElement) {
+          if (current && this.menuItemsMap.has(current)) {
               e.preventDefault();
               e.stopPropagation();
               this.dispatching = true;
@@ -645,9 +651,9 @@ class ReturnYouTubeDislike {
       // Sync index if drift occurred
       if (this.focusedIndex === -1 || (this.menuItemsCache[this.focusedIndex] !== this.lastFocusedElement)) {
            // Fallback to finding index if state drifted
-           if (this.lastFocusedElement) {
-                this.focusedIndex = this.menuItemsMap.get(this.lastFocusedElement) ?? -1;
-           } else if (document.activeElement) {
+           // (a kept lastFocusedElement YouTube has since removed misses).
+           this.focusedIndex = this.lastFocusedElement ? (this.menuItemsMap.get(this.lastFocusedElement) ?? -1) : -1;
+           if (this.focusedIndex === -1 && document.activeElement) {
                 this.focusedIndex = this.menuItemsMap.get(document.activeElement) ?? -1;
            }
            if (this.focusedIndex === -1) this.focusedIndex = 0;

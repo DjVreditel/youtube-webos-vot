@@ -1,7 +1,7 @@
-import { configRead, configAddChangeListener, configRemoveChangeListener } from './config.js';
+import { configRead, configAddChangeListener } from './config.js';
 import { showNotification } from './notifications.js';
 import { isWebOS25 } from './webos-utils.js';
-import { sendKey, REMOTE_KEYS, SELECTORS, isWatchPage } from './utils.js';
+import { sendKey, REMOTE_KEYS, SELECTORS, isWatchPage, getVideo } from './utils.js';
 
 const DEBUG = false;
 
@@ -24,7 +24,6 @@ let _shouldForce = false;
 let player = null;
 let lastVideoId = null;
 let initTimer = null;
-let configCleanup = null;
 let isDestroyed = false;
 let lastWriteTime = 0;
 let statePollingInterval = null;
@@ -284,6 +283,64 @@ function interceptAndUpgradeQuality(videoId) {
   });
 }
 
+// --- Show Video Quality on Start ---
+// A few seconds after a video starts playing, a toast with the quality it
+// plays in (e.g. 1080p60), once per video (NicholasBly/youtube-webos#72). The
+// delay lets the adaptive stream (and Force Max Quality) settle first.
+const QUALITY_TOAST_DELAY_MS = 4000;
+const QUALITY_HEIGHTS = {
+  highres: 4320, hd2160: 2160, hd1440: 1440, hd1080: 1080, hd720: 720,
+  large: 480, medium: 360, small: 240, tiny: 144
+};
+let qualityToastVideoId = null;
+let qualityToastTimer = null;
+
+function clearQualityToast() {
+  if (qualityToastTimer) {
+    clearTimeout(qualityToastTimer);
+    qualityToastTimer = null;
+  }
+}
+
+function playingQualityLabel() {
+  try {
+    const label = player?.getPlaybackQualityLabel?.();
+    if (label) return label;
+  } catch { /* ignore */ }
+  // The picture itself: the shorter side, so a portrait video reads right too.
+  const video = getVideo();
+  if (video && video.videoHeight) return `${Math.min(video.videoWidth || video.videoHeight, video.videoHeight)}p`;
+  try {
+    const height = QUALITY_HEIGHTS[player?.getPlaybackQuality?.()];
+    if (height) return `${height}p`;
+  } catch { /* ignore */ }
+  return null;
+}
+
+function scheduleQualityToast(actualState) {
+  if (actualState !== STATE_PLAYING || !configRead('showQualityOnStart')) return;
+  let videoId = null;
+  try { videoId = player.getVideoData?.()?.video_id || null; } catch { /* ignore */ }
+  if (!videoId || videoId === qualityToastVideoId) return;
+  qualityToastVideoId = videoId;
+  clearQualityToast();
+  qualityToastTimer = setTimeout(() => {
+    qualityToastTimer = null;
+    if (isDestroyed || !player) return;
+    try {
+      // Still the same video, and still playing.
+      if (player.getVideoData?.()?.video_id !== videoId) return;
+      if (player.getPlayerState?.() !== STATE_PLAYING) {
+        // Paused or buffering: the next time it plays tries again.
+        qualityToastVideoId = null;
+        return;
+      }
+    } catch { return; }
+    const label = playingQualityLabel();
+    if (label) showNotification(`Playing in ${label}`);
+  }, QUALITY_TOAST_DELAY_MS);
+}
+
 function handleStateChange(state) {
   if (isDestroyed || !player) return;
 
@@ -296,6 +353,8 @@ function handleStateChange(state) {
   window.dispatchEvent(new CustomEvent('yt-player-state-change', {
     detail: { state: actualState, videoId: lastVideoId }
   }));
+
+  scheduleQualityToast(actualState);
 
   // Everything below is quality forcing only.
   if (!_shouldForce) return;
@@ -387,23 +446,18 @@ export function destroyVideoQuality() {
   }
   
   stopStatePolling();
-  
+  clearQualityToast();
+  qualityToastVideoId = null;
+
   if (player) {
     try {
       player.removeEventListener?.('onStateChange', handleStateChange);
     } catch { /* ignore */ }
   }
   
-  if (configCleanup) {
-    try {
-      configCleanup();
-    } catch { /* ignore */ }
-  }
-  
   player = null;
   lastVideoId = null;
   lastKnownState = null;
-  configCleanup = null;
   qualitySetForVideo.clear();
   videoBeingProcessed = null;
   _isWatchPageCached = false;
@@ -449,23 +503,6 @@ export function initVideoQuality() {
           startStatePolling();
       }
       
-      if (configAddChangeListener && !configCleanup) {
-        const onChange = (evt) => {
-          if (isDestroyed) return;
-          _shouldForce = !!evt.detail.newValue;
-          
-          if (_shouldForce) {
-            cachedQualitySettings = null;
-            setLocalStorageQuality();
-            qualitySetForVideo.clear();
-          } else {
-            clearLocalStorageQuality();
-          }
-        };
-        configCleanup = configAddChangeListener('forceHighResVideo', onChange) || 
-          (() => configRemoveChangeListener?.('forceHighResVideo', onChange));
-      }
-      
       DEBUG && console.info('[VideoQuality] ✅ Attached to player');
       
       handleStateChange(player.getPlayerState?.());
@@ -480,6 +517,9 @@ export function initVideoQuality() {
 
   if (attach()) return;
 
+  // Every 200ms for 10s, then - for a player that mounts late, e.g. after a
+  // slow start or an ad - once a second for another 50s, then it gives up
+  // until the next watch page.
   let attempts = 0;
   const poll = () => {
     if (isDestroyed) {
@@ -487,11 +527,11 @@ export function initVideoQuality() {
       initTimer = null;
       return;
     }
-    if (attach() || attempts++ >= 50) {
+    if (attach() || attempts++ >= 100) {
       clearTimeout(initTimer);
       initTimer = null;
     } else {
-      initTimer = setTimeout(poll, 200);
+      initTimer = setTimeout(poll, attempts > 50 ? 1000 : 200);
     }
   };
   
@@ -512,6 +552,20 @@ function handleNavigation(event) {
 }
 
 function setupListeners() {
+    // Registered once for the session, not per attach: the option is also
+    // switched off from the home screen, where the module is detached, and the
+    // 4320p record it wrote must go then too.
+    configAddChangeListener('forceHighResVideo', (evt) => {
+      _shouldForce = !!evt.detail.newValue;
+      if (_shouldForce) {
+        cachedQualitySettings = null;
+        setLocalStorageQuality();
+        qualitySetForVideo.clear();
+      } else {
+        clearLocalStorageQuality();
+      }
+    });
+
     window.addEventListener('yt-navigate-finish', handleNavigation);
 
     // Passed directly: handleNavigation falls back to isWatchPage() when the

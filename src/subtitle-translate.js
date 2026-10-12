@@ -1,4 +1,5 @@
 import { configRead } from './config.js';
+import { SELECTORS, SYNTHETIC_KEY_FLAG, isShortsPage } from './utils.js';
 
 /**
  * Auto-translated subtitles in a language of the viewer's choosing.
@@ -186,12 +187,53 @@ function patchRenderer(renderer, code) {
   addTranslatedTrack(renderer, code);
 }
 
+/**
+ * The track to turn on for `code`: a human-made one first, then YouTube's
+ * own speech recognition in that language. The injected auto-translated
+ * track is a plain (non-ASR) track in that language, so it is found here too;
+ * it only exists when the video had no track in the language to begin with.
+ */
+function pickTrack(list, code) {
+  if (!Array.isArray(list)) return null;
+  let asr = null;
+  for (const t of list) {
+    if (!isObject(t) || isObject(t.translationLanguage) || !sameLanguage(t.languageCode, code)) continue;
+    if (t.kind !== 'asr') return t;
+    if (!asr) asr = t;
+  }
+  return asr;
+}
+
+// The response's view of the target track, per video, for a player whose
+// captions API answers with no tracklist (see autoEnableCaptions below).
+const RESPONSE_TRACKS_MAX = 20;
+const responseTracks = [];
+
+function rememberResponseTrack(videoId, track) {
+  if (typeof videoId !== 'string' || !videoId) return;
+  for (let i = 0; i < responseTracks.length; i++) {
+    if (responseTracks[i].videoId === videoId) { responseTracks.splice(i, 1); break; }
+  }
+  if (!track) return;
+  responseTracks.push({ videoId, languageCode: track.languageCode, kind: track.kind, vssId: track.vssId });
+  if (responseTracks.length > RESPONSE_TRACKS_MAX) responseTracks.shift();
+}
+
+function responseTrack(videoId) {
+  for (let i = 0; i < responseTracks.length; i++) {
+    if (responseTracks[i].videoId === videoId) return responseTracks[i];
+  }
+  return null;
+}
+
 function patchResponse(res, code) {
   const containers = [res, res.playerResponse];
   for (const c of containers) {
     if (!isObject(c) || !isObject(c.captions)) continue;
     const renderer = c.captions.playerCaptionsTracklistRenderer;
-    if (isObject(renderer)) patchRenderer(renderer, code);
+    if (!isObject(renderer)) continue;
+    patchRenderer(renderer, code);
+    if (isObject(c.videoDetails)) rememberResponseTrack(c.videoDetails.videoId, pickTrack(renderer.captionTracks, code));
   }
 }
 
@@ -219,3 +261,156 @@ JSON.parse = function (text, reviver) {
   }
   return out;
 };
+
+/**
+ * "Turn On Translated Subtitles Automatically".
+ *
+ * When a video starts playing, captions are switched to the chosen language
+ * through the player's own API: a native track in that language if the video
+ * has one, otherwise the auto-translated track added above. Restraint is the
+ * point, both for the viewer and for YouTube's timedtext endpoint (every track
+ * switch is a request, and a burst earns HTTP 429):
+ *
+ *   - one attempt per video, plus at most one re-apply when the player resets
+ *     the track on its own within a few seconds (it does that while the
+ *     captions module settles);
+ *   - any key the viewer presses ends it for that video, so captions turned
+ *     off (or another language picked) by hand stay that way;
+ *   - no player API, no tracklist in the language: nothing happens.
+ */
+const STATE_PLAYING = 1;
+const TRACKLIST_POLL_MS = 300;
+const TRACKLIST_TRIES = 10; // ~3 s for the captions module to list its tracks
+const REAPPLY_WINDOW_MS = 5000;
+const REAPPLY_POLL_MS = 500;
+const ATTEMPTED_MAX = 50;
+
+const attemptedVideos = [];
+let lastUserKeyAt = 0;
+let autoTimer = null;
+
+function cancelAutoEnable() {
+  if (autoTimer !== null) {
+    clearTimeout(autoTimer);
+    autoTimer = null;
+  }
+}
+
+function captionsPlayer() {
+  const p = document.getElementById(SELECTORS.PLAYER_ID);
+  return p && typeof p.getOption === 'function' && typeof p.setOption === 'function' ? p : null;
+}
+
+function playerVideoId(player) {
+  try {
+    const data = typeof player.getVideoData === 'function' ? player.getVideoData() : null;
+    return (data && data.video_id) || null;
+  } catch {
+    return null;
+  }
+}
+
+function captionsOption(player, name) {
+  try {
+    return player.getOption('captions', name);
+  } catch {
+    return null;
+  }
+}
+
+function isTargetTrack(track, code) {
+  if (!isObject(track)) return false;
+  if (isObject(track.translationLanguage)) return sameLanguage(track.translationLanguage.languageCode, code);
+  return sameLanguage(track.languageCode, code);
+}
+
+function setCaptionsTrack(player, track) {
+  try {
+    player.setOption('captions', 'track', track);
+    return true;
+  } catch (err) {
+    console.warn(LOG_PREFIX, 'Could not turn on subtitles:', err);
+    return false;
+  }
+}
+
+/** Watches for the player dropping the track it was just given; puts it back once. */
+function watchForReset(player, videoId, code, track, appliedAt) {
+  const check = () => {
+    autoTimer = null;
+    if (lastUserKeyAt > appliedAt || !player.isConnected || playerVideoId(player) !== videoId) return;
+    if (!isTargetTrack(captionsOption(player, 'track'), code)) {
+      if (DEBUG) console.info(LOG_PREFIX, 'Subtitles were reset, re-applying once', videoId);
+      setCaptionsTrack(player, track);
+      return;
+    }
+    if (Date.now() - appliedAt < REAPPLY_WINDOW_MS) autoTimer = setTimeout(check, REAPPLY_POLL_MS);
+  };
+  autoTimer = setTimeout(check, REAPPLY_POLL_MS);
+}
+
+function autoEnableCaptions() {
+  if (!configRead('subtitleAutoEnable') || isShortsPage()) return;
+  const code = currentTarget();
+  if (!code) return;
+  const player = captionsPlayer();
+  if (!player) return;
+  const videoId = playerVideoId(player);
+  if (!videoId || attemptedVideos.indexOf(videoId) !== -1) return;
+
+  attemptedVideos.push(videoId);
+  if (attemptedVideos.length > ATTEMPTED_MAX) attemptedVideos.shift();
+  cancelAutoEnable();
+
+  // The captions module loads on demand; until it has, the tracklist is empty.
+  try {
+    if (typeof player.loadModule === 'function') player.loadModule('captions');
+  } catch { /* the tracklist poll below copes */ }
+
+  const startedAt = Date.now();
+  let tries = 0;
+  const attempt = () => {
+    autoTimer = null;
+    // The viewer is already doing something with the player, or moved on.
+    if (lastUserKeyAt > startedAt || !player.isConnected || playerVideoId(player) !== videoId) return;
+    if (!configRead('subtitleAutoEnable') || currentTarget() !== code) return;
+    if (isTargetTrack(captionsOption(player, 'track'), code)) return; // already on
+
+    let track = pickTrack(captionsOption(player, 'tracklist'), code);
+    if (!track && ++tries < TRACKLIST_TRIES) {
+      autoTimer = setTimeout(attempt, TRACKLIST_POLL_MS);
+      return;
+    }
+    if (!track) {
+      // No tracklist from the API: name the track the response carried.
+      const known = responseTrack(videoId);
+      if (!known) return;
+      track = { languageCode: known.languageCode, kind: known.kind, vss_id: known.vssId };
+    }
+    if (DEBUG) console.info(LOG_PREFIX, 'Turning on subtitles', videoId, track.languageCode);
+    if (setCaptionsTrack(player, track)) watchForReset(player, videoId, code, track, Date.now());
+  };
+  attempt();
+}
+
+window.addEventListener('keydown', (evt) => {
+  if (evt.isTrusted === false || evt[SYNTHETIC_KEY_FLAG]) return;
+  lastUserKeyAt = Date.now();
+}, true);
+
+// Published by video-quality.js for every player state change on a watch page.
+window.addEventListener('yt-player-state-change', (evt) => {
+  if (evt && evt.detail && evt.detail.state === STATE_PLAYING) autoEnableCaptions();
+});
+
+window.addEventListener('ytaf-page-update', (evt) => {
+  if (!evt || !evt.detail || !evt.detail.isWatch) {
+    cancelAutoEnable();
+    return;
+  }
+  // A watch page entered with the video already running gets no PLAYING change.
+  const player = captionsPlayer();
+  try {
+    if (player && typeof player.getPlayerState === 'function' && player.getPlayerState() === STATE_PLAYING) autoEnableCaptions();
+  } catch { /* the state-change event will come */ }
+});

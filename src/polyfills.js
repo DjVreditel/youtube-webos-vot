@@ -64,7 +64,7 @@ if (typeof Node !== 'undefined' && !('isConnected' in Node.prototype)) {
 // Chromium 38 predates that, so `for (const el of container.children)` throws
 //   "Invalid attempt to iterate non-iterable instance."
 // from Babel's for-of helper. core-js's web.dom-collections.iterator used to
-// cover this; spatial-navigation-polyfill.js relies on it for every arrow-key
+// cover this; the old spatial-navigation polyfill relied on it for every arrow-key
 // press, which is how it took out Settings-panel navigation on webOS 3.
 //
 // Array.prototype[Symbol.iterator] works verbatim on these: they are all

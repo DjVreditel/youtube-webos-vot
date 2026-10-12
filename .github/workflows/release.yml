@@ -97,11 +97,11 @@ jobs:
           # The notes are what the published release shows, so they are
           # written for the people installing it: .github/release-notes.md
           # (download, install, credits) with this version's CHANGELOG.md
-          # section in place of @CHANGELOG@, its headings one level down.
+          # section in place of @CHANGELOG@, every heading one level down.
           awk -v v="$VERSION" '
             index($0, "## [" v "]") == 1 { on = 1; next }
             on && /^## \[/ { exit }
-            on { sub(/^## /, "### "); print }
+            on { if ($0 ~ /^#+ /) $0 = "#" $0; print }
           ' CHANGELOG.md | tr -d '\r' > changes.md
           {
             # Hidden once published; tells a tester which commit the draft is.

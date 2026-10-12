@@ -44,11 +44,9 @@ const makeConfig = (env) => {
           'whatwg-fetch': false,
           
           // Strip local polyfills
-          [path.resolve(__dirname, 'src/spatial-navigation-polyfill.js')]: path.resolve(__dirname, 'src/spatial-navigation.modern.js'),
           // Chrome 87 has every built-in polyfills.js installs, so the whole
           // file is dead weight (and a pile of no-op feature checks) here.
           [path.resolve(__dirname, 'src/polyfills.js')]: false,
-          [path.resolve(__dirname, 'src/domrect-polyfill.js')]: false,
           [path.resolve(__dirname, 'src/emoji-font.js')]: false,
 		  [path.resolve(__dirname, 'src/hooks/buffer-limit.js')]: false,
           [path.resolve(__dirname, 'src/emoji-font.css')]: false

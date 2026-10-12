@@ -1,6 +1,9 @@
 /**
  * On webOS, when a video element doesn't perfectly fill
  * the entire screen, the screensaver can kick in.
+ *
+ * Also asks the TV itself, through its power service, not to start the
+ * screensaver while a video plays (best effort; see registerScreenSaverRequest).
  */
 
 import { waitForChildAdd, sendKey, SELECTORS, REMOTE_KEYS, isWatchPage, isShortsPage, getVideo } from './utils';
@@ -73,6 +76,9 @@ const playerCtrlObs = new MutationObserver((mutations) => {
   if (!video || !(video instanceof HTMLVideoElement) || !video.isConnected) {
     DEBUG && console.warn('[ScreensaverFix] Video element gone, disconnecting observer');
     playerCtrlObs.disconnect();
+    // The page may still be the watch page with a new <video>: look again.
+    // (ytaf-page-update fires on a page-type change only.)
+    setTimeout(updateState, 0);
     return;
   }
 
@@ -107,83 +113,175 @@ const playerCtrlObs = new MutationObserver((mutations) => {
   });
 });
 
+// --- webOS screensaver request ---
+// The Yellow-key keep-alive above is ignored by some TVs, so longer Shorts
+// still ended in the screensaver (NicholasBly/youtube-webos#46). The TV's
+// power service announces each screensaver it is about to start to the
+// clients registered for it, and a client answering ack:false holds it off.
+// Best effort: PalmServiceBridge (the webOS service bridge) may be missing or
+// the call refused on a given firmware; the keep-alive stays as the fallback.
+const TVPOWER_URI = 'luna://com.webos.service.tvpower/power/';
+const SCREENSAVER_CLIENT = 'youtube-webos';
+// A bridge collected before its answer arrives drops the answer; keep each
+// one-shot call referenced until its callback ran.
+const pendingLunaCalls = [];
+
+function lunaCall(method, params, onResponse, subscribe) {
+  const Bridge = typeof window !== 'undefined' ? window.PalmServiceBridge : null;
+  if (typeof Bridge !== 'function') return null;
+  try {
+    const bridge = new Bridge();
+    if (!subscribe) pendingLunaCalls.push(bridge);
+    bridge.onservicecallback = (msg) => {
+      if (!subscribe) {
+        const i = pendingLunaCalls.indexOf(bridge);
+        if (i !== -1) pendingLunaCalls.splice(i, 1);
+      }
+      if (!onResponse) return;
+      let res = null;
+      try { res = JSON.parse(msg); } catch { /* not JSON */ }
+      try { onResponse(res); } catch (e) { DEBUG && console.warn('[ScreensaverFix] luna callback failed:', e); }
+    };
+    bridge.call(TVPOWER_URI + method, JSON.stringify(params));
+    return bridge;
+  } catch (e) {
+    DEBUG && console.warn('[ScreensaverFix] luna call failed:', method, e);
+    return null;
+  }
+}
+
+function isVideoPlaying() {
+  if (lastPageType !== 'WATCH' && lastPageType !== 'SHORTS') return false;
+  const video = getVideo();
+  return !!(video && !video.paused && !video.ended);
+}
+
+// Held for the session: the subscription lasts as long as its bridge.
+let screenSaverSubscription = null;
+
+function registerScreenSaverRequest() {
+  screenSaverSubscription = lunaCall('registerScreenSaverRequest', { subscribe: true, clientName: SCREENSAVER_CLIENT }, (res) => {
+    if (!res || res.returnValue === false) {
+      DEBUG && console.info('[ScreensaverFix] Screensaver request refused:', res);
+      return;
+    }
+    // The first answer only confirms the subscription; each screensaver the
+    // TV is about to start comes with a timestamp to answer.
+    if (res.timestamp === undefined) return;
+    const playing = isVideoPlaying();
+    DEBUG && console.info(`[ScreensaverFix] Screensaver request: ${playing ? 'blocked (video playing)' : 'allowed'}`);
+    lunaCall('responseScreenSaverRequest', { clientName: SCREENSAVER_CLIENT, ack: !playing, timestamp: res.timestamp });
+  }, true);
+}
+
+registerScreenSaverRequest();
+
 let currentVideoElement = null;
 
-const updateState = async () => {
-  const isWatch = isWatchPage();
-  const isShorts = isShortsPage();
-  
-  const newPageType = isWatch ? 'WATCH' : (isShorts ? 'SHORTS' : 'OTHER');
+// The <video> itself, or a player subtree mounted with it inside.
+const holdsVideo = (node) =>
+  node instanceof HTMLVideoElement || !!(node.querySelector && node.querySelector('video'));
 
-  // Optimization: If the page type hasn't changed, ignore
-  if (newPageType === lastPageType) return;
-  lastPageType = newPageType;
-
-  // 1. Handle Shorts Mode
-  if (newPageType === 'SHORTS') {
-    // Ensure Watch logic is disabled
-    if (currentVideoElement) {
-        playerCtrlObs.disconnect();
-        currentVideoElement = null;
+// waitForChildAdd cancels through an AbortSignal-like object; AbortController
+// is missing on webOS 3 (Chromium 38), so this is the minimal stand-in.
+function createWaitCanceller() {
+  let onAbort = null;
+  return {
+    addEventListener(type, fn) { if (type === 'abort') onAbort = fn; },
+    removeEventListener(type, fn) { if (onAbort === fn) onAbort = null; },
+    cancel() {
+      const fn = onAbort;
+      onAbort = null;
+      if (fn) fn();
     }
-    setShortsKeepAlive(true);
-    return;
-  }
+  };
+}
 
-  // 2. Handle Other Modes (Disable Shorts KeepAlive)
-  setShortsKeepAlive(false);
+// The pending wait for a <video> on the watch page, cancelled on a page change
+// so its observer does not outlive the page.
+let videoWait = null;
 
-  // 3. Handle Watch Mode
-  if (newPageType !== 'WATCH') {
-    // If we are here, it's 'OTHER'. Ensure watchers are off.
-    playerCtrlObs.disconnect();
-    currentVideoElement = null;
-    return;
-  }
+function unbindVideo() {
+  playerCtrlObs.disconnect();
+  currentVideoElement = null;
+}
 
-  // -- Watch Page Logic Below --
+// The watch page's <video>, waited for when it has not mounted yet; null when
+// it never does (left the page, or the 30s wait ran out).
+async function findWatchVideo() {
+  const playerContainer = document.getElementById(SELECTORS.PLAYER_CONTAINER);
+  // If container exists, search inside it. If not, fallback to body.
+  const searchRoot = playerContainer || document.body;
 
+  // Shared cached lookup (isConnected-guarded, invalidated on page change).
+  const found = getVideo() || searchRoot.querySelector('video');
+  if (found) return found;
+
+  const wait = createWaitCanceller();
+  videoWait = wait;
   try {
-    const playerContainer = document.getElementById(SELECTORS.PLAYER_CONTAINER);
-    
-    // If container exists, search inside it. If not, fallback to body.
-    const searchRoot = playerContainer || document.body;
-    
-    // Shared cached lookup (isConnected-guarded, invalidated on page change).
-    let video = getVideo() || searchRoot.querySelector('video');
+    const node = await waitForChildAdd(searchRoot, holdsVideo, false, wait);
+    // The added node can be a player subtree with the <video> inside.
+    return node instanceof HTMLVideoElement ? node : node.querySelector('video');
+  } catch (e) {
+    DEBUG && console.info('[ScreensaverFix] No video element to attach to:', e.message);
+    return null;
+  } finally {
+    if (videoWait === wait) videoWait = null;
+  }
+}
 
-    // If not found immediately, use the waiter (scoped to root)
-    if (!video) {
-         video = await waitForChildAdd(
-            searchRoot,
-            (node) => node instanceof HTMLVideoElement,
-            false
-        );
-    }
-    
+async function bindWatchVideo() {
+  try {
+    const video = await findWatchVideo();
+
     // Double check we are still on Watch page after await
-    if (lastPageType !== 'WATCH') return;
+    if (!video || lastPageType !== 'WATCH' || video === currentVideoElement) return;
 
-    if (video && video !== currentVideoElement) {
-      if (currentVideoElement) {
-        playerCtrlObs.disconnect();
-      }
-      
-      currentVideoElement = video;
-      
-      if (video.isConnected) {
-        playerCtrlObs.observe(video, {
-          attributes: true,
-          attributeFilter: ['style']
-        });
-      }
+    if (currentVideoElement) playerCtrlObs.disconnect();
+    currentVideoElement = video;
+
+    if (video.isConnected) {
+      playerCtrlObs.observe(video, {
+        attributes: true,
+        attributeFilter: ['style']
+      });
     }
   } catch (e) {
     console.warn('[ScreensaverFix] Error attaching to video element:', e);
   }
+}
+
+const updateState = async () => {
+  const isWatch = isWatchPage();
+  const isShorts = isShortsPage();
+
+  const newPageType = isWatch ? 'WATCH' : (isShorts ? 'SHORTS' : 'OTHER');
+
+  if (newPageType === lastPageType) {
+    // Watch to watch: bind a remounted <video>, or one that mounted after the
+    // wait for it ran out; a wait still running is left to find it.
+    if (newPageType !== 'WATCH') return;
+    if (currentVideoElement ? currentVideoElement.isConnected : videoWait) return;
+    unbindVideo();
+  }
+  lastPageType = newPageType;
+
+  if (videoWait) {
+    videoWait.cancel();
+    videoWait = null;
+  }
+
+  // Shorts: the keep-alive; any other page switches it off.
+  setShortsKeepAlive(newPageType === 'SHORTS');
+
+  if (newPageType === 'WATCH') await bindWatchVideo();
+  else unbindVideo();
 };
 
 window.addEventListener('ytaf-page-update', updateState);
+// A video-to-video navigation keeps the page type and may replace the <video>.
+window.addEventListener('hashchange', updateState);
 
 // Initial Check
 if(document.body) updateState();
@@ -192,6 +290,12 @@ else document.addEventListener('DOMContentLoaded', updateState);
 window.addEventListener('beforeunload', () => {
   playerCtrlObs.disconnect();
   window.removeEventListener('ytaf-page-update', updateState);
+  window.removeEventListener('hashchange', updateState);
+  if (videoWait) videoWait.cancel();
+  if (screenSaverSubscription) {
+    try { screenSaverSubscription.cancel(); } catch { /* ignore */ }
+    screenSaverSubscription = null;
+  }
   currentVideoElement = null;
   setShortsKeepAlive(false);
 });

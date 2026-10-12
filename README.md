@@ -53,12 +53,14 @@ Install it in one of three ways:
 | 🟦 Blue | SponsorBlock manual skip / jump to highlight | |
 | 5 | Skip to next chapter | |
 | 0-4, 6-9 | *None* | Can be set to any action during playback. |
-| Back | Closes the settings panel | Otherwise YouTube's normal Back. |
+| Back | Closes the settings panel | Otherwise YouTube's normal Back. Holding it to close the panel does not also go back a page. |
 | Magic Remote wheel | Scrolls | With *Scroll Wheel Seeks* on, each notch on the focused progress bar seeks 10 s. |
+| Magic Remote pointer | Shows a fox button | Moving the pointer shows a fox button in the top-right corner that opens and closes the settings, for remotes without colour buttons. |
 
 Every coloured button and number key can be set to any of these actions on the **Shortcuts** tab:
 
-- **Playback:** Play/Pause, Fast Forward (Burst), Rewind (Burst), Skip to Next / Previous Chapter
+- **Playback:** Play/Pause, Fast Forward (Burst), Rewind (Burst), Skip to Next / Previous Chapter,
+  **Jump to Live** (back to the live edge of a live stream)
 - **SponsorBlock:** Manual Skip / Jump to Highlight, Skip to Last SponsorBlock Segment
 - **Panels:** Toggle Subtitles, Toggle Comments, Toggle Description, Save / Watch Later
 - **Screen:**
@@ -67,12 +69,15 @@ Every coloured button and number key can be set to any of these actions on the *
   - **Sleep Timer**: each press steps 15/30/60/90/120 min, then off; pauses the video when it runs out
 - **App:** Open/Close Settings, Refresh Page
 
+Holding a key that runs a seek keeps seeking; holding any other bound key runs it once and is not passed on
+to YouTube. A USB or Bluetooth keyboard can type in the search page (see *Type in Search with a Keyboard*).
+
 ## Settings
 
 The panel has three themes: **Fox** (orange, the default), **Blue** and **Red**. Pick one with **UI Theme** on the
 Interface tab, or with a mouse, click the fox logo in the panel header. OLED-Care Mode turns any of them true black.
 
-The settings panel opens with 🟩 Green and has six tabs. Defaults are in the right-hand column. A setting
+The settings panel opens with 🟩 Green (or the fox button that the Magic Remote pointer shows) and has six tabs. Defaults are in the right-hand column. A setting
 marked *webOS 25* or *guest* only appears there.
 
 **Filters**
@@ -85,6 +90,8 @@ marked *webOS 25* or *guest* only appears there.
 | Remove Live Videos (Global) | Off |
 | Remove Top Live Games | Off |
 | Remove "Most Relevant" Shelf | Off |
+| **Remove Upcoming Videos** (upcoming streams and premieres) | Off |
+| **Remove Members-Only Videos** | Off |
 | Guest Mode: Hide Sign-in Buttons (*guest*: only when not signed in) | Off |
 
 All filters except Ad Blocking need Ad Blocking on.
@@ -94,8 +101,10 @@ All filters except Ad Blocking need Ad Blocking on.
 | Setting | Default |
 |---|---|
 | Force Max Quality | Off |
+| **Show Video Quality on Start** | Off |
 | Force Video Codec (Auto, AV1, VP9, AVC, HEVC, Avoid AV1) | Auto |
 | **Auto-Translate Subtitles** (pick a language) | Off |
+| **Turn On Translated Subtitles Automatically** (needs a language above) | Off |
 | Hide Endcards | Off |
 | **Magic Remote: Scroll Wheel Seeks on Progress Bar** | Off |
 | Return YouTube Dislike | On |
@@ -108,11 +117,15 @@ All filters except Ad Blocking need Ad Blocking on.
 | Bypass Nag Screens | On |
 | **Auto Login** (off: always ask who is watching) | On |
 | Max Thumbnail Quality | Off |
-| Thumbnail Strategy (Original, Fast) | Original |
+| Thumbnail Strategy (Original, Fast, **Smooth (SD)**) | Original |
 | YouTube Logo (Default, Premium, Hidden) | Default |
 | Display Time in UI | Off |
 | OLED-Care Mode (True Black UI) | Off |
 | Disable Notifications | Off |
+| **Load Rows Ahead** | On |
+| **Type in Search with a Keyboard** | On |
+| **Settings Button for the Pointer** | On |
+| **Disable Animations** | Off |
 | **Block webOS Cast Service** (*webOS 25*) | On |
 
 **SponsorBlock**
@@ -147,6 +160,7 @@ Each category can be set to Auto Skip, Manual Skip, Show in Seek Bar or Disable,
 | Setting | Default |
 |---|---|
 | Video shelf opacity (needs OLED-Care Mode) | 100% |
+| **UI Brightness** (dims menus and thumbnails, never the video) | 100% |
 | Force Previews (Disabled, Force On, Force Off) | Disabled |
 | Fix Multiline Titles | On |
 | New Liquid Glass UI | Off |
@@ -173,6 +187,9 @@ other forks of the project; credits are in [CHANGELOG.md](CHANGELOG.md).
 - Magic Remote scroll-wheel seeking.
 - SponsorBlock picks up segments submitted while you watch: re-checked during playback.
 - Block webOS Cast Service toggle.
+- *0.8.6:* Remove Upcoming / Members-Only Videos filters, Load Rows Ahead, Smooth (SD) thumbnails, Turn On
+  Translated Subtitles Automatically, typing in search with a USB/Bluetooth keyboard, Jump to Live, Show Video
+  Quality on Start, a pointer button for the settings, Disable Animations and UI Brightness.
 
 **Fixed**
 - Ad blocking holds up against YouTube's "property locker"; previously playback could stall a few seconds in.
@@ -187,6 +204,16 @@ other forks of the project; credits are in [CHANGELOG.md](CHANGELOG.md).
 - Force Max Quality no longer expires after a year, and resets when switched off.
 - 2026+ TVs are no longer detected as a simulator.
 - Fixes for the legacy build (webOS 3-6).
+- *0.8.6:* about 40 more, most of them from mirijanristic's fork:
+  - SponsorBlock: overlapping and nested segments, a stalled server blocking the fallback, segments cut short
+    by an early video length, the start-of-video chain, a late player, progress-bar watchers;
+  - Ad Blocking: continuations and action lists beside the main content, bare search results, expanded
+    shelves, filters that ran with Ad Blocking off;
+  - thumbnails stuck at low quality after a network error, held keys, burst seeks, Shorts hiding the
+    controls, the screensaver fix, Force Max Quality switched off from the home screen;
+  - the settings panel: the SponsorBlock switch could not be reached with the arrows; it is about 16 KiB
+    lighter without the spatial-navigation polyfill;
+  - webOS 3/4: focus highlight, emoji sequences; webOS 22+: "fancy font" channel names.
 
 ## All features
 

@@ -294,8 +294,7 @@ export {};
     [/ytaf-hide-logo|ytaf-fix-titles|oled-theme-active|ytaf-remove-borders|configWrite/, 'ui.js'],
     [/webOs-watch/, 'watch.js'],
     [/whosWatching|identityBypass|attemptActiveBypass/, 'auto-login.js'],
-    [/WEB_PAGE_TYPE_|ytaf-page-update/, 'utils.js'],
-    [/navigate|spatialNavigation|focusableAreas/, 'spatial-navigation-polyfill.js']
+    [/WEB_PAGE_TYPE_|ytaf-page-update/, 'utils.js']
   ];
 
   function moduleFromSource(fn) {
@@ -345,9 +344,6 @@ export {};
     'yt-fixes.js',
     'lang-settings-fix',
     'block-webos-cast',
-    'spatial-navigation-polyfill.js',
-    'spatial-navigation.modern.js',
-    'domrect-polyfill.js',
     'ui.js',
     'utils.js',
     'config.js',
@@ -2630,27 +2626,6 @@ export {};
         return {
           state: connected ? 'firing' : 'armed',
           detail: connected + ' style observer(s) on the video element.'
-        };
-      }
-    },
-    {
-      key: null,
-      label: 'Spatial Navigation Polyfill',
-      lamp: 'SPNAV',
-      module: 'spatial-navigation-polyfill.js',
-      pages: ALL_PAGES,
-      cost: 'medium',
-      expect:
-        'Provides window.navigate and directional focus for the remote. Every arrow keypress ' +
-        'runs a candidate search across focusable elements.',
-      fns: [],
-      probe: function () {
-        var present = typeof window.navigate === 'function' || !!window.__spatialNavigation__;
-        return {
-          state: present ? 'firing' : 'stalled',
-          detail: present
-            ? 'Installed. Cost scales with focusable element count on the page.'
-            : 'window.navigate is missing — remote navigation will fall back to YouTube.'
         };
       }
     },

@@ -7,7 +7,6 @@ import './perf_mon.js';
 // otherwise sent as "[object Object]".
 import './polyfills.js';
 import 'whatwg-fetch';
-import './domrect-polyfill';
 import './adblock.js';
 import './hooks/json-stringify';
 import './force-codec.js';
@@ -20,6 +19,7 @@ import { isWebOS25, simulatorMode } from './webos-utils.js';
 import { initBlockWebOSCast } from './block-webos-cast';
 import './app_api/index';
 import './ui.js'; // Registers the green-key handler, options panel, video-quality, global styles
+import './keyboard-search.js';
 import './sponsorblock.js';
 import './emoji-font.js';
 import './screensaver-fix.js';

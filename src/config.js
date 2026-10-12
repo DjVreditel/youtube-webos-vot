@@ -39,10 +39,18 @@ export const logoStyles = {
  *             never land on a 404. Upgrades past that arrive once verified.
  * 'eager'   - go straight to maxresdefault. Sharpest first paint, but videos
  *             with no maxres show a grey box until the correction lands.
+ * 'sd'      - 'eager' semantics, but never reaches past sddefault (640x480):
+ *             about a quarter of the decode work of maxres per tile, and drawn
+ *             from the first frame, so a new tile is never swapped from a lower
+ *             rung; the rare video with no sddefault shows a grey box until the
+ *             correction lands, and no probe or correction runs while the
+ *             remote's arrow keys are moving. The choice for smooth row-to-row
+ *             navigation.
  */
 export const thumbnailQualityModes = {
   safe: 'Original',
-  eager: 'Fast'
+  eager: 'Fast',
+  sd: 'Smooth (SD)'
 };
 
 export const shortcutActions = {
@@ -62,6 +70,7 @@ export const shortcutActions = {
   sleep_timer: 'Sleep Timer (15/30/60/90/120 min, off)',
   audio_only: 'Toggle Audio-Only Mode',
   sb_manual_skip: 'Manual Skip / Jump to Highlight',
+  jump_to_live: 'Jump to Live',
   config_menu: 'Open/Close Settings'
   //speed_up: 'Playback Speed +',
   //speed_down: 'Playback Speed -',
@@ -118,6 +127,8 @@ const configOptions = new Map([
   ['thumbnailQualityMode', { default: 'safe', desc: 'Thumbnail Strategy' }],
   ['removeGlobalShorts', { default: false, desc: 'Remove Shorts (Global)' }],
   ['removeLiveVideos', { default: false, desc: 'Remove Live Videos (Global)' }],
+  ['removeUpcomingVideos', { default: false, desc: 'Remove Upcoming Videos' }],
+  ['removeMembersOnly', { default: false, desc: 'Remove Members-Only Videos' }],
   ['removeTopLiveGames', { default: false, desc: 'Remove Top Live Games' }],
   ['removeMostRelevant', { default: false, desc: 'Remove "Most Relevant" Shelf' }],
   ['enableSponsorBlock', { default: true, desc: 'SponsorBlock' }],
@@ -145,16 +156,26 @@ const configOptions = new Map([
   ['enableOledCareMode', { default: false, desc: 'OLED-Care Mode (True Black UI)' }],
   ['videoShelfOpacity', { default: 100, desc: 'Video shelf opacity' }],
   ['fixMultilineTitles', { default: true, desc: 'Fix Multiline Titles' }],
+  ['loadRowsAhead', { default: true, desc: 'Load Rows Ahead' }],
+  ['keyboardSearch', { default: true, desc: 'Type in Search with a Keyboard' }],
   ['removeBlackBorders', { default: false, desc: 'New Liquid Glass UI' }],
   ['forcePreviews', { default: 'disabled', desc: 'Force Previews' }],
   ['enableLegacyEmojiFix', { default: true, desc: 'Emoji + Characters Fix' }],
   ['hideGuestSignInPrompts', { default: false, desc: 'Guest Mode: Hide Sign-in Buttons' }],
   ['forceHighResVideo', { default: false, desc: 'Force Max Quality' }],
+  ['showQualityOnStart', { default: false, desc: 'Show Video Quality on Start' }],
   ['forceVideoCodec', { default: 'auto', desc: 'Force Video Codec' }],
   ['subtitleTranslateLang', { default: 'off', desc: 'Auto-Translate Subtitles' }],
+  ['subtitleAutoEnable', { default: false, desc: 'Turn On Translated Subtitles Automatically' }],
   //['enablePlaybackSpeed', { default: true, desc: 'Playback Speed Control' }],
   ['blockWebosCast', { default: true, desc: 'Block webOS Cast Service (webOS 25)' }],
-  ['disableNotifications', { default: false, desc: 'Disable Notifications' }]
+  ['disableNotifications', { default: false, desc: 'Disable Notifications' }],
+  // A fox button in the top-right corner that the Magic Remote pointer can
+  // click to open the panel: for remotes with no colour buttons (#189).
+  ['pointerSettingsButton', { default: true, desc: 'Settings Button for the Pointer' }],
+  ['disableAnimations', { default: false, desc: 'Disable Animations' }],
+  // Percent, 40-100 in steps of 10: dims the browse UI, never the video.
+  ['uiBrightness', { default: 100, desc: 'UI Brightness' }]
 ]);
 
 // Register shortcut keys 0-9

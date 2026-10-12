@@ -4,6 +4,78 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.8.6] - 2026/10/12
+
+Bug fixes and features from mirijanristic's fork and from the NicholasBly/youtube-webos issue tracker, each checked against this codebase first. Ships both packages: `_webOS22+.ipk` for webOS 22 and newer, and the legacy `.ipk` for webOS 3-6.
+
+## Added
+
++ **Remove Upcoming Videos** (Filters, off by default): hides upcoming streams and premieres (NicholasBly/youtube-webos#155).
++ **Remove Members-Only Videos** (Filters, off by default): hides videos only channel members can watch. Both filters read YouTube's badge type, not its text, so they work in every language (NicholasBly/youtube-webos#115, NicholasBly/youtube-webos#163).
++ **Load Rows Ahead** (Interface, on by default): the next rows are requested four rows before the end of the home screen, a browse tab or search, so a fast scroll no longer reaches rows that have not loaded yet. From mirijanristic's fork.
++ **Smooth (SD)** Thumbnail Strategy: 640x480 thumbnails from the first frame, with no low-to-high swap, and the quality checks pause while you move with the arrow keys. From mirijanristic's fork.
++ **Turn On Translated Subtitles Automatically** (Player, off by default): when a video starts, subtitles switch to your Auto-Translate Subtitles language, the video's own track if it has one, otherwise the auto-translated one. One try per video plus one retry if YouTube resets it; turn subtitles off and they stay off for that video (NicholasBly/youtube-webos#181).
++ **Type in Search with a Keyboard** (Interface, on by default): on the search page a USB or Bluetooth keyboard types into the search: letters, space, punctuation, Backspace, and Enter to search. Digits count as typing only right after a letter, so the number-key shortcuts keep working (NicholasBly/youtube-webos#82, NicholasBly/youtube-webos#156).
++ **Jump to Live** shortcut action: takes a live stream back to the live edge (NicholasBly/youtube-webos#148).
++ **Show Video Quality on Start** (Player, off by default): shows the quality a video plays in a few seconds after it starts (NicholasBly/youtube-webos#72).
++ **Settings Button for the Pointer** (Interface, on by default): moving the Magic Remote pointer shows a fox button in the top-right corner that opens and closes the settings, for remotes with no colour buttons (NicholasBly/youtube-webos#189).
++ **Disable Animations** (Interface, off by default): turns off YouTube's UI transitions and animations (NicholasBly/youtube-webos#142).
++ **UI Brightness** (UI Tweaks, 100% by default): dims YouTube's menus and thumbnails down to 40%, never the playing video or the settings panel (NicholasBly/youtube-webos#83).
++ The app asks the TV not to start its screensaver while a video (including a Short) is playing, for TVs that ignore the existing workaround (NicholasBly/youtube-webos#46).
+
+## Fixes
+
+### SponsorBlock
+
++ A server that stalled halfway through its answer blocked the fallback server, the retries and the periodic re-check for good. One 5-second deadline now covers the whole answer, and Return YouTube Dislike uses the same deadline. From mirijanristic's fork.
++ Overlapping segments (for example a self-promotion inside a sponsor) could be missed after a seek, or show "Skipped" over and over without skipping. The outer segment is now skipped, and a manual segment inside it is offered first. From mirijanristic's fork.
++ A short video length reported before the real one cut segments off for the rest of the video. They get their full length back once the real length is known. From mirijanristic's fork.
++ At the start of a video, a manual segment could be skipped along with the automatic ones before it, a very short opening segment could make the player seek again and again, and "Skip Segments Once" was ignored there. The chain now stops at the manual segment, never loops, and respects the setting. From mirijanristic's fork.
++ When the player loaded slowly, segments were not skipped and the highlight jump was lost. SponsorBlock now waits for the player and catches up as soon as it appears. From mirijanristic's fork.
++ Segments sometimes did not show on the progress bar, and the watchers looking for the bar could pile up. Both progress bar layouts are found now, and only one watcher runs. From mirijanristic's fork.
++ The "Exclusive Access" full-video badge could never appear because the category was never requested. It is requested now (it is only a badge, nothing is skipped). From mirijanristic's fork.
++ Videos with no segments, or only a full-video badge, still ran the progress bar machinery. It now starts only once there is something to draw.
+
+### Ad Blocking
+
++ Ads and Shorts in a continuation or action list sent along with a page's main content got through. They are filtered too now. From mirijanristic's fork.
++ When a response carried both received actions and received endpoints, only the first list was filtered. Both are filtered now. From mirijanristic's fork.
++ Bare Shorts tiles, live videos and grids directly in search results were not filtered, and items in expanded shelves were never filtered. They now go through the same rules as shelf items. From mirijanristic's fork.
++ A shelf that arrived empty (to be filled later) was removed. Only shelves the filter emptied are removed now. From mirijanristic's fork.
++ Reduce Telemetry & Tracking and the other filters the panel greys out while Ad Blocking is off still ran. They now do nothing until Ad Blocking is on, and the telemetry check looks only at the request path. From mirijanristic's fork.
++ The Top Live Games / "Most Relevant" title match ignores case and spaces now. Titles in other UI languages are still not matched (NicholasBly/youtube-webos#101).
+
+### Thumbnails (Max Thumbnail Quality)
+
++ A slow or failed thumbnail check was saved as "no HD thumbnail", so the video stayed at low quality in every later session, and in Fast mode a sharp thumbnail was even swapped for a blurry one. A failed check is retried in the next session now, and Fast keeps the thumbnail it drew. The thumbnail cache is cleared once after the update. From mirijanristic's fork.
++ Some videos were dropped from the cache too early and then never checked again that session, and sharper thumbnails could take a long time to appear. The cache keeps them now, checks start right away, and the newest thumbnails on screen go first. From mirijanristic's fork.
++ Some responses only had part of their thumbnails upgraded, and live chat and comment updates were scanned every few seconds during streams. All thumbnails are upgraded, and chat and comments are skipped. From mirijanristic's fork.
+
+### Remote, playback and settings panel
+
++ The settings panel moves between options by where they sit on screen, without the spatial-navigation polyfill, so both packages are about 16 KiB lighter. The SponsorBlock on/off switch can be reached with Up/Down again, and Down from the Player tab no longer skips "Force Max Quality". From mirijanristic's fork.
++ Settings panel: moving along the tabs with Left/Right only moved a frame, and the page changed only on OK, so two tabs looked selected and Down led into the old page. The tab under the focus now opens right away.
++ Holding a key that has a shortcut passed the key on to YouTube (a held digit jumped the video to a percentage). It no longer does, and holding Fast Forward or Rewind keeps seeking. From mirijanristic's fork.
++ A burst of seek presses that changed direction (for example +5, +5, -5) dropped the presses not yet applied. It moves by the right total now. From mirijanristic's fork.
++ Holding Back to close the settings also took YouTube back a page, and a digit key bound to Open/Close Settings did nothing while a checkbox was selected. Both are fixed. From mirijanristic's fork.
++ If no key opens the settings any more after you change the shortcuts, Green is bound to it again when the panel closes, with a notification, and the startup hint names the key actually bound. From mirijanristic's fork.
++ Pausing a Short left the player controls and the clock hidden. They come back now. From mirijanristic's fork.
++ The screensaver fix lost the video when YouTube swapped the player between videos or loaded it late. It follows the new one now. From mirijanristic's fork.
++ Force Max Quality: turning it off from the home screen kept the forced quality, and a slowly loading player was never found. Both are fixed. From mirijanristic's fork.
++ Return YouTube Dislike: Enter in the description panel acted on the wrong item after YouTube updated the panel. It acts on the selected item now. From mirijanristic's fork.
+
+### Older and newer TVs
+
++ webOS 3/4: the focused row of the settings panel was not highlighted (the cycle rows fell back to blue). It is highlighted again, in the Fox theme too. From mirijanristic's fork.
++ webOS 3: "Video shelf opacity" in OLED-Care Mode did nothing. It works now. From mirijanristic's fork.
++ webOS 3/4: emoji with skin tones, flags, families and keycaps fell apart or were not drawn, links and timestamps after an emoji pointed too early, and emoji on the Shorts page showed as boxes. Whole emoji sequences are wrapped now, offsets move with them, and responses without emoji skip the work. From mirijanristic's fork and NicholasBly/youtube-webos#74.
++ webOS 22+: channel names and titles written in "fancy" Unicode letters showed as empty boxes. They show as plain readable letters now (NicholasBly/youtube-webos#122).
+
+## Other
+
++ Homebrew Channel: the webOS 22+ package was listed under a different app id, so a webOS 22+ TV was offered the legacy package as its update. There are now two repository links, `repo.json` (legacy, any TV) and `repo-webos22.json` (webOS 22+), both with the real app id (NicholasBly/youtube-webos#144).
++ Build: `npm ci` runs without deprecation or install-script warnings, the CI uploads the built package, and the GitHub Actions run on Node 24.
+
 ## [0.8.5] - 2026/10/11
 
 Fixes and features collected from the other forks of youtube-webos (webosbrew upstream and the NicholasBly fork network), ported onto this codebase. Ships both packages: `_webOS22+.ipk` for webOS 22 and newer, and the legacy `.ipk` for webOS 3-6.
