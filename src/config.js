@@ -190,7 +190,10 @@ const configOptions = new Map([
   ['pointerSettingsButton', { default: true, desc: 'Settings Button for the Pointer' }],
   ['disableAnimations', { default: false, desc: 'Disable Animations' }],
   // Percent, 40-100 in steps of 10: dims the browse UI, never the video.
-  ['uiBrightness', { default: 100, desc: 'UI Brightness' }]
+  ['uiBrightness', { default: 100, desc: 'UI Brightness' }],
+  // Each YouTube account on the TV keeps its own settings - see the
+  // per-account profile code below.
+  ['perAccountSettings', { default: false, desc: 'Separate Settings for Each Account' }]
 ]);
 
 // Register shortcut keys 0-9
@@ -217,22 +220,132 @@ for (const [k, v] of configOptions) { defaultConfig[k] = v.default; }
 
 const changeListeners = new Map();
 
-function loadStoredConfig() {
-  const storage = window.localStorage.getItem(CONFIG_KEY);
+/*
+ * Per-account settings.
+ *
+ * With `perAccountSettings` off everything lives in CONFIG_KEY, shared by every
+ * account, as it always has. With it on, the settings that belong to a person
+ * (ad filters, SponsorBlock, theme, button mapping...) are kept per account in
+ * `CONFIG_KEY::<profile>`, while the ones that belong to the TV stay in
+ * CONFIG_KEY: those that run before an account is chosen (auto login), and the
+ * ones about the hardware (codec, emoji fix, cast block...).
+ *
+ * The account is read from the leanback client's own identity record. The
+ * profile name is a hash of that record's id-like fields, so no account id is
+ * stored; tokens and timestamps are skipped, they change while the account
+ * stays the same. Guest mode gets a profile of its own.
+ */
+const DEVICE_KEYS = new Set([
+  'perAccountSettings',
+  'foxThemeApplied',
+  'enableAutoLogin',
+  'autoSelectAccount',
+  'blockWebosCast',
+  'forceVideoCodec',
+  'enableLegacyEmojiFix',
+  'pointerSettingsButton',
+  'keyboardSearch',
+  'loadRowsAhead',
+  'disableAnimations'
+]);
+const IDENTITY_KEY = 'yt.leanback.default::last-identity-used';
+// Ids first; names and e-mail only when the record has no id, as a rename
+// would otherwise move the account to a fresh profile.
+const ID_FIELD_RE = /id$/i;
+const FALLBACK_FIELD_RE = /(?:user|email|name)$/i;
+// Anything that changes while the account stays the same would leave the
+// account's settings behind at the next change.
+const VOLATILE_FIELD_RE = /token|expir|time|date|secret|index|session|request|nonce|state/i;
+
+function loadStored(key) {
+  const storage = window.localStorage.getItem(key);
   if (storage === null) return null;
-  try { return JSON.parse(storage); } catch { return null; }
+  try {
+    const parsed = JSON.parse(storage);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch { return null; }
+}
+
+function collectIdFields(obj, fieldRe, prefix, out, depth) {
+  for (const key of Object.keys(obj)) {
+    if (VOLATILE_FIELD_RE.test(key)) continue;
+    const value = obj[key];
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      if (depth < 1) collectIdFields(value, fieldRe, prefix + key + '.', out, depth + 1);
+    } else if (((typeof value === 'string' && value) || typeof value === 'number') && fieldRe.test(key)) {
+      out.push(prefix + key + '=' + value);
+    }
+  }
+}
+
+// Two 32-bit FNV-1a passes with different offsets: a short, stable name that
+// does not carry the account id itself.
+function hashString(str) {
+  let h1 = 0x811c9dc5, h2 = 0x01000193 ^ 0x5bd1e995;
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193);
+    h2 = Math.imul(h2 ^ c, 0x01000193) ^ (h2 >>> 15);
+  }
+  return ('0000000' + (h1 >>> 0).toString(16)).slice(-8) + ('0000000' + (h2 >>> 0).toString(16)).slice(-8);
+}
+
+// When the last lookup could not tell the account, the identity record's
+// field names (never the values), for the settings panel to show.
+let unknownIdentityFields = [];
+
+function readAccountProfile() {
+  let data;
+  try { data = (loadStored(IDENTITY_KEY) || {}).data; } catch { data = null; }
+  unknownIdentityFields = [];
+  if (!data || typeof data !== 'object') return null;
+  if (String(data.identityType || '').indexOf('GUEST') !== -1) return 'guest';
+  const parts = [];
+  collectIdFields(data, ID_FIELD_RE, '', parts, 0);
+  if (!parts.length) collectIdFields(data, FALLBACK_FIELD_RE, '', parts, 0);
+  if (!parts.length) {
+    unknownIdentityFields = Object.keys(data);
+    return null;
+  }
+  parts.sort();
+  return hashString(parts.join('|'));
+}
+
+const profileStorageKey = (profile) => CONFIG_KEY + '::' + profile;
+
+function pickAccountValues(source) {
+  const out = {};
+  for (const key of Object.keys(source)) {
+    if (!DEVICE_KEYS.has(key) && configOptions.has(key)) out[key] = source[key];
+  }
+  return out;
 }
 
 // MUTATE IN PLACE ONLY — adblock.js (and other modules) hold a module-level
 // reference to this object via the configGetAll() snapshot. Reassigning
 // localConfig (e.g. for a future "reset to defaults") would silently desync
 // those holders. Use Object.assign(localConfig, defaultConfig) to reset.
-const storedConfig = loadStoredConfig() || {};
-let localConfig = Object.assign({}, defaultConfig, storedConfig);
+// sharedConfig is what CONFIG_KEY holds: everything with per-account settings
+// off, and the device settings plus the shared profile with them on.
+const sharedConfig = loadStored(CONFIG_KEY) || {};
+// The account profile in use, or null while the shared settings are.
+let activeProfile = null;
+let profileSeeded = false;
+let localConfig = Object.assign({}, defaultConfig, sharedConfig);
+
+if (sharedConfig.perAccountSettings) {
+  activeProfile = readAccountProfile();
+  if (activeProfile) {
+    const stored = loadStored(profileStorageKey(activeProfile));
+    // A new account starts from the shared settings, not from the defaults.
+    if (stored) Object.assign(localConfig, pickAccountValues(stored));
+    else profileSeeded = true;
+  }
+}
 
 // The clock was an on/off switch (showWatch) before it could show the date.
-if ('showWatch' in storedConfig) {
-  if (!('clockMode' in storedConfig)) localConfig.clockMode = storedConfig.showWatch ? 'time' : 'off';
+if ('showWatch' in sharedConfig) {
+  if (!('clockMode' in sharedConfig)) localConfig.clockMode = sharedConfig.showWatch ? 'time' : 'off';
   delete localConfig.showWatch;
 }
 
@@ -241,7 +354,16 @@ if ('showWatch' in storedConfig) {
 let pendingWriteTimer = null;
 function writeNow() {
   pendingWriteTimer = null;
-  try { window.localStorage[CONFIG_KEY] = JSON.stringify(localConfig); }
+  try {
+    if (activeProfile) {
+      for (const key of DEVICE_KEYS) sharedConfig[key] = localConfig[key];
+      window.localStorage[CONFIG_KEY] = JSON.stringify(sharedConfig);
+      window.localStorage[profileStorageKey(activeProfile)] = JSON.stringify(pickAccountValues(localConfig));
+    } else {
+      Object.assign(sharedConfig, localConfig);
+      window.localStorage[CONFIG_KEY] = JSON.stringify(localConfig);
+    }
+  }
   catch { /* quota / SecurityError on private mode */ }
 }
 const flushPendingWrite = () => {
@@ -254,6 +376,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', flushPendingWrite);
   window.addEventListener('pagehide', flushPendingWrite);
 }
+if (profileSeeded) scheduleWrite();
 
 function configExists(key) { return configOptions.has(key); }
 
@@ -280,15 +403,103 @@ export function configWrite(key, value) {
   DEBUG && console.info('Changing key', key, 'from', oldValue, 'to', value);
   localConfig[key] = value;
   scheduleWrite();
+  notifyChange(key, value, oldValue);
+}
 
+function notifyChange(key, newValue, oldValue) {
   const listeners = changeListeners.get(key);
   if (listeners) {
-    const syntheticEvent = { detail: { key, newValue: value, oldValue } };
+    const syntheticEvent = { detail: { key, newValue, oldValue } };
     for (const callback of listeners) {
       try { callback(syntheticEvent); }
       catch (err) { console.warn('[Config] change listener failed for', key, err); }
     }
   }
+}
+
+/**
+ * Loads `profile`'s settings (null: the shared ones) in place of the current
+ * account's, telling every listener of a value that changed - the same as if
+ * each had been changed in the panel. The outgoing account's pending write is
+ * flushed to its own profile first.
+ */
+function switchProfile(profile) {
+  if (profile === activeProfile) return;
+  flushPendingWrite();
+  const previous = activeProfile;
+  activeProfile = profile;
+
+  let incoming = null;
+  if (profile) incoming = loadStored(profileStorageKey(profile));
+  if (!incoming) {
+    // An account seen for the first time starts from the shared settings.
+    incoming = pickAccountValues(Object.assign({}, defaultConfig, sharedConfig));
+    if (profile) scheduleWrite();
+  }
+  incoming = pickAccountValues(Object.assign(pickAccountValues(defaultConfig), incoming));
+
+  console.info('[Config] Settings profile:', previous || 'shared', '->', profile || 'shared');
+  for (const key of Object.keys(incoming)) {
+    const oldValue = localConfig[key];
+    const newValue = incoming[key];
+    if (oldValue === newValue) continue;
+    localConfig[key] = newValue;
+    notifyChange(key, newValue, oldValue);
+  }
+  window.dispatchEvent(new CustomEvent('ytaf-profile-change'));
+}
+
+/**
+ * Where the current settings come from, for the panel: 'off' (one set for
+ * every account), 'account', 'guest', or 'unknown' when per-account settings
+ * are on but no account could be told from the identity record. `fields` lists
+ * that record's field names in the 'unknown' case, so it can be reported.
+ */
+export function configGetProfileStatus() {
+  if (!localConfig.perAccountSettings) return { state: 'off', fields: [] };
+  if (activeProfile === 'guest') return { state: 'guest', fields: [] };
+  if (activeProfile) return { state: 'account', fields: [] };
+  return { state: 'unknown', fields: unknownIdentityFields.slice() };
+}
+
+function checkAccountChange() {
+  if (!localConfig.perAccountSettings) return;
+  const profile = readAccountProfile();
+  // No readable identity (e.g. mid sign-out): keep what is loaded.
+  if (profile === null) return;
+  switchProfile(profile);
+}
+
+configAddChangeListener('perAccountSettings', ({ detail }) => {
+  if (detail.newValue) {
+    // The account carries on with exactly the settings it has now.
+    activeProfile = readAccountProfile();
+    if (!activeProfile) {
+      const fields = unknownIdentityFields;
+      console.warn('[Config] Per-account settings: no account found in the identity record' +
+        (fields.length ? ' (fields: ' + fields.join(', ') + ')' : ''));
+    }
+  } else {
+    // The settings in use become the shared ones, so nothing visibly changes.
+    activeProfile = null;
+  }
+  scheduleWrite();
+});
+
+// The account is chosen on the account selector, so it is looked up again
+// when the selector is left. The identity record may be written a moment after
+// the page has moved on, hence the two later looks.
+if (typeof window !== 'undefined') {
+  let onSelector = false;
+  let recheckTimers = [];
+  window.addEventListener('ytaf-page-update', (evt) => {
+    const wasOnSelector = onSelector;
+    onSelector = !!(evt.detail && evt.detail.isAccountSelector);
+    if (onSelector || !wasOnSelector || !localConfig.perAccountSettings) return;
+    for (const timer of recheckTimers) clearTimeout(timer);
+    checkAccountChange();
+    recheckTimers = [setTimeout(checkAccountChange, 1500), setTimeout(checkAccountChange, 5000)];
+  });
 }
 
 export function configAddChangeListener(key, callback) {

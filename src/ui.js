@@ -1,5 +1,5 @@
 import { logoStyles, thumbnailQualityModes, videoCodecModes, uiThemes, clockModes } from './config.js';
-import { configAddChangeListener, configRead, configWrite, configGetDesc, segmentTypes, configGetDefault, shortcutActions, sbModes, sbModesHighlight, forcePreviewModes } from './config.js';
+import { configAddChangeListener, configRead, configWrite, configGetDesc, segmentTypes, configGetDefault, shortcutActions, sbModes, sbModesHighlight, forcePreviewModes, configGetProfileStatus } from './config.js';
 import './ui.css';
 import './auto-login.js';
 import './return-dislike.js';
@@ -440,6 +440,30 @@ function createThumbnailQualityControl() {
   return control;
 }
 
+// The per-account switch, with a line under it saying which settings are in
+// use. When no account can be told from the identity record, the line lists
+// the record's field names (never values) so the case can be reported.
+function createPerAccountControl() {
+  const control = createConfigCheckbox('perAccountSettings');
+  const status = createElement('div', { class: 'ytaf-profile-status', style: { fontSize: '1.7vh', opacity: '0.75', paddingLeft: '3.2vh' } });
+  const update = () => {
+    const { state, fields } = configGetProfileStatus();
+    let text = '';
+    if (state === 'account') text = 'Using this account\'s own settings';
+    else if (state === 'guest') text = 'Using the guest settings';
+    else if (state === 'unknown') {
+      text = 'Account not recognised - shared settings in use' +
+        (fields.length ? ' (fields: ' + fields.join(', ') + ')' : '');
+    }
+    status.textContent = text;
+    status.style.display = text ? '' : 'none';
+  };
+  configAddChangeListener('perAccountSettings', update);
+  window.addEventListener('ytaf-profile-change', update);
+  update();
+  return createElement('div', {}, control, status);
+}
+
 // Turning subtitles on automatically needs a language to turn on. Greyed out
 // and dropped from the focus order while Auto-Translate Subtitles is Off, like
 // the thumbnail strategy row, so the rows below do not move.
@@ -767,7 +791,7 @@ function createOptionsPanel() {
   const updateClockRow = () => setState(elClockDuringPlayback, configRead('clockMode') !== 'off');
   configAddChangeListener('clockMode', updateClockRow);
   updateClockRow();
-  const interfaceGroup = [createAlignedCycleControl('uiTheme', uiThemes), createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('autoSelectAccount'), createConfigCheckbox('upgradeThumbnails'), createThumbnailQualityControl(), createLogoControl(), createAlignedCycleControl('clockMode', clockModes), elClockDuringPlayback, createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications'), createConfigCheckbox('loadRowsAhead'), createConfigCheckbox('keyboardSearch'), createConfigCheckbox('pointerSettingsButton'), createConfigCheckbox('disableAnimations')];
+  const interfaceGroup = [createAlignedCycleControl('uiTheme', uiThemes), createConfigCheckbox('enableAutoLogin'), createConfigCheckbox('autoSelectAccount'), createPerAccountControl(), createConfigCheckbox('upgradeThumbnails'), createThumbnailQualityControl(), createLogoControl(), createAlignedCycleControl('clockMode', clockModes), elClockDuringPlayback, createConfigCheckbox('enableOledCareMode'), createConfigCheckbox('disableNotifications'), createConfigCheckbox('loadRowsAhead'), createConfigCheckbox('keyboardSearch'), createConfigCheckbox('pointerSettingsButton'), createConfigCheckbox('disableAnimations')];
   // The cast block only exists on webOS 25 (see userScript.js).
   if (isWebOS25()) interfaceGroup.push(createConfigCheckbox('blockWebosCast'));
   // --- Page 3: Interface ---

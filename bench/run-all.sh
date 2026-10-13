@@ -21,6 +21,7 @@ echo "--- dislike fetch/render timing ---";   node bench/dislike-timing-test.cjs
 echo "--- thumbnail / dislike behaviour ---";  node bench/module-behaviour-test.cjs dist/webOSUserScripts/userScript.js 2>&1 | tail -1
 echo "--- options panel build cost ---";   node bench/panel-bench.cjs dist/webOSUserScripts/userScript.js 2>&1 | grep -E "IN the handler|wall time|deferred to"
 echo "--- options panel behaviour ---";     node bench/panel-test.cjs dist/webOSUserScripts/userScript.js 2>&1 | tail -1
+echo "--- per-account settings ---";       node bench/per-account-test.cjs dist/webOSUserScripts/userScript.js 2>&1 | tail -1
 echo "--- emoji observer convergence ---"; node bench/emoji-loop-test.cjs dist/webOSUserScripts/userScript.js 40 2>&1 | tail -1
 echo "--- emoji amplification ---";        node bench/emoji-amplify-test.cjs dist/webOSUserScripts/userScript.js 2>&1 | tail -1
 echo "--- JSON hook perf (webOS 3) ---"; node bench/hook-bench.cjs dist/webOSUserScripts/userScript.js legacy "$LABEL" 2>&1 | grep -v "^JSON:"

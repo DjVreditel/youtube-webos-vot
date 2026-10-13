@@ -119,6 +119,7 @@ All filters except Ad Blocking need Ad Blocking on.
 | **UI Theme** (Fox, Blue, Red) | Fox |
 | Bypass Nag Screens (also "Are you still watching?") | On |
 | **Auto Login** (off: always ask who is watching) | On |
+| **Separate Settings for Each Account** | Off |
 | Max Thumbnail Quality | Off |
 | Thumbnail Strategy (Original, Fast, **Smooth (SD)**) | Original |
 | YouTube Logo (Default, Premium, Hidden) | Default |
@@ -188,6 +189,7 @@ other forks of the project; credits are in [CHANGELOG.md](CHANGELOG.md).
 **New**
 - Auto-Translate Subtitles to a language of your choice.
 - Auto Login: always ask who is watching.
+- Separate Settings for Each Account: each YouTube account on the TV keeps its own settings.
 - Bindable yellow button, Sleep Timer and Audio-Only Mode.
 - Magic Remote scroll-wheel seeking.
 - SponsorBlock picks up segments submitted while you watch: re-checked during playback.

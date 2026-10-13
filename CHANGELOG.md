@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Fixes from the security audit of 0.8.7 (SECURITY_AUDIT.md).
 
+## Added
+
++ **Separate Settings for Each Account** (Interface, off by default). Each YouTube account on the TV keeps its own settings: ad and shelf filters, SponsorBlock, theme, button mapping and the rest. The settings that belong to the TV stay shared: Bypass Nag Screens, Auto Login, the codec, the emoji fix, the cast block, the pointer button, keyboard search, Load Rows Ahead and Disable Animations. An account seen for the first time starts from the shared settings, and picking another account on "Who's watching" switches the settings without a restart. The account is told from YouTube's own identity record; the profile is named by a hash of its id fields, so no account id is stored, and tokens are never read. If the account cannot be told, the shared settings stay in use and the panel lists the record's field names (not their values) for a bug report. Turning the option off makes the settings in use the shared ones.
+
 ## Changed
 
 + **Return YouTube Dislike is off by default.** Every video opened sends its id to returnyoutubedislikeapi.com, a third party, so it is now switched on by choice. Applies to new installs; a TV that already has saved settings keeps the switch as it was.
