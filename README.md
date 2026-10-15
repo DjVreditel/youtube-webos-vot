@@ -55,6 +55,8 @@ Install it in one of three ways:
 | 5 | Skip to next chapter | |
 | 0-4, 6-9 | *None* | Can be set to any action during playback. |
 | Back | Closes the settings panel | Otherwise YouTube's normal Back. Holding it to close the panel does not also go back a page. |
+| Left / Right | YouTube's own | With *Left/Right Seek Step* set, they seek by that step while the player controls are hidden. |
+| Hold OK on a video | YouTube's menu | With *More Options in the Long-Press Menu* on, it also offers "Block channel", "Not interested" and "Don't recommend channel". |
 | Magic Remote wheel | Scrolls | With *Scroll Wheel Seeks* on, each notch on the focused progress bar seeks 10 s. |
 | Magic Remote pointer | Shows a fox button | Moving the pointer shows a fox button in the top-right corner that opens and closes the settings, for remotes without colour buttons. |
 
@@ -94,8 +96,13 @@ marked *webOS 25* or *guest* only appears there.
 | **Remove Upcoming Videos** (upcoming streams and premieres) | Off |
 | **Remove Members-Only Videos** | Off |
 | Guest Mode: Hide Sign-in Buttons (*guest*: only when not signed in) | Off |
+| **Hide Watched Videos** (90% watched or more; not in the History, the Library or playlists) | Off |
+| **Hide Videos Shorter Than** (1, 2, 3, 5, 10 or 20 min) | Off |
+| **Blocked Channels** (a list; also from the long-press menu, or for the video playing) | Empty |
+| **Hide Videos Whose Title Contains** (a list of words or phrases, any case) | Empty |
 
-All filters except Ad Blocking need Ad Blocking on.
+All filters except Ad Blocking need Ad Blocking on. The two lists are edited with a text box: type with the TV's
+keyboard (OK on the box) or a USB/Bluetooth one, then OK; select an entry to remove it.
 
 **Player**
 
@@ -107,9 +114,11 @@ All filters except Ad Blocking need Ad Blocking on.
 | **Auto-Translate Subtitles** (pick a language) | Off |
 | **Turn On Translated Subtitles Automatically** (needs a language above) | Off |
 | **Don't Turn On Subtitles by Themselves** | Off |
+| **Prefer Original Audio over Dubbed** (drops dubbed and auto-dubbed tracks) | Off |
 | **Show Remaining Time and End Time** | Off |
 | Hide Endcards | Off |
 | **Magic Remote: Scroll Wheel Seeks on Progress Bar** | Off |
+| **Left/Right Seek Step (Controls Hidden)** (5, 10, 15, 30, 60 s) | YouTube's default |
 | Return YouTube Dislike (sends the id of every video you open to returnyoutubedislikeapi.com) | Off |
 
 **Interface**
@@ -171,6 +180,10 @@ Each category can be set to Auto Skip, Manual Skip, Show in Seek Bar or Disable,
 | Fix Multiline Titles | On |
 | New Liquid Glass UI | Off |
 | Emoji + Characters Fix (webOS 3-4 only) | On |
+| **Start Page** (Home, Subscriptions, Library, History; not on a launch into a video) | Home |
+| **More Options in the Long-Press Menu** | Off |
+| **DeArrow: Replace Clickbait Titles** (asks sponsor.ajay.app by hash prefix, like SponsorBlock) | Off |
+| **DeArrow: Replace Clickbait Thumbnails** (needs the titles above) | Off |
 
 **Auto-Translate Subtitles** offers about 30 languages: Hungarian, English, German, Spanish, French, Italian,
 Portuguese, Dutch, Polish, Czech, Slovak, Romanian, Croatian, Serbian, Slovenian, Bulgarian, Greek, Turkish,
@@ -200,6 +213,9 @@ other forks of the project; credits are in [CHANGELOG.md](CHANGELOG.md).
 - *0.8.7:* no "Are you still watching?" pause, no paid-promotion banner, a clock with the date that can stay on
   during playback, remaining time and end time, Mute Video Previews and Don't Turn On Subtitles by Themselves;
   about 5.6 KB smaller packages.
+- *Next release:* from MickLesk's fork, Prefer Original Audio over Dubbed, Feed Filters (watched videos, short
+  videos, blocked channels, title keywords), "Block channel" / "Not interested" / "Don't recommend channel" in the
+  long-press menu, Start Page, a Left/Right seek step and DeArrow.
 
 **Fixed**
 - Ad blocking holds up against YouTube's "property locker"; previously playback could stall a few seconds in.
@@ -231,7 +247,8 @@ other forks of the project; credits are in [CHANGELOG.md](CHANGELOG.md).
 - Support for webOS 3, 4, 5, 6, 22, 23, 24, 25 and newer (2016 and newer LG TVs; webOS 1 and 2 are not supported).
 - Ad blocking with a schema-based filter engine: cleaner Home, Search and Shorts. It also hides QR-code and
   shop overlays and the "Includes paid promotion" banner during playback.
-- Optional filters: Shorts, live videos, "Most Relevant" shelf, Top Live Games, guest sign-in prompts.
+- Optional filters: Shorts, live videos, "Most Relevant" shelf, Top Live Games, guest sign-in prompts, watched
+  videos, videos shorter than a set length, blocked channels and title keywords.
 - [SponsorBlock](https://sponsor.ajay.app/):
   - every segment type, including Hook, Filler and muted segments, plus Highlight;
   - colour for every segment, and a desktop-style segment list;
@@ -239,11 +256,14 @@ other forks of the project; credits are in [CHANGELOG.md](CHANGELOG.md).
   - full-video label and time with skips removed;
   - new segments picked up during playback.
 - Return YouTube Dislike in the description panel (off by default).
+- [DeArrow](https://dearrow.ajay.app/) community titles and thumbnails in place of clickbait (off by default).
 - Force Max Quality, Force Video Codec and Max Thumbnail Quality.
-- Auto-Translate Subtitles.
+- Auto-Translate Subtitles, and the original audio in place of dubbed tracks.
 - Bypass Nag Screens: account picker, Premium and other upsell screens, and "Are you still watching?".
   Optionally, always ask who is watching.
-- Programmable remote: 0-9 and all four colour buttons, Magic Remote wheel seeking.
+- Programmable remote: 0-9 and all four colour buttons, Magic Remote wheel seeking, a Left/Right seek step,
+  more entries in the long-press menu of a video.
+- Start Page: open on Subscriptions, the Library or the History.
 - OLED care:
   - OLED black overlay on Red, with keep-alive;
   - OLED-Care Mode (true-black UI);

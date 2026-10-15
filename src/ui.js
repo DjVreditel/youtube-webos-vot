@@ -1,4 +1,4 @@
-import { logoStyles, thumbnailQualityModes, videoCodecModes, uiThemes, clockModes } from './config.js';
+import { logoStyles, thumbnailQualityModes, videoCodecModes, uiThemes, clockModes, startPageModes, minVideoLengthModes, seekStepModes } from './config.js';
 import { configAddChangeListener, configRead, configWrite, configGetDesc, segmentTypes, configGetDefault, shortcutActions, sbModes, sbModesHighlight, forcePreviewModes, configGetProfileStatus } from './config.js';
 import './ui.css';
 import './auto-login.js';
@@ -17,6 +17,7 @@ import logoDarkUrl from './icons/logo-dark.png';
 import { getWebOSVersion, isWebOS25 } from './webos-utils.js';
 import { subtitleTranslateLanguages } from './subtitle-translate.js';
 import { showNotification as _showNotification, setNotificationOled, setNotificationTheme } from './notifications.js';
+import { blockChannel } from './long-press-menu.js';
 
 // Re-export so existing `import { showNotification } from './ui'` sites keep working.
 export const showNotification = _showNotification;
@@ -553,6 +554,93 @@ function createOpacityControl(key, step = 5, min = 0, max = 100) {
   return container;
 }
 
+// The channel of the video being watched, as the player names it, or ''.
+function currentVideoChannel() {
+  if (!isWatchPage()) return '';
+  const player = document.getElementById(SELECTORS.PLAYER_ID);
+  try {
+    const data = player && typeof player.getVideoData === 'function' ? player.getVideoData() : null;
+    return data && typeof data.author === 'string' ? data.author.trim() : '';
+  } catch { return ''; }
+}
+
+/**
+ * A list setting (Blocked Channels, title keywords): its entries as buttons
+ * that remove them, then a text box with an Add button. The text box takes a
+ * USB or Bluetooth keyboard, or the TV's own keyboard on OK; OK with text in
+ * it adds the text. `channelButton` adds a button that blocks the channel of
+ * the video being watched, shown while there is one.
+ */
+function createListEditor(key, { placeholder, emptyText, channelButton }) {
+  const entries = createElement('div', { class: 'ytaf-list-entries' });
+  const input = createElement('input', { type: 'text', class: 'ytaf-text-input', placeholder });
+
+  const render = () => {
+    entries.textContent = '';
+    const values = configRead(key);
+    if (!values.length) entries.appendChild(createElement('div', { class: 'ytaf-list-empty', text: emptyText }));
+    values.forEach((value, index) => {
+      entries.appendChild(createElement('button', {
+        class: 'ytaf-list-btn',
+        text: '\u2715 ' + value,
+        title: 'Remove',
+        tabIndex: 0,
+        events: { click: () => removeAt(index) }
+      }));
+    });
+  };
+
+  // The focused entry goes away with its button, so the focus moves on to the
+  // entry that takes its place, or to the text box.
+  const removeAt = (index) => {
+    const values = configRead(key).slice();
+    values.splice(index, 1);
+    configWrite(key, values);
+    const buttons = entries.querySelectorAll('.ytaf-list-btn');
+    (buttons[Math.min(index, buttons.length - 1)] || input).focus();
+  };
+
+  const add = () => {
+    const value = input.value.trim();
+    input.value = '';
+    if (!value) return;
+    const values = configRead(key);
+    const lower = value.toLowerCase();
+    for (let i = 0; i < values.length; i++) {
+      if (String(values[i]).toLowerCase() === lower) return;
+    }
+    configWrite(key, values.concat([value]));
+  };
+  // OK in the text box (the panel's key handler).
+  input.ytafSubmit = add;
+
+  const children = [entries];
+  if (channelButton) {
+    const button = createElement('button', {
+      class: 'ytaf-list-btn ytaf-list-action',
+      tabIndex: 0,
+      events: { click: () => { blockChannel(currentVideoChannel()); input.focus(); } }
+    });
+    const update = () => {
+      const channel = currentVideoChannel();
+      const blocked = channel && configRead(key).some((v) => String(v).toLowerCase() === channel.toLowerCase());
+      button.textContent = 'Block the Channel of This Video: ' + channel;
+      button.style.display = channel && !blocked ? '' : 'none';
+    };
+    configAddChangeListener(key, update);
+    window.addEventListener('ytaf-panel-show', update);
+    update();
+    children.push(button);
+  }
+  children.push(createElement('div', { class: 'ytaf-list-input-row' }, input,
+    createElement('button', { class: 'ytaf-list-btn', text: 'Add', tabIndex: 0, events: { click: () => { add(); input.focus(); } } })));
+
+  configAddChangeListener(key, render);
+  render();
+  return createElement('div', { class: 'ytaf-list-editor' },
+    createElement('div', { class: 'ytaf-list-title', text: configGetDesc(key) }), ...children);
+}
+
 // --- Main Options Panel Logic ---
 
 function createOptionsPanel() {
@@ -630,14 +718,62 @@ function createOptionsPanel() {
 
   // The tab buttons and the controls of the open page.
   const panelFocusables = () => tabBtns.concat(pageFocusables(pages[activePage]));
+  // Focuses a control and scrolls the open page so it is in full view, with
+  // half a row of its neighbours: focus() alone does not scroll on every TV.
+  // The first and the last control take the page to its top and its end, so
+  // what sits above the first or below the last (a heading, a note, the
+  // page's padding) comes into view with the arrows too, not only with the
+  // Magic Remote wheel. The part in view is the page's box within the panel's.
+  const focusInView = (el) => {
+    el.focus();
+    const page = pages[activePage];
+    if (!page || !page.contains(el)) return;
+    const shown = pageFocusables(page).filter((c) => c.getClientRects().length > 0);
+    if (el === shown[0]) { page.scrollTop = 0; return; }
+    if (el === shown[shown.length - 1]) { page.scrollTop = page.scrollHeight; return; }
+    const pageBox = page.getBoundingClientRect();
+    const panelBox = elmContainer.getBoundingClientRect();
+    const top = Math.max(pageBox.top, panelBox.top);
+    const bottom = Math.min(pageBox.bottom, panelBox.bottom);
+    const row = boxOf(el);
+    const margin = row.height / 2;
+    if (row.bottom + margin > bottom) page.scrollTop += row.bottom + margin - bottom;
+    else if (row.top - margin < top) page.scrollTop -= top - row.top + margin;
+  };
   const moveFocus = (dir) => {
     const target = nearestInDirection(document.activeElement, dir, panelFocusables());
-    if (target) target.focus();
+    if (target) focusInView(target);
   };
 
   // Keyboard Navigation for the Options Panel
   elmContainer.addEventListener('keydown', (evt) => {
     if (getKeyColor(evt.charCode || evt.keyCode) === 'green') return; // Let global handler handle close if mapped to green (or config_menu logic)
+
+    // A text box keeps the keys it types with, Left and Right included (they
+    // move the cursor) until the cursor is at that end of the text, where they
+    // move on to the Add button and back; Up and Down still leave it. OK adds
+    // what was typed, or with nothing typed is left to the TV, which opens its
+    // keyboard.
+    const textBox = isTextBox(document.activeElement) ? document.activeElement : null;
+    if (textBox) {
+      const code = evt.keyCode;
+      if (code === REMOTE_KEYS.ENTER.code) {
+        if (textBox.value.trim() && textBox.ytafSubmit) {
+          textBox.ytafSubmit();
+          evt.preventDefault();
+        }
+        evt.stopPropagation();
+        return;
+      }
+      const isVertical = code === REMOTE_KEYS.UP.code || code === REMOTE_KEYS.DOWN.code;
+      const caret = typeof textBox.selectionStart === 'number' ? textBox.selectionStart : 0;
+      const leavesBox = (code === REMOTE_KEYS.RIGHT.code && caret >= textBox.value.length) ||
+        (code === REMOTE_KEYS.LEFT.code && caret === 0 && textBox.selectionEnd === 0);
+      if (!isVertical && !leavesBox && code !== 27 && code !== REMOTE_KEYS.BACK.code) {
+        evt.stopPropagation();
+        return;
+      }
+    }
 
     if (evt.keyCode in ARROW_KEY_CODE) {
       const dir = ARROW_KEY_CODE[evt.keyCode];
@@ -679,8 +815,8 @@ function createOptionsPanel() {
           const focusables = [activeTabBtn].concat(pageFocusables(pages[activePage])).filter(Boolean);
           
           if (focusables.length > 0) {
-            if (dir === 'up') focusables[focusables.length - 1].focus();
-            else if (dir === 'down') focusables[0].focus();
+            if (dir === 'up') focusInView(focusables[focusables.length - 1]);
+            else if (dir === 'down') focusInView(focusables[0]);
           }
         }
         evt.preventDefault(); evt.stopPropagation(); return;
@@ -719,6 +855,30 @@ function createOptionsPanel() {
   // A page element: the first one visible, the others hidden until their tab
   // is picked. They are appended in build order, which does not matter since
   // only one is ever displayed.
+  // The room a page has under the heading and the tabs, so a long page
+  // scrolls inside the panel. ui.css says 94vh - 15vh, but the heading and the
+  // tabs take more than 15vh, so the bottom rows of a full page were cut off
+  // by the panel's edge instead of scrolling into view. Measured when the
+  // panel is shown; the pages built later get the same.
+  let pageMaxHeight = '';
+  const fitPages = () => {
+    const screenH = window.innerHeight || document.documentElement.clientHeight || 0;
+    const page = pages[activePage];
+    if (!screenH || !page) return;
+    const frame = window.getComputedStyle(elmContainer);
+    const pageStyle = window.getComputedStyle(page);
+    // Where the open page starts in the panel: the heading, the tabs and their margins.
+    const room = screenH * 0.94 - page.offsetTop -
+      (parseFloat(frame.borderTopWidth) || 0) - (parseFloat(frame.borderBottomWidth) || 0) -
+      (parseFloat(pageStyle.paddingTop) || 0) - (parseFloat(pageStyle.paddingBottom) || 0);
+    if (room < 100) return;
+    pageMaxHeight = Math.floor(room) + 'px';
+    for (let i = 0; i < pages.length; i++) {
+      if (pages[i]) pages[i].style.maxHeight = pageMaxHeight;
+    }
+  };
+  elmContainer.fitPages = fitPages;
+
   const makePage = (index) => {
     const page = createElement('div', {
       class: 'ytaf-settings-page ytaf-page-sectioned',
@@ -726,6 +886,7 @@ function createOptionsPanel() {
       style: index === 0 ? {} : { display: 'none' }
     });
     pages[index] = page;
+    if (pageMaxHeight) page.style.maxHeight = pageMaxHeight;
     elmContainer.appendChild(page);
     return page;
   };
@@ -771,6 +932,42 @@ function createOptionsPanel() {
   configAddChangeListener('enableAdBlock', updateDependencyState);
   updateDependencyState();
 
+  // Feed filters. Ad Blocking's like the ones above: greyed out and out of the
+  // focus order while it is off. Built in the first frame after the panel is
+  // up, with the deferred pages below, so opening the panel does not pay for
+  // it; it sits at the bottom of the page, below what the panel opens on.
+  let buildFeedSection = () => {
+    const feedSection = createSection('Feed Filters', [
+      createConfigCheckbox('hideWatchedVideos'),
+      createAlignedCycleControl('minVideoLength', minVideoLengthModes),
+      createListEditor('blockedChannels', {
+        placeholder: 'Channel name, then OK',
+        emptyText: 'None. Block one here, or with a long press on a video (UI Tweaks tab).',
+        channelButton: true
+      }),
+      createListEditor('blockedKeywords', {
+        placeholder: 'A word or phrase, then OK',
+        emptyText: 'None.'
+      })
+    ]);
+    pageFilters.appendChild(feedSection);
+    const updateFeedSection = () => {
+      const enabled = configRead('enableAdBlock');
+      feedSection.style.opacity = enabled ? '1' : '0.5';
+      const controls = feedSection.querySelectorAll('input, button');
+      for (let i = 0; i < controls.length; i++) {
+        if (controls[i].tabIndex !== -1 || controls[i].disabled) controls[i].disabled = !enabled;
+      }
+      const rows = feedSection.querySelectorAll('.shortcut-control-row');
+      for (let i = 0; i < rows.length; i++) rows[i].tabIndex = enabled ? 0 : -1;
+    };
+    configAddChangeListener('enableAdBlock', updateFeedSection);
+    // The entries are rebuilt when a list changes.
+    configAddChangeListener('blockedChannels', updateFeedSection);
+    configAddChangeListener('blockedKeywords', updateFeedSection);
+    updateFeedSection();
+  };
+
   // --- Page 2: Player ---
   makePage(1).appendChild(createSection('Video Player',
   [createConfigCheckbox('forceHighResVideo'),
@@ -780,9 +977,11 @@ function createOptionsPanel() {
   createAlignedCycleControl('subtitleTranslateLang', subtitleTranslateLanguages),
   createSubtitleAutoEnableControl(),
   createConfigCheckbox('disableAutoCaptions'),
+  createConfigCheckbox('forceOriginalAudio'),
   createConfigCheckbox('showTimeRemaining'),
   createConfigCheckbox('hideEndcards'),
   createConfigCheckbox('enableScrollSeek'),
+  createAlignedCycleControl('seekStep', seekStepModes),
   createConfigCheckbox('enableReturnYouTubeDislike')]));
   // The logo in the header also cycles the theme, but a remote cannot focus
   // it, so the setting needs a row of its own to be reachable on a TV.
@@ -856,6 +1055,20 @@ function createOptionsPanel() {
 
     pageUITweaks.appendChild(createSection('Player UI Tweaks', playerUITweaks));
 
+    // Where the app starts and what the tiles and their menus show. On this
+    // page, which has room, as the Interface page is full.
+    // DeArrow's thumbnails come with its titles.
+    const elDeArrowThumbnails = createConfigCheckbox('enableDeArrowThumbnails');
+    const updateDeArrowRow = () => setState(elDeArrowThumbnails, configRead('enableDeArrow'));
+    configAddChangeListener('enableDeArrow', updateDeArrowRow);
+    updateDeArrowRow();
+    pageUITweaks.appendChild(createSection('Browsing', [
+      createAlignedCycleControl('startPage', startPageModes),
+      createConfigCheckbox('extendLongPressMenu'),
+      createConfigCheckbox('enableDeArrow'),
+      elDeArrowThumbnails
+    ]));
+
       }
   ];
 
@@ -872,6 +1085,13 @@ function createOptionsPanel() {
   elmContainer.buildDeferredPages = () => {
     let index = 1;
     const step = () => {
+      if (buildFeedSection) {
+        const build = buildFeedSection;
+        buildFeedSection = null;
+        build();
+        requestAnimationFrame(step);
+        return;
+      }
       while (index < pageBuilders.length && !pageBuilders[index]) index++;
       if (index >= pageBuilders.length) return;
       ensurePage(index++);
@@ -910,6 +1130,11 @@ function showOptionsPanel(visible) {
 
     console.info('Showing and focusing options panel!');
     optionsPanel.style.display = 'block';
+    // Measured in the next frame, not here: the measuring forces a layout,
+    // which would hold up the key press that opens the panel.
+    requestAnimationFrame(optionsPanel.fitPages);
+    // Rows that depend on the page under the panel (the video's channel).
+    window.dispatchEvent(new CustomEvent('ytaf-panel-show'));
     // The other three tabs are built here, one per frame, now that the panel is
     // on screen. Doing it inside the keydown handler is what made opening the
     // panel a 170ms freeze on webOS 3.
@@ -1128,6 +1353,49 @@ function handleScrollSeek(evt) {
 }
 
 window.addEventListener('wheel', handleScrollSeek, { passive: false, capture: true });
+
+// --- Left/Right Seek Step ---
+// While the player controls are hidden, Left and Right seek by the chosen step
+// instead of YouTube's own, on the burst-seek path, so quick presses add up to
+// one seek. With the controls on screen they move along the controls as
+// before. (From MickLesk's fork.)
+let seekStepKeyCode = null;
+
+// Taken as shown unless the controls are found and neither active nor holding
+// the focus: wrongly taking Left and Right from the controls is worse than
+// leaving them to YouTube.
+function playerControlsShown() {
+  const controls = document.querySelector('yt-focus-container[idomkey="controls"]');
+  if (!controls) return true;
+  return controls.classList.contains('zylon-focus') || controls.contains(document.activeElement);
+}
+
+function handleSeekStepKey(evt) {
+  if (isSyntheticKey(evt)) return;
+  const code = evt.keyCode;
+  if (code !== REMOTE_KEYS.LEFT.code && code !== REMOTE_KEYS.RIGHT.code) return;
+  if (evt.type === 'keyup') {
+    // The keyup of a press we seeked with is ours too.
+    if (code === seekStepKeyCode) {
+      seekStepKeyCode = null;
+      evt.preventDefault();
+      evt.stopImmediatePropagation();
+    }
+    return;
+  }
+  const step = Number(configRead('seekStep')) || 0;
+  if (!step || optionsPanelVisible || !isWatchPage() || isShortsPage()) return;
+  if (isTextBox(document.activeElement) || playerControlsShown() || isEngagementPanelVisible()) return;
+  const video = getVideo();
+  if (!video || !video.duration) return;
+  evt.preventDefault();
+  evt.stopImmediatePropagation();
+  seekStepKeyCode = code;
+  performBurstSeek(code === REMOTE_KEYS.RIGHT.code ? step : -step, video);
+}
+
+window.addEventListener('keydown', handleSeekStepKey, true);
+window.addEventListener('keyup', handleSeekStepKey, true);
 
 function triggerInternal(element, name) {
   if (!element) return false;
@@ -1976,6 +2244,10 @@ configAddChangeListener('loadRowsAhead', () => syncAdblockHook());
 // are rewritten in the same hook.
 configAddChangeListener('enableAutoLogin', () => syncAdblockHook());
 configAddChangeListener('disableAutoCaptions', () => syncAdblockHook());
+// Original audio, the long-press menu and DeArrow are rewrites in the same hook.
+configAddChangeListener('forceOriginalAudio', () => syncAdblockHook());
+configAddChangeListener('extendLongPressMenu', () => syncAdblockHook());
+configAddChangeListener('enableDeArrow', () => syncAdblockHook());
 
 configAddChangeListener('videoShelfOpacity', () => {
   // Cheap update — rewrites the one-rule opacity <style> and toggles the

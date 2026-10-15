@@ -857,3 +857,97 @@
   object-fit: contain;
   pointer-events: none;
 }
+
+/* --- List settings (Blocked Channels, title keywords) ---------------------
+   Each entry is a button that removes it; a text box and an Add button go
+   under them. Plain flex-wrap, no gap property: Chrome 38 (webOS 3) has
+   neither gap nor :focus-within. */
+.ytaf-list-editor {
+  margin: 0.6vh 0 0.9vh 3.2vh;
+  font-size: 2.1vh;
+}
+
+.ytaf-list-title {
+  margin-bottom: 0.4vh;
+}
+
+.ytaf-list-entries {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.ytaf-list-empty {
+  font-size: 1.8vh;
+  opacity: 0.7;
+  margin-bottom: 0.5vh;
+}
+
+.ytaf-list-btn {
+  background: rgba(0, 100, 150, 0.5);
+  color: #ffffff;
+  border: 0.09vh solid rgba(0, 150, 200, 0.5);
+  border-radius: 0.6vh;
+  padding: 0.4vh 1vh;
+  margin: 0 0.75vh 0.6vh 0;
+  font-size: 1.9vh;
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ytaf-list-btn.ytaf-list-action {
+  display: block;
+}
+
+.ytaf-list-input-row {
+  display: flex;
+  align-items: center;
+}
+
+.ytaf-text-input {
+  -webkit-flex: 1 1 auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0 0.75vh 0.6vh 0;
+  padding: 0.4vh 0.8vh;
+  font-size: 1.9vh;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.35);
+  border: 0.09vh solid rgba(0, 150, 200, 0.5);
+  border-radius: 0.6vh;
+}
+
+.ytaf-list-btn:focus,
+.ytaf-text-input:focus {
+  outline: 0.19vh solid #00d4ff;
+}
+
+.ytaf-ui-container.theme-classic-red .ytaf-list-btn {
+  background: #4f4f4f;
+  border-color: #666666;
+}
+
+.ytaf-ui-container.theme-classic-red .ytaf-text-input {
+  border-color: #666666;
+}
+
+.ytaf-ui-container.theme-classic-red .ytaf-list-btn:focus,
+.ytaf-ui-container.theme-classic-red .ytaf-text-input:focus {
+  outline: 0.19vh solid #ff0000;
+}
+
+.ytaf-ui-container.theme-fox .ytaf-list-btn {
+  background: #3a2a1f;
+  border-color: #6b4a33;
+}
+
+.ytaf-ui-container.theme-fox .ytaf-text-input {
+  border-color: #6b4a33;
+}
+
+.ytaf-ui-container.theme-fox .ytaf-list-btn:focus,
+.ytaf-ui-container.theme-fox .ytaf-text-input:focus {
+  outline: 0.19vh solid #ff8c2a;
+}

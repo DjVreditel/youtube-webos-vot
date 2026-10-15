@@ -6,11 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
-Fixes from the security audit of 0.8.7 (SECURITY_AUDIT.md).
+Fixes from the security audit of 0.8.7 (SECURITY_AUDIT.md), and five features from MickLesk's fork (fork watch #26).
 
 ## Added
 
-+ **Separate Settings for Each Account** (Interface, off by default). Each YouTube account on the TV keeps its own settings: ad and shelf filters, SponsorBlock, theme, button mapping and the rest. The settings that belong to the TV stay shared: Bypass Nag Screens, Auto Login, the codec, the emoji fix, the cast block, the pointer button, keyboard search, Load Rows Ahead and Disable Animations. An account seen for the first time starts from the shared settings, and picking another account on "Who's watching" switches the settings without a restart. The account is told from YouTube's own identity record; the profile is named by a hash of its id fields, so no account id is stored, and tokens are never read. If the account cannot be told, the shared settings stay in use and the panel lists the record's field names (not their values) for a bug report. Turning the option off makes the settings in use the shared ones.
++ **Separate Settings for Each Account** (Interface, off by default). Each YouTube account on the TV keeps its own settings: ad and shelf filters, SponsorBlock, theme, button mapping and the rest. The settings that belong to the TV stay shared: Bypass Nag Screens, Auto Login, the codec, the emoji fix, the cast block, the pointer button, keyboard search, Load Rows Ahead, Disable Animations and the Start Page. An account seen for the first time starts from the shared settings, and picking another account on "Who's watching" switches the settings without a restart. The account is told from YouTube's own identity record; the profile is named by a hash of its id fields, so no account id is stored, and tokens are never read. If the account cannot be told, the shared settings stay in use and the panel lists the record's field names (not their values) for a bug report. Turning the option off makes the settings in use the shared ones.
++ **Prefer Original Audio over Dubbed** (Player, off by default): on a video with dubbed audio tracks, uploaded or auto-dubbed, only the original track is offered to the player, so the video plays in its own language. The original is the track YouTube's format tags call original, otherwise the one it marks as default. From MickLesk's fork.
++ **Feed Filters** (Filters, need Ad Blocking): **Hide Watched Videos** (90% or more of the red bar; the History, the Library and playlists keep them), **Hide Videos Shorter Than** (1 to 20 minutes), **Blocked Channels** and **Hide Videos Whose Title Contains**. They apply to Home, Subscriptions, search, channel pages and the videos beside the player. The two lists are edited in the panel, with a text box that takes the TV's keyboard or a USB/Bluetooth one; while a video plays, the panel also offers to block its channel. From MickLesk's fork.
++ **More Options in the Long-Press Menu** (UI Tweaks, off by default): holding OK on a video offers "Block channel". Where YouTube opens its feedback panel instead of a menu, a menu takes its place with Play, Watch later, Save to playlist, "Not interested", "Don't recommend channel" and "Block channel"; the two feedback entries are sent to YouTube as its own panel would. From MickLesk's fork, after TizenTube.
++ **Start Page** (UI Tweaks): the app can open on Subscriptions, the Library or the History instead of Home. A launch into a video, a cast or a voice search is left alone. From MickLesk's fork.
++ **Left/Right Seek Step** (Player, YouTube's default): while the player controls are hidden, Left and Right seek by 5, 10, 15, 30 or 60 seconds, and quick presses add up to one seek. With the controls on screen the keys move along them as before. From MickLesk's fork.
++ **DeArrow** (UI Tweaks, off by default): titles, and optionally thumbnails, submitted by the community in place of clickbait ones (dearrow.ajay.app). Like SponsorBlock, a request names only the first four characters of the SHA-256 of a video id, never the id. A video looked up for the first time gets its new title on the tiles YouTube draws after the answer comes, and on every later page. From MickLesk's fork.
 
 ## Changed
 
@@ -21,11 +27,13 @@ Fixes from the security audit of 0.8.7 (SECURITY_AUDIT.md).
 ## Fixes
 
 + Return YouTube Dislike: the video id is URL-encoded in the API request.
++ Settings panel: a page longer than the room under the tabs was cut off at the panel's bottom edge instead of scrolling, as ui.css counted 15vh for the heading and the tabs, which take more. The room is now measured when the panel opens, and moving with the arrows scrolls the focused row into full view; the first and the last control take the page to its top and its end, so a note or margin below the last control is reached without the Magic Remote wheel. The new Browsing rows went to the UI Tweaks tab, so the Interface tab is as long as in 0.8.7.
 
 ## Tests
 
 + The bench tests press keys as trusted events, as the remote does: the app ignores untrusted key events, so the panel tests had never opened the panel. `jsdom` is a dev dependency.
 + The bench tests follow the six-tab settings panel, the thumbnail upgrade done inside the response, the "4.3k" dislike format, and JSON.parse staying hooked as a pass-through. The tests of the spatial-navigation polyfill, removed in 0.8.6, are gone.
++ `bench/feed-features-test.cjs`: the feed filters and the pages that keep watched videos, Prefer Original Audio, the long-press entries and their actions, DeArrow (hash prefix, rewrite, cache), the panel's list editors, the seek step and the Start Page.
 
 ## [0.8.7] - 2026/10/12
 

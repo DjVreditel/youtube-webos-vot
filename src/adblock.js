@@ -4,6 +4,9 @@ import { getWebOSVersion } from './webos-utils';
 import { FetchRegistry } from './hooks';
 import { upgradeResponseThumbnails, thumbnailHookRequired } from './thumbnail-quality.js';
 import { raiseRowsAhead } from './rows-ahead.js';
+import { itemTitle, itemChannel, itemDurationSeconds, itemWatchedPercent, keepsWatchedVideos } from './feed-filters.js';
+import { extendLongPressMenu } from './long-press-menu.js';
+import { applyDeArrow } from './dearrow.js';
 
 const DEBUG = false;
 const EMOJI_DEBUG = false; 
@@ -74,8 +77,19 @@ const CONFIG_KEYS = {
   ROWS_AHEAD: 'loadRowsAhead',
   // "Are you still watching?" is one of the nag screens this switch bypasses.
   NAG_SCREENS: 'enableAutoLogin',
-  AUTO_CAPTIONS: 'disableAutoCaptions'
+  AUTO_CAPTIONS: 'disableAutoCaptions',
+  HIDE_WATCHED: 'hideWatchedVideos',
+  MIN_LENGTH: 'minVideoLength',
+  BLOCKED_CHANNELS: 'blockedChannels',
+  BLOCKED_KEYWORDS: 'blockedKeywords',
+  ORIGINAL_AUDIO: 'forceOriginalAudio',
+  LONG_PRESS: 'extendLongPressMenu',
+  DEARROW: 'enableDeArrow',
+  DEARROW_THUMBNAILS: 'enableDeArrowThumbnails'
 };
+
+// A video counts as watched from this much of its red progress bar.
+const WATCHED_PERCENT = 90;
 
 // One emoji character: the symbols below in the BMP, or any astral character
 // (a surrogate pair).
@@ -173,8 +187,34 @@ const cfgFlags = {
   upgradeThumbnails: false,
   loadRowsAhead: false,
   removeYouThere: false,
-  disableAutoCaptions: false
+  disableAutoCaptions: false,
+  // Feed filters: whether any is on, then each one. The lists are lower-cased.
+  feedFilters: false,
+  hideWatched: false,
+  minLengthSeconds: 0,
+  blockedChannels: null,
+  blockedKeywords: null,
+  forceOriginalAudio: false,
+  // The per-tile rewrites of the items that stay (decorateItem).
+  decorateItems: false,
+  extendLongPress: false,
+  deArrow: false,
+  deArrowThumbnails: false
 };
+
+// Set per response by filterResponse(): the pages that list videos because
+// they were watched keep them (keepsWatchedVideos).
+let hideWatchedHere = false;
+
+function lowerCasedList(value) {
+  const out = [];
+  if (!Array.isArray(value)) return out;
+  for (let i = 0; i < value.length; i++) {
+    const entry = typeof value[i] === 'string' ? value[i].trim().toLowerCase() : '';
+    if (entry) out.push(entry);
+  }
+  return out;
+}
 
 // cfgFlags with the legacy emoji fix off: what the filters get for a response
 // whose text holds nothing the fix would change (hookedParse).
@@ -209,6 +249,20 @@ function recomputeFilterFlags() {
   cfgFlags.loadRowsAhead = !!cfgSnapshot[CONFIG_KEYS.ROWS_AHEAD];
   cfgFlags.removeYouThere = !!cfgSnapshot[CONFIG_KEYS.NAG_SCREENS];
   cfgFlags.disableAutoCaptions = !!cfgSnapshot[CONFIG_KEYS.AUTO_CAPTIONS];
+  cfgFlags.forceOriginalAudio = !!cfgSnapshot[CONFIG_KEYS.ORIGINAL_AUDIO];
+  // The feed filters are Ad Blocking's, like the other item filters.
+  cfgFlags.hideWatched = adBlock && !!cfgSnapshot[CONFIG_KEYS.HIDE_WATCHED];
+  cfgFlags.minLengthSeconds = adBlock ? (Number(cfgSnapshot[CONFIG_KEYS.MIN_LENGTH]) || 0) * 60 : 0;
+  const channels = adBlock ? lowerCasedList(cfgSnapshot[CONFIG_KEYS.BLOCKED_CHANNELS]) : [];
+  const keywords = adBlock ? lowerCasedList(cfgSnapshot[CONFIG_KEYS.BLOCKED_KEYWORDS]) : [];
+  cfgFlags.blockedChannels = channels.length ? channels : null;
+  cfgFlags.blockedKeywords = keywords.length ? keywords : null;
+  cfgFlags.feedFilters = !!(cfgFlags.hideWatched || cfgFlags.minLengthSeconds ||
+    cfgFlags.blockedChannels || cfgFlags.blockedKeywords);
+  cfgFlags.extendLongPress = !!cfgSnapshot[CONFIG_KEYS.LONG_PRESS];
+  cfgFlags.deArrow = !!cfgSnapshot[CONFIG_KEYS.DEARROW];
+  cfgFlags.deArrowThumbnails = cfgFlags.deArrow && !!cfgSnapshot[CONFIG_KEYS.DEARROW_THUMBNAILS];
+  cfgFlags.decorateItems = cfgFlags.extendLongPress || cfgFlags.deArrow;
 
   anyResponseFilterEnabled = !!(
     cfgFlags.enableAdBlock ||
@@ -224,7 +278,9 @@ function recomputeFilterFlags() {
     cfgFlags.hideEndcards ||
     cfgFlags.upgradeThumbnails ||
     cfgFlags.removeYouThere ||
-    cfgFlags.disableAutoCaptions
+    cfgFlags.disableAutoCaptions ||
+    cfgFlags.forceOriginalAudio ||
+    cfgFlags.decorateItems
   );
   anyFilterEnabled = anyResponseFilterEnabled || cfgFlags.loadRowsAhead;
 
@@ -232,6 +288,9 @@ function recomputeFilterFlags() {
   cfgFlagsNoEmoji.enableLegacyEmojiFix = false;
   for (const k in cfgFlagsEmojiOnly) cfgFlagsEmojiOnly[k] = false;
   cfgFlagsEmojiOnly.badgeMask = 0;
+  cfgFlagsEmojiOnly.minLengthSeconds = 0;
+  cfgFlagsEmojiOnly.blockedChannels = null;
+  cfgFlagsEmojiOnly.blockedKeywords = null;
   cfgFlagsEmojiOnly.enableLegacyEmojiFix = cfgFlags.enableLegacyEmojiFix;
 }
 
@@ -633,6 +692,7 @@ function filterResponse(data, text) {
   // emoji in it is filtered with the fix left out (one native scan of the
   // text instead). (From mirijanristic's fork.)
   const flags = cfgFlags.enableLegacyEmojiFix && !mayNeedEmojiWork(text) ? cfgFlagsNoEmoji : cfgFlags;
+  hideWatchedHere = flags.hideWatched && !keepsWatchedVideos(data);
 
   if (isShortsPage() && responseType && IGNORE_ON_SHORTS.has(responseType)) {
     // The Shorts player gets these unfiltered, but their titles, comments
@@ -760,7 +820,13 @@ function applySchemaFilters(data, responseType, config) {
       }
       if (config.removeYouThere) removeYouThere(data);
       if (config.disableAutoCaptions && responseType === 'PLAYER') disableAutoCaptions(data);
-      if (config.hideGuestPrompts) {
+      if (config.forceOriginalAudio) {
+        keepOriginalAudio(data);
+        keepOriginalAudio(data.playerResponse);
+      }
+      // The videos beside and under the player go through the item filters
+      // and rewrites too.
+      if (config.hideGuestPrompts || config.feedFilters || config.decorateItems) {
          let pivotContents = getByPath(data, schema?.pivotPath);
          if (!pivotContents) {
             pivotContents = findObjects(data, ['pivot'], 8).pivot?.sectionListRenderer?.contents;
@@ -1103,7 +1169,42 @@ function shouldDropItem(item, config) {
   if (config.enableAdBlock && (hasAdRenderer(item) || isReelAd(item))) return true;
   if (config.hideGuestPrompts && isGuestPrompt(item)) return true;
   if (config.removeGlobalShorts && isShortsItem(item)) return true;
+  if (config.feedFilters && dropsByFeedFilters(item, config)) return true;
   return hasWantedBadge(item, config.badgeMask);
+}
+
+function containsAny(text, needles) {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  for (let i = 0; i < needles.length; i++) {
+    if (lower.indexOf(needles[i]) !== -1) return true;
+  }
+  return false;
+}
+
+/**
+ * Hide Watched Videos, Hide Videos Shorter Than, Blocked Channels and Hide
+ * Videos Whose Title Contains (feed-filters.js reads the fields). A field the
+ * item does not have never drops it.
+ */
+function dropsByFeedFilters(item, config) {
+  if (config.blockedKeywords && containsAny(itemTitle(item), config.blockedKeywords)) return true;
+  if (config.blockedChannels) {
+    const channel = itemChannel(item);
+    if (channel && config.blockedChannels.indexOf(channel.toLowerCase()) !== -1) return true;
+  }
+  if (config.minLengthSeconds) {
+    const seconds = itemDurationSeconds(item);
+    if (seconds !== null && seconds < config.minLengthSeconds) return true;
+  }
+  return !!(config.hideWatched && hideWatchedHere && itemWatchedPercent(item) >= WATCHED_PERCENT);
+}
+
+/** The rewrites of an item that stays: its long-press menu, DeArrow's title. */
+function decorateItem(item, config) {
+  if (!item || typeof item !== 'object') return;
+  if (config.extendLongPress) extendLongPressMenu(item);
+  if (config.deArrow) applyDeArrow(item, config.deArrowThumbnails);
 }
 
 /** Whether a whole shelf goes: the Shorts shelf by type or title, the titled shelves. */
@@ -1191,6 +1292,7 @@ function processSectionListOptimized(contents, config, contextName = '', skipEmo
       // A bare grid or horizontal list keeps its (filtered) place, and with
       // it its continuation; anything else is an item of its own.
       if (shouldDropItem(item, config)) keepItem = false;
+      else if (config.decorateItems) decorateItem(item, config);
     }
 
     if (keepItem) {
@@ -1207,10 +1309,11 @@ function processSectionListOptimized(contents, config, contextName = '', skipEmo
   }
 }
 
-// Whether any per-item or per-shelf check is on at all.
-// Every one of them counts only with Ad Blocking on (recomputeFilterFlags).
+// Whether any per-item or per-shelf check or rewrite is on at all. Every
+// check counts only with Ad Blocking on (recomputeFilterFlags); the rewrites
+// have switches of their own.
 function anyItemCheck(config) {
-  return config.enableAdBlock;
+  return config.enableAdBlock || config.decorateItems;
 }
 
 // skipEmoji: set when the caller is about to run its own findAndProcessText
@@ -1227,6 +1330,7 @@ function filterItemsOptimized(items, config, skipEmoji) {
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     if (anyCheck && shouldDropItem(item, config)) continue;
+    if (config.decorateItems) decorateItem(item, config);
     if (enableLegacyEmojiFix) findAndProcessText(item, 20);
     if (writeIdx !== i) items[writeIdx] = item;
     writeIdx++;
@@ -1339,6 +1443,60 @@ function disableAutoCaptions(data) {
   captionsOff(data.playerResponse);
 }
 
+/**
+ * What a format's xtags say about its audio track: 'original', 'other' (a
+ * dub, an audio description) or '' when they do not say. The xtags are a
+ * base64url protobuf whose text holds "acont" and the kind of track.
+ */
+function audioContentOf(format) {
+  if (typeof format.xtags !== 'string') return '';
+  const text = decodeBase64Url(format.xtags);
+  if (text.indexOf('acont') === -1) return '';
+  return text.indexOf('original') !== -1 ? 'original' : 'other';
+}
+
+function decodeBase64Url(value) {
+  let b64 = value.replace(/-/g, '+').replace(/_/g, '/');
+  while (b64.length % 4) b64 += '=';
+  try { return atob(b64); }
+  catch { return ''; }
+}
+
+/**
+ * Prefer Original Audio over Dubbed: a video with dubbed tracks (uploaded or
+ * auto-dubbed) lists the formats of every track in adaptiveFormats, each with
+ * its audioTrack. Only the original track's are kept, so the player has
+ * nothing else to pick. The original is the track the xtags call original;
+ * where no format says, the one marked audioIsDefault. With neither, or with a
+ * single track, nothing changes. (From MickLesk's fork.)
+ */
+function keepOriginalAudio(holder) {
+  const formats = holder && holder.streamingData && holder.streamingData.adaptiveFormats;
+  if (!Array.isArray(formats)) return;
+  let byXtags = false;
+  let hasDefault = false;
+  let hasOther = false;
+  for (let i = 0; i < formats.length; i++) {
+    const format = formats[i];
+    if (!format || !format.audioTrack) continue;
+    const content = audioContentOf(format);
+    if (content === 'original') byXtags = true;
+    if (format.audioTrack.audioIsDefault === true) hasDefault = true;
+    else hasOther = true;
+  }
+  if (!byXtags && !(hasDefault && hasOther)) return;
+
+  let w = 0;
+  for (let i = 0; i < formats.length; i++) {
+    const format = formats[i];
+    const keep = !format || !format.audioTrack ||
+      (byXtags ? audioContentOf(format) === 'original' : format.audioTrack.audioIsDefault === true);
+    if (keep) formats[w++] = format;
+  }
+  if (DEBUG && w !== formats.length) debugLog(`Original audio: dropped ${formats.length - w} dubbed format(s)`);
+  formats.length = w;
+}
+
 function findObjects(haystack, needlesArray, maxDepth = 10) {
   if (!haystack || typeof haystack !== 'object' || maxDepth <= 0 || !needlesArray.length) return {};
   const results = {};
@@ -1391,6 +1549,9 @@ export function parseHookRequired() {
     cfgSnapshot[CONFIG_KEYS.ROWS_AHEAD] ||
     cfgSnapshot[CONFIG_KEYS.NAG_SCREENS] ||
     cfgSnapshot[CONFIG_KEYS.AUTO_CAPTIONS] ||
+    cfgSnapshot[CONFIG_KEYS.ORIGINAL_AUDIO] ||
+    cfgSnapshot[CONFIG_KEYS.LONG_PRESS] ||
+    cfgSnapshot[CONFIG_KEYS.DEARROW] ||
     thumbnailHookRequired()
   );
 }

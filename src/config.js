@@ -105,6 +105,38 @@ export const forcePreviewModes = {
   force_off: 'Force Off'
 };
 
+/** The page the app opens on (start-page.js). */
+export const startPageModes = {
+  home: 'Home',
+  subscriptions: 'Subscriptions',
+  library: 'Library',
+  history: 'History'
+};
+
+/**
+ * Hide Videos Shorter Than, in minutes. The keys are strings, as the panel's
+ * cycle rows store them; '0' is off.
+ */
+export const minVideoLengthModes = {
+  0: 'Off',
+  1: '1 min',
+  2: '2 min',
+  3: '3 min',
+  5: '5 min',
+  10: '10 min',
+  20: '20 min'
+};
+
+/** Left/Right Seek Step, in seconds while the player controls are hidden. '0': YouTube's own. */
+export const seekStepModes = {
+  0: "YouTube's Default",
+  5: '5 s',
+  10: '10 s',
+  15: '15 s',
+  30: '30 s',
+  60: '60 s'
+};
+
 /**
  * Force Video Codec.
  *
@@ -140,6 +172,12 @@ const configOptions = new Map([
   ['removeMembersOnly', { default: false, desc: 'Remove Members-Only Videos' }],
   ['removeTopLiveGames', { default: false, desc: 'Remove Top Live Games' }],
   ['removeMostRelevant', { default: false, desc: 'Remove "Most Relevant" Shelf' }],
+  // Feed filters (feed-filters.js). Like the filters above, they need Ad Blocking on.
+  ['hideWatchedVideos', { default: false, desc: 'Hide Watched Videos' }],
+  ['minVideoLength', { default: '0', desc: 'Hide Videos Shorter Than' }],
+  // Names as YouTube shows them; compared without case.
+  ['blockedChannels', { default: [], desc: 'Blocked Channels' }],
+  ['blockedKeywords', { default: [], desc: 'Hide Videos Whose Title Contains' }],
   ['enableSponsorBlock', { default: true, desc: 'SponsorBlock' }],
   ['enableMutedSegments', { default: false, desc: 'Allow segments that mute audio' }],
   ['sbPeriodicRefresh', { default: true, desc: 'Periodically Check for New Segments' }],
@@ -159,6 +197,9 @@ const configOptions = new Map([
   ['hideEndcards', { default: false, desc: 'Hide Endcards' }],
   // The player responses say whether subtitles start on; this says off.
   ['disableAutoCaptions', { default: false, desc: "Don't Turn On Subtitles by Themselves" }],
+  // Drops the dubbed audio tracks from the player response, so the original plays.
+  ['forceOriginalAudio', { default: false, desc: 'Prefer Original Audio over Dubbed' }],
+  ['seekStep', { default: '0', desc: 'Left/Right Seek Step (Controls Hidden)' }],
   // Remaining time and the wall-clock end time beside the duration.
   ['showTimeRemaining', { default: false, desc: 'Show Remaining Time and End Time' }],
   ['enableScrollSeek', { default: false, desc: 'Magic Remote: Scroll Wheel Seeks on Progress Bar' }],
@@ -193,7 +234,15 @@ const configOptions = new Map([
   ['uiBrightness', { default: 100, desc: 'UI Brightness' }],
   // Each YouTube account on the TV keeps its own settings - see the
   // per-account profile code below.
-  ['perAccountSettings', { default: false, desc: 'Separate Settings for Each Account' }]
+  ['perAccountSettings', { default: false, desc: 'Separate Settings for Each Account' }],
+  ['startPage', { default: 'home', desc: 'Start Page' }],
+  // "Not interested", "Don't recommend channel" and "Block channel" in the
+  // long-press menu of a video (long-press-menu.js).
+  ['extendLongPressMenu', { default: false, desc: 'More Options in the Long-Press Menu' }],
+  // Off until switched on: like Return YouTube Dislike, it asks a third party
+  // (sponsor.ajay.app) - by hash prefix, as SponsorBlock does.
+  ['enableDeArrow', { default: false, desc: 'DeArrow: Replace Clickbait Titles' }],
+  ['enableDeArrowThumbnails', { default: false, desc: 'DeArrow: Replace Clickbait Thumbnails' }]
 ]);
 
 // Register shortcut keys 0-9
@@ -246,7 +295,9 @@ const DEVICE_KEYS = new Set([
   'pointerSettingsButton',
   'keyboardSearch',
   'loadRowsAhead',
-  'disableAnimations'
+  'disableAnimations',
+  // Read when the app starts, before "Who's watching" picks an account.
+  'startPage'
 ]);
 const IDENTITY_KEY = 'yt.leanback.default::last-identity-used';
 // Ids first; names and e-mail only when the record has no id, as a rename
