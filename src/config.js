@@ -216,6 +216,7 @@ const configOptions = new Map([
   ['removeBlackBorders', { default: false, desc: 'New Liquid Glass UI' }],
   ['forcePreviews', { default: 'disabled', desc: 'Force Previews' }],
   ['mutePreviews', { default: false, desc: 'Mute Video Previews' }],
+  ['fitPageBesideGuide', { default: true, desc: 'Fit Page Beside Open Menu' }],
   ['enableLegacyEmojiFix', { default: true, desc: 'Emoji + Characters Fix' }],
   ['hideGuestSignInPrompts', { default: false, desc: 'Guest Mode: Hide Sign-in Buttons' }],
   ['forceHighResVideo', { default: false, desc: 'Force Max Quality' }],
