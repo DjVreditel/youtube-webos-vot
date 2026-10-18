@@ -254,13 +254,35 @@ function runAction(custom) {
   }
 }
 
+function customAction(command) {
+  const endpoint = command && command.playlistEditEndpoint;
+  return endpoint && typeof endpoint === 'object' ? endpoint[ACTION_KEY] : null;
+}
+
+function safeRunAction(custom) {
+  try { runAction(custom); }
+  catch (err) { console.warn('[LongPress] Action failed:', custom.action, err); }
+}
+
 ResolveCommandRegistry.getInstance().then((registry) => {
   registry.setHook('playlistEditEndpoint', (resolveCommand, payload, extra) => {
-    const endpoint = payload.playlistEditEndpoint;
-    const custom = endpoint && typeof endpoint === 'object' ? endpoint[ACTION_KEY] : null;
+    const custom = customAction(payload);
     if (!custom) return resolveCommand(payload, extra);
-    try { runAction(custom); }
-    catch (err) { console.warn('[LongPress] Action failed:', custom.action, err); }
+    safeRunAction(custom);
+    return true;
+  });
+  // Newer clients (webOS 25) wrap a menu entry's endpoint, after a
+  // CLOSE_POPUP signal, in a commandExecutorCommand, and run its commands
+  // without coming back through the hook above: YouTube then gets our
+  // endpoint and shows "Something went wrong".
+  registry.setHook('commandExecutorCommand', (resolveCommand, payload, extra) => {
+    const commands = payload.commandExecutorCommand?.commands;
+    if (!Array.isArray(commands) || !commands.some(customAction)) return resolveCommand(payload, extra);
+    for (let i = 0; i < commands.length; i++) {
+      const custom = customAction(commands[i]);
+      if (custom) safeRunAction(custom);
+      else resolveCommand(commands[i], extra);
+    }
     return true;
   });
 }).catch((err) => {

@@ -7,6 +7,9 @@
  * bottom of the screen.
  */
 html[data-ytaf-guide-open] ytlr-surface-page {
+  /* Newer YouTube (webOS 25) slides the page with margin-left instead of a
+     transform; left in place, it would add to the shift below. */
+  margin-left: 0 !important;
   transform: translateX(var(--ytaf-guide-shift)) scale(var(--ytaf-guide-scale)) !important;
   transform-origin: 0 0 !important;
   height: calc(100vh / var(--ytaf-guide-scale)) !important;

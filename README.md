@@ -263,9 +263,8 @@ The actions each key can take are listed under [Remote control](#-remote-control
 | DeArrow: Replace Clickbait Titles | Off |
 | DeArrow: Replace Clickbait Thumbnails | Off |
 
-**Fit Page Beside Open Menu**: for TVs where the open left menu slides the page off the right edge of the screen,
-with its first letters under the menu: the page shrinks to fit beside it instead. Where YouTube already makes room
-for the menu, it only adds a wider margin, so leave it off there. DeArrow asks dearrow.ajay.app by hash
+**Fit Page Beside Open Menu**: while the left menu is open, YouTube slides the page right and its right side leaves
+the screen; with this option the page shrinks to fit beside the menu instead. DeArrow asks dearrow.ajay.app by hash
 prefix, like SponsorBlock. The Start Page is not used on a launch into a video.
 </details>
 

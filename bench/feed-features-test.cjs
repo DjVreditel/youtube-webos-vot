@@ -224,6 +224,13 @@ const ids = (r) => itemsOf(r).map((i) => (i.tileRenderer || i.lockupViewModel).c
     t('long press: Block channel adds the channel', JSON.stringify(config().blockedChannels) === '["Chan"]', JSON.stringify(config().blockedChannels));
     t('long press: YouTube\'s own playlist edits pass through',
       resolve({ playlistEditEndpoint: { playlistId: 'WL', actions: [] } }) === 'original' && resolved.length === 1);
+    // webOS 25 wraps the entry's endpoint after a CLOSE_POPUP signal.
+    const blockOther = built.showMenuCommand.menu.menuRenderer.items[5].menuServiceItemRenderer.serviceEndpoint;
+    const wrapped = resolve({ commandExecutorCommand: { commands: [{ signalAction: { signal: 'CLOSE_POPUP' } }, blockOther] } });
+    await wait(300);
+    t('long press: a wrapped action runs, and the signal beside it still reaches YouTube',
+      wrapped === true && JSON.stringify(config().blockedChannels) === '["Chan","Other"]' &&
+      resolved.length === 2 && resolved[1].signalAction?.signal === 'CLOSE_POPUP', JSON.stringify(config().blockedChannels));
 
     const notInterested = built.showMenuCommand.menu.menuRenderer.items[3].menuServiceItemRenderer.serviceEndpoint;
     const noChannel = built.showMenuCommand.menu.menuRenderer.items[4].menuServiceItemRenderer.serviceEndpoint;
