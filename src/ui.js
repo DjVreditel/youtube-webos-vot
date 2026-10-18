@@ -1046,6 +1046,7 @@ function createOptionsPanel() {
   	  createElement('div', { text: 'Forces the video thumbnail preview on/off on app load', style: { color: '#aaa', fontSize: '18px', padding: '4px 12px 12px' } }),
   	  createConfigCheckbox('mutePreviews'),
   	  createConfigCheckbox('fitPageBesideGuide'),
+  	  createElement('div', { text: 'Only if the open left menu pushes the page off the right edge; elsewhere it just adds a wider margin', style: { color: '#aaa', fontSize: '18px', padding: '4px 12px 12px' } }),
   	  createConfigCheckbox('fixMultilineTitles'),
   	  createConfigCheckbox('removeBlackBorders')
     ];
