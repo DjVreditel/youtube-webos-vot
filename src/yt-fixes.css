@@ -58,17 +58,3 @@ ytlr-tile-renderer[style*='width: 12.75rem; height: 21.25rem;']
   border-image: url('data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7')
     30%;
 }
-
-/* Long-press menu: the video's thumbnail takes 342px of the panel, so only
-   four of its entries fit and the rest hang off the bottom of the screen.
-   Without it every entry fits; the title and channel stay. The panel measures
-   its list when it opens, so the list takes the room. Tag names only, as the
-   short class names change with every YouTube release. */
-ytlr-overlay-panel-header-renderer > div:first-child,
-ytlr-overlay-panel-header-renderer ytlr-thumbnail-details {
-  display: none !important;
-}
-
-ytlr-overlay-panel-header-renderer {
-  height: auto !important;
-}
