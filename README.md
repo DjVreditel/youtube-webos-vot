@@ -287,7 +287,7 @@ of the project; credits are in [CHANGELOG.md](CHANGELOG.md).
 - *0.8.7:* no "Are you still watching?" pause, no paid-promotion banner, a clock with the date that can stay on
   during playback, remaining time and end time, Mute Video Previews and Don't Turn On Subtitles by Themselves;
   about 5.6 KB smaller packages.
-- *Next release:* from MickLesk's fork, Prefer Original Audio over Dubbed, Feed Filters (watched videos, short
+- *0.8.8:* from MickLesk's fork, Prefer Original Audio over Dubbed, Feed Filters (watched videos, short
   videos, blocked channels, title keywords), "Block channel" / "Not interested" / "Don't recommend channel" in the
   long-press menu, Start Page, a Left/Right seek step and DeArrow; from Dazzyelv's fork, Fit Page Beside Open Menu.
 

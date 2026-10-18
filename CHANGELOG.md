@@ -4,9 +4,9 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [0.8.8] - 2026/10/18
 
-Fixes from the security audit of 0.8.7 (SECURITY_AUDIT.md), and five features from MickLesk's fork (fork watch #26).
+Feed filters, DeArrow, the original audio over dubbed tracks, separate settings for each account and a page that fits beside the open menu. Features from MickLesk's fork (fork watch #26) and Dazzyelv's fork (fork watch #29), and fixes from the security audit of 0.8.7 (SECURITY_AUDIT.md). Ships both packages: `_webOS22+.ipk` for webOS 22 and newer, and the legacy `.ipk` for webOS 3-6.
 
 ## Added
 
@@ -24,6 +24,7 @@ Fixes from the security audit of 0.8.7 (SECURITY_AUDIT.md), and five features fr
 + **Return YouTube Dislike is off by default.** Every video opened sends its id to returnyoutubedislikeapi.com, a third party, so it is now switched on by choice. Applies to new installs; a TV that already has saved settings keeps the switch as it was.
 + SponsorBlock asks the official server (sponsor.ajay.app) first, and the community mirror (sponsorblock.inf.re) only when the official one fails.
 + The launch and relaunch log lines name the launch parameters without their values, which can hold a search, a voice query or a cast pairing code.
++ The app is called **YouTube** on the TV (the home screen, the inputs list), instead of YouTube AdFree.
 
 ## Fixes
 

@@ -74,8 +74,8 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           npm ci
-          # dist/ also holds committed .ipk files; start clean before each
-          # build so none of them ends up inside a new package.
+          # Start clean before each build so no earlier package ends up
+          # inside a new one.
           rm -rf dist out legacy
           npm run build:modern
           npx ares-package -n dist -o out
@@ -95,20 +95,9 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           # The notes are what the published release shows, so they are
-          # written for the people installing it: .github/release-notes.md
-          # (download, install, credits) with this version's CHANGELOG.md
-          # section in place of @CHANGELOG@, every heading one level down.
-          awk -v v="$VERSION" '
-            index($0, "## [" v "]") == 1 { on = 1; next }
-            on && /^## \[/ { exit }
-            on { if ($0 ~ /^#+ /) $0 = "#" $0; print }
-          ' CHANGELOG.md | tr -d '\r' > changes.md
-          {
-            # Hidden once published; tells a tester which commit the draft is.
-            echo "<!-- built from ${GITHUB_SHA::7} -->"
-            sed "s/@VERSION@/$VERSION/g" .github/release-notes.md | tr -d '\r' |
-              awk '$0 == "@CHANGELOG@" { while ((getline l < "changes.md") > 0) print l; next } { print }'
-          } > notes.md
+          # written for the people installing it: the template in
+          # .github/release-notes.md with this version's CHANGELOG.md section.
+          bash tools/release-notes.sh "$VERSION" "${GITHUB_SHA::7}" > notes.md
           {
             echo "**Draft for testing** - built from ${GITHUB_SHA::7}. If it works on the TV, press *Publish release*."
             echo
