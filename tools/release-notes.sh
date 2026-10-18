@@ -19,7 +19,10 @@ cd "$(dirname "$0")/.."
 changes="$(mktemp)"
 trap 'rm -f "$changes"' EXIT
 
-tr -d '\r' < CHANGELOG.md | awk -v v="$version" '
+# awk reads the file itself: it stops at the end of the section, and a pipe
+# feeding it would then fail with "Broken pipe" under pipefail.
+awk -v v="$version" '
+  { sub(/\r$/, "") }
   index($0, "## [" v "]") == 1 { on = 1; next }
   on && /^## \[/ { exit }
   !on { next }
@@ -43,7 +46,7 @@ tr -d '\r' < CHANGELOG.md | awk -v v="$version" '
     gap = 0; started = 1; print "> " $0; next
   }
   { print }
-' > "$changes"
+' CHANGELOG.md > "$changes"
 
 if [ ! -s "$changes" ]; then
   echo "CHANGELOG.md has no section for $version" >&2
