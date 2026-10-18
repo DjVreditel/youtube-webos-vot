@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.8.8] - 2026/10/18
 
-Feed filters, DeArrow, the original audio over dubbed tracks, separate settings for each account and a page that fits beside the open menu. Features from MickLesk's fork (fork watch #26) and Dazzyelv's fork (fork watch #29), and fixes from the security audit of 0.8.7 (SECURITY_AUDIT.md). Ships both packages: `_webOS22+.ipk` for webOS 22 and newer, and the legacy `.ipk` for webOS 3-6.
+Feed filters, DeArrow, the original audio over dubbed tracks, separate settings for each account and a page that fits beside the open menu. Features from MickLesk's fork (fork watch #26) and Dazzyelv's fork (fork watch #29), and fixes from a security review of 0.8.7. Ships both packages: `_webOS22+.ipk` for webOS 22 and newer, and the legacy `.ipk` for webOS 3-6.
 
 ## Added
 
