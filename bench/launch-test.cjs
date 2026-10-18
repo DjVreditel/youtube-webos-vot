@@ -49,7 +49,8 @@ for (const [params, expects] of cases) {
   applyChrome38Downgrade(w);
 
   try {
-    w.eval('(function(window){' + fs.readFileSync(ROOT + '/dist/index.js', 'utf8') + '})(__fakeWindow)');
+    // The newline ends a trailing //# sourceMappingURL comment (coverage builds).
+    w.eval('(function(window){' + fs.readFileSync(ROOT + '/dist/index.js', 'utf8') + '\n})(__fakeWindow)');
   } catch (e) { console.log('FAIL threw:', e.message); fail++; continue; }
   const href = w.eval('__getHref()');
 

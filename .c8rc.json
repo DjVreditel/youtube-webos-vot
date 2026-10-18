@@ -1,0 +1,17 @@
+{
+  "experimental-monocart": true,
+  "src": [
+    "src"
+  ],
+  "reporter": [
+    "text",
+    "html",
+    "json-summary"
+  ],
+  "reports-dir": "coverage",
+  "temp-directory": "coverage/tmp",
+  "include": [
+    "dist/webOSUserScripts/userScript.js",
+    "src/**"
+  ]
+}

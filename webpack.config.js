@@ -17,11 +17,14 @@ const makeConfig = (env) => {
   const isModern = env && env.modern;
   // Dev-only instrumentation; see src/perf_mon.js. Off unless `--env perf`.
   const withPerfMon = !!(env && env.perf);
+  // Coverage runs of the bench tests (bench/ci.sh --coverage): source maps, and
+  // no minifying, so c8 maps every line back to src/.
+  const withCoverage = !!(env && env.coverage);
 
   return [
     {
       target: isModern ? 'browserslist:chrome 87' : ['web', 'es5'],
-      devtool: false,
+      devtool: withCoverage ? 'source-map' : false,
       entry: {
         index: './src/index.js',
         userScript: {
@@ -125,7 +128,7 @@ const makeConfig = (env) => {
         ]
       },
       optimization: {
-        minimize: true,
+        minimize: !withCoverage,
         minimizer: [
           new TerserPlugin({
             terserOptions: {

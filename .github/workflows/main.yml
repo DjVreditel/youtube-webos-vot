@@ -26,9 +26,26 @@ jobs:
 
       - run: npm ci
 
-      # dist/ also holds the committed .ipk files: clear them first, or they
-      # would be packed into the new .ipk. `npm run package` writes into
-      # dist/, so the package goes to out/ instead, where the upload finds it.
+      # Builds both packages and runs every bench test (bench/ci.sh).
+      - name: Test
+        run: npm test
+
+      # The same tests under c8: the report goes to the job summary, and the
+      # HTML version is uploaded below.
+      - name: Coverage
+        run: |
+          npm run coverage
+          node bench/coverage-summary.cjs >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: coverage/
+          if-no-files-found: error
+
+      # The tests leave other builds in dist/: start clean. The package goes
+      # to out/, where the upload finds it.
       - name: Build and package
         run: |
           rm -rf dist out
