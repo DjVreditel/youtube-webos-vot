@@ -64,5 +64,32 @@ for (const [params, expects] of cases) {
     console.log(`PASS ${JSON.stringify(params).slice(0, 58)}`);
   }
 }
-console.log(fail ? `\n${fail} failed` : `\nall ${cases.length} launch cases passed`);
+// Offline at launch: no redirect, a note; the 'online' event redirects.
+{
+  const dom = new JSDOM('<!doctype html><html><body></body></html>', {
+    url: 'https://example.com/', runScripts: 'outside-only'
+  });
+  const w = dom.window;
+  w.launchParams = '{}';
+  let online = false;
+  Object.defineProperty(w.navigator, 'onLine', { get: () => online, configurable: true });
+  w.eval(`
+    var __href = null;
+    var __fakeLocation = { get href() { return 'https://example.com/'; }, set href(v) { __href = v; } };
+    var __fakeWindow = new Proxy(window, {
+      get: function (t, k) { if (k === 'location') return __fakeLocation; var v = t[k]; return typeof v === 'function' ? v.bind(t) : v; },
+      set: function (t, k, v) { t[k] = v; return true; }
+    });
+  `);
+  applyChrome38Downgrade(w);
+  w.eval('(function(window){' + fs.readFileSync(ROOT + '/dist/index.js', 'utf8') + '\n})(__fakeWindow)');
+  const waited = w.eval('__href') === null && /Waiting for an internet connection/.test(w.document.documentElement.textContent);
+  online = true;
+  w.dispatchEvent(new w.Event('online'));
+  const href = w.eval('__href') || '';
+  const ok = waited && href.indexOf('https://www.youtube.com/tv') === 0 && !/Waiting/.test(w.document.documentElement.textContent);
+  if (!ok) fail++;
+  console.log((ok ? 'PASS' : 'FAIL') + ' offline launch waits for the online event' + (ok ? '' : `\n     waited ${waited} href ${href}`));
+}
+console.log(fail ? `\n${fail} failed` : `\nall ${cases.length + 1} launch cases passed`);
 process.exit(fail ? 1 : 0);
