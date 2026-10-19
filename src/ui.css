@@ -702,6 +702,7 @@
 
 
 .ytaf-notification-container.oled-care.theme-fox .message {
+  background: #000000;
   border-color: #ff7a1a;
   border-left-color: #ff7a1a;
 }
