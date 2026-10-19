@@ -44,11 +44,11 @@ const UI_STRINGS = {
 // The shelves removed by their title. The TV sends the title in the account's
 // language and these shelves carry no language-independent marker that has
 // been seen in a response, so each language needs its exact title here
-// (NicholasBly/youtube-webos#101); only the English ones are confirmed.
+// (NicholasBly/youtube-webos#101); English and Hungarian are confirmed.
 // Compared trimmed and lower-cased.
 const SHELF_TITLES = {
-  TOP_LIVE_GAMES: new Set(['top live games']),
-  MOST_RELEVANT: new Set(['most relevant'])
+  TOP_LIVE_GAMES: new Set(['top live games', 'népszerű élő játékok']),
+  MOST_RELEVANT: new Set(['most relevant', 'legrelevánsabb'])
 };
 
 const YT_CONSTANTS = {
@@ -58,6 +58,7 @@ const YT_CONSTANTS = {
   BADGE_STYLE_UPCOMING: 'THUMBNAIL_OVERLAY_BADGE_STYLE_UPCOMING',
   CONTENT_TYPE_LIVE: 'TILE_CONTENT_TYPE_LIVE',
   CONTENT_TYPE_SHORTS: 'TILE_CONTENT_TYPE_SHORTS',
+  LOCKUP_TYPE_SHORT: 'LOCKUP_CONTENT_TYPE_SHORT',
   VIDEO_TYPE_REEL_AD: 'REEL_VIDEO_TYPE_AD'
 };
 
@@ -1155,6 +1156,8 @@ function isGuestPrompt(item) {
 function isShortsItem(item) {
   const tile = item.tileRenderer;
   if (tile && (tile.style === YT_CONSTANTS.TILE_STYLE_SHORTS || tile.contentType === YT_CONSTANTS.CONTENT_TYPE_SHORTS || tile.onSelectCommand?.reelWatchEndpoint)) return true;
+  // Search results send Shorts as lockups in an ordinary shelf.
+  if (item.lockupViewModel?.contentType === YT_CONSTANTS.LOCKUP_TYPE_SHORT) return true;
   return !!(item.reelItemRenderer || item.contentType === YT_CONSTANTS.CONTENT_TYPE_SHORTS || item.onSelectCommand?.reelWatchEndpoint);
 }
 

@@ -51,12 +51,16 @@ setTimeout(() => {
       { shelfRenderer: { title: { runs: [{ text: 'Keep me' }] }, content: { horizontalListRenderer: { items: [
         { tileRenderer: { style: 'TILE_STYLE_YTLR_DEFAULT', trackingParams: 'tp-tile' } },
         { tileRenderer: { style: 'TILE_STYLE_YTLR_SHORTS' } },
+        { lockupViewModel: { contentType: 'LOCKUP_CONTENT_TYPE_SHORT' } },
         { adSlotRenderer: {} }
       ] } } } },
       { shelfRenderer: { title: { runs: [{ text: 'Shorts' }] } } },
       { shelfRenderer: { tvhtml5ShelfRendererType: 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS' } },
       { shelfRenderer: { title: { runs: [{ text: 'Top live games' }] } } },
       { shelfRenderer: { title: { runs: [{ text: 'Most relevant' }] } } },
+      // Hungarian, in the header shape the TV sends.
+      { shelfRenderer: { headerRenderer: { shelfHeaderRenderer: { avatarLockup: { avatarLockupRenderer: { title: { runs: [{ text: 'Legrelevánsabb' }] } } } } } } },
+      { shelfRenderer: { headerRenderer: { shelfHeaderRenderer: { avatarLockup: { avatarLockupRenderer: { title: { runs: [{ text: 'Népszerű élő játékok' }] } } } } } } },
       { adSlotRenderer: {} },
       { tvMastheadRenderer: {} },
       { feedNudgeRenderer: {} }
@@ -68,7 +72,7 @@ setTimeout(() => {
   t('browse: only the keepable shelf survives', secs.length === 1, 'got ' + secs.length + ' sections');
   t('browse: shelf title preserved', secs[0]?.shelfRenderer?.title?.runs?.[0]?.text === 'Keep me');
   const inner = secs[0]?.shelfRenderer?.content?.horizontalListRenderer?.items || [];
-  t('browse: nested ad + shorts tile removed', inner.length === 1, 'got ' + inner.length + ' tiles');
+  t('browse: nested ad, shorts tile and shorts lockup removed', inner.length === 1, 'got ' + inner.length + ' tiles');
   t('browse: trackingParams blanked at root', b.trackingParams === '');
   t('browse: trackingParams blanked nested', inner[0]?.tileRenderer?.trackingParams === '');
 
