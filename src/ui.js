@@ -555,13 +555,19 @@ function createOpacityControl(key, step = 5, min = 0, max = 100) {
 }
 
 // The channel of the video being watched, as the player names it, or ''.
+// webOS 25 leaves the player's author empty, so the first item of the
+// title tray's metadata line (the channel) is the fallback.
 function currentVideoChannel() {
   if (!isWatchPage()) return '';
   const player = document.getElementById(SELECTORS.PLAYER_ID);
+  let author = '';
   try {
     const data = player && typeof player.getVideoData === 'function' ? player.getVideoData() : null;
-    return data && typeof data.author === 'string' ? data.author.trim() : '';
-  } catch { return ''; }
+    if (data && typeof data.author === 'string') author = data.author.trim();
+  } catch { /* the tray below */ }
+  if (author) return author;
+  const line = document.querySelector('ytlr-video-title-tray ytlr-video-metadata-line yt-formatted-string');
+  return line ? line.textContent.trim() : '';
 }
 
 /**

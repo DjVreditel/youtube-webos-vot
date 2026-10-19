@@ -14,11 +14,11 @@ const { applyChrome38Downgrade, UA, setUserAgent, dispatchTrusted } = require('.
 const bundlePath = process.argv[2] || 'dist/webOSUserScripts/userScript.js';
 const GREEN = 404;
 
-function boot() {
+function boot(bodyClass = 'WEB_PAGE_TYPE_BROWSE', extraHtml = '') {
   const errors = [];
   const vc = new VirtualConsole();
   vc.on('jsdomError', (e) => errors.push(e.message));
-  const dom = new JSDOM('<!doctype html><html><body class="WEB_PAGE_TYPE_BROWSE"><ytlr-app></ytlr-app></body></html>',
+  const dom = new JSDOM('<!doctype html><html><body class="' + bodyClass + '"><ytlr-app></ytlr-app>' + extraHtml + '</body></html>',
     { runScripts: 'outside-only', url: 'https://www.youtube.com/tv', virtualConsole: vc, pretendToBeVisual: true });
   const win = dom.window;
   setUserAgent(win, UA.webos3);
@@ -139,6 +139,21 @@ setTimeout(() => {
     t('reopen does not duplicate pages',
       PAGES.every((s) => win.document.querySelectorAll(s).length === 1));
     t('no jsdomError across open/close/reopen', errors.length === 0, errors[0]);
+  }
+
+  // ---- Case 3: Block the Channel of This Video when the player's author is empty (webOS 25) ----
+  {
+    const { win, errors, pump } = boot('WEB_PAGE_TYPE_WATCH',
+      '<div id="ytlr-player__player-container-player"></div><ytlr-video-title-tray><ytlr-video-metadata-line>' +
+      '<yt-formatted-string>Linus Tech Tips</yt-formatted-string><yt-formatted-string>1 M views</yt-formatted-string>' +
+      '</ytlr-video-metadata-line></ytlr-video-title-tray>');
+    win.document.getElementById('ytlr-player__player-container-player').getVideoData = () => ({ author: '' });
+    key(win, GREEN);
+    for (let i = 0; i < 20; i++) pump();
+    const btn = win.document.querySelector('.ytaf-list-action');
+    t('channel button falls back to the title tray', !!btn && btn.style.display === '' &&
+      /: Linus Tech Tips$/.test(btn.textContent), btn && btn.textContent + ' / ' + btn.style.display);
+    t('no jsdomError on the watch page', errors.length === 0, errors[0]);
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);
