@@ -107,17 +107,14 @@ function rewrite(item, videoId, branding, thumbnails) {
 function settle(prefix, answer) {
   const tiles = waiting.get(prefix) || [];
   waiting.delete(prefix);
-  // The answer covers every video under the prefix; cache them all, so the
-  // next page that shows one needs no request.
-  if (answer && typeof answer === 'object') {
-    for (const id in answer) {
-      if (VIDEO_ID_RE.test(id)) remember(id, brandingFrom(answer[id]));
-    }
-  }
+  // Only the asked videos are cached: an answer names ~170 videos, so caching
+  // all of them overflowed MAX_CACHED within one page and evicted the videos
+  // on screen, which were then fetched again and never shown rewritten.
+  const known = answer && typeof answer === 'object' ? answer : {};
   for (let i = 0; i < tiles.length; i++) {
     const { item, videoId, thumbnails } = tiles[i];
     // A video the answer does not name has no submissions.
-    if (!cache.has(videoId)) remember(videoId, null);
+    if (!cache.has(videoId)) remember(videoId, brandingFrom(known[videoId]));
     const branding = cache.get(videoId);
     if (branding) rewrite(item, videoId, branding, thumbnails);
   }

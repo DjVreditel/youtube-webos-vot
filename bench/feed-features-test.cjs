@@ -290,6 +290,19 @@ const ids = (r) => itemsOf(r).map((i) => (i.tileRenderer || i.lockupViewModel).c
     const before = urls.length;
     off.parse(browse([tile('qwertyuiopa')]));
     t('DeArrow off: no request', urls.length === before);
+
+    // An answer naming thousands of other videos must not evict the asked one.
+    const crowded = 'crowdedvid1';
+    const big = { [crowded]: { titles: [{ title: 'Calm title', original: false, votes: 1 }], thumbnails: [] } };
+    for (let i = 0; i < 2500; i++) big['f' + String(i).padStart(10, '0')] = { titles: [{ title: 'x', original: false, votes: 1 }], thumbnails: [] };
+    answers[prefixOf(crowded)] = big;
+    const busy = boot({ enableDeArrow: true }, { fetch });
+    busy.parse(browse([tile(crowded)]));
+    await wait(30);
+    const asked = urls.length;
+    const seen = busy.parse(browse([lockup(crowded)]));
+    t('DeArrow: a big answer does not evict the asked video',
+      itemsOf(seen)[0].lockupViewModel.metadata.lockupMetadataViewModel.title.content === 'Calm title' && urls.length === asked, urls.length - asked);
   }
 
   // ---- Settings panel ----
