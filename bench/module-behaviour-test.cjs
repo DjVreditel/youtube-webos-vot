@@ -182,6 +182,28 @@ setTimeout(async () => {
     t('focus outside the panel clears isPanelFocused', ryd.isPanelFocused === false);
   }
 
+  // ---- video-quality: Force Max Quality upgrades to the video's best level ----
+  // A 1440p video that plays in 720p is not "max" (it used to count as max
+  // because 720p is a named level, so nothing was ever upgraded).
+  for (const [start, want] of [['hd720', 1], ['hd1440', 0]]) {
+    const { win, pump } = boot({ forceHighResVideo: true },
+      '<body class="WEB_PAGE_TYPE_WATCH"><div id="ytlr-player__player-container-player"></div></body>',
+      'https://www.youtube.com/tv#/watch?v=abc');
+    const p = win.document.getElementById('ytlr-player__player-container-player');
+    let q = start, set = 0;
+    Object.assign(p, {
+      setPlaybackQualityRange() { set++; q = 'hd1440'; }, setPlaybackQuality() {},
+      getPlaybackQuality: () => q, getPlaybackQualityLabel: () => q,
+      getAvailableQualityLevels: () => ['hd1440', 'hd1080', 'hd720', 'auto'],
+      getVideoData: () => ({ video_id: 'abc' }), getPlayerState: () => 1,
+      pauseVideo() {}, playVideo() {}, isInline: () => false, addEventListener() {}
+    });
+    win.dispatchEvent(new win.CustomEvent('yt-navigate-finish', { detail: { pageType: 'watch' } }));
+    await new Promise((r) => setTimeout(r, 300));
+    pump(); pump();
+    t(`force max quality from ${start}: ${want ? 'upgrades' : 'leaves it'}`, set === want, `set=${set}`);
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 }, 500);

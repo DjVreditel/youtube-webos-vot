@@ -5,10 +5,6 @@ import { sendKey, REMOTE_KEYS, SELECTORS, isWatchPage, getVideo } from './utils.
 
 const DEBUG = false;
 
-const TARGET_QUALITIES = new Set([
-  'highres', 'hd2160', 'hd1440', 'hd1080', 'hd720', 'large', 'medium', 'small', 'tiny'
-]);
-
 const IS_WEBOS_25 = isWebOS25();
 const QUALITY_KEY = 'yt-player-quality';
 const ONE_YEAR_MS = 31536000000; // 365 * 24 * 60 * 60 * 1000
@@ -113,11 +109,13 @@ async function ensurePlaybackStarts() {
   }
 }
 
+// Max means the best level this video offers (the list is best first), not
+// any named level: a 1440p video playing in 720p still needs the upgrade.
 function isQualityAlreadyMax() {
   if (!player) return false;
   try {
-    const currentQuality = player.getPlaybackQuality?.();
-    return TARGET_QUALITIES.has(currentQuality);
+    const best = (player.getAvailableQualityLevels?.() || []).find((q) => q !== 'auto');
+    return !!best && player.getPlaybackQuality?.() === best;
   } catch {
     return false;
   }
