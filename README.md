@@ -297,8 +297,7 @@ of the project; credits are in [CHANGELOG.md](CHANGELOG.md).
 
 - Ad blocking holds up against YouTube's "property locker"; previously playback could stall a few seconds in.
 - webOS 25: the webOS Cast service is no longer blocked when a cast starts the app. Casting can still fail while
-  the app is open; see *Known issues* in [CHANGELOG.md](CHANGELOG.md). Some unofficial phone apps (e.g. ReVanced)
-  send the video to the TV's hidden, preloaded copy of the app, so it plays unseen: open YouTube on the TV first.
+  the app is open; see *Known issues* in [CHANGELOG.md](CHANGELOG.md).
 - SponsorBlock: Non-Music segments are actually fetched; muted segments now mute; failed requests are retried.
 - Back closes the settings panel, and colour-button seeks no longer fire twice.
 - The OLED overlay no longer hides the notifications.
