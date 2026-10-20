@@ -747,7 +747,7 @@ class SponsorBlockHandler {
                 const hlMode = config.sbMode_highlight;
                 if (hlMode === 'auto_skip') {
                     // No <video> yet: jumped to as soon as one is bound.
-                    if (this.video) this.jumpToNextHighlight();
+                    if (this.video) this.autoJumpToHighlight();
                     else this.highlightPending = true;
                 } else if (hlMode === 'ask') {
                     showNotification('Highlight available: Press Blue to jump');
@@ -948,7 +948,7 @@ class SponsorBlockHandler {
 
         if (this.highlightPending) {
             this.highlightPending = false;
-            this.jumpToNextHighlight();
+            this.autoJumpToHighlight();
         }
 
         this._startBarWatch();
@@ -1614,6 +1614,25 @@ class SponsorBlockHandler {
         });
 
         this.log('info', `Skipped to ${jumpTarget}`);
+    }
+
+    // Auto Skip to Start: on a partly watched video YouTube's resume seek lands
+    // right after a jump made at load and undoes it, so a seek away from the
+    // highlight in the first few seconds is answered with one re-jump.
+    autoJumpToHighlight() {
+        if (!this.jumpToNextHighlight()) return;
+        const video = this.video;
+        const target = this.highlightSegment.segment[0];
+        const until = Date.now() + 4000;
+        const onSeeked = () => {
+            if (Date.now() > until || this.video !== video || this.isDestroyed) {
+                video.removeEventListener('seeked', onSeeked);
+            } else if (Math.abs(video.currentTime - target) > 2) {
+                video.removeEventListener('seeked', onSeeked);
+                video.currentTime = target;
+            }
+        };
+        video.addEventListener('seeked', onSeeked);
     }
 
     jumpToNextHighlight() {
