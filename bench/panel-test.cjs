@@ -29,7 +29,8 @@ function boot(bodyClass = 'WEB_PAGE_TYPE_BROWSE', extraHtml = '') {
   win.cancelAnimationFrame = () => {};
   win.localStorage.setItem('ytaf-configuration', win.JSON.stringify({
     enableAdBlock: true, enableLegacyEmojiFix: true, enableSponsorBlock: true,
-    enableReturnYouTubeDislike: true, upgradeThumbnails: false, enableAutoLogin: true
+    enableReturnYouTubeDislike: true, upgradeThumbnails: false, enableAutoLogin: true,
+    enableScrollSeek: true, showTimeRemaining: true
   }));
   applyChrome38Downgrade(win);
   win.eval(fs.readFileSync(bundlePath, 'utf8'));
@@ -53,7 +54,7 @@ const PAGES = ['#ytaf-page-filters', '#ytaf-page-player', '#ytaf-page-interface'
 const SPONSOR = 3;
 const SHORTCUTS = 4;
 
-setTimeout(() => {
+setTimeout(async () => {
   // ---- Case 1: user hits a tab BEFORE the idle chain gets there ----
   {
     const { win, errors, pump } = boot();
@@ -154,6 +155,36 @@ setTimeout(() => {
     t('channel button falls back to the title tray', !!btn && btn.style.display === '' &&
       /: Linus Tech Tips$/.test(btn.textContent), btn && btn.textContent + ' / ' + btn.style.display);
     t('no jsdomError on the watch page', errors.length === 0, errors[0]);
+  }
+
+  // ---- Case 4: scroll-wheel seek when webOS 25 marks the bar with zylon-focus only ----
+  {
+    const { win } = boot('WEB_PAGE_TYPE_WATCH',
+      '<ytlr-progress-bar class="zylon-focus"></ytlr-progress-bar><video></video>');
+    const v = win.document.querySelector('video');
+    Object.defineProperty(v, 'duration', { value: 600 });
+    Object.defineProperty(v, 'currentTime', { value: 100, writable: true });
+    win.dispatchEvent(new win.WheelEvent('wheel', { deltaY: -100, cancelable: true }));
+    await new Promise((r) => setTimeout(r, 300));
+    t('wheel up on the focused bar seeks +10s', v.currentTime === 110, 'currentTime=' + v.currentTime);
+  }
+
+  // ---- Case 5: remaining time is hidden on a live stream with a finite duration (webOS 25) ----
+  {
+    const { win } = boot('WEB_PAGE_TYPE_WATCH',
+      '<div id="ytlr-player__player-container-player"></div>' +
+      '<div idomkey="time-label"><span idomkey="duration"></span></div><video></video>');
+    const v = win.document.querySelector('video');
+    Object.defineProperty(v, 'duration', { value: 39021 });
+    Object.defineProperty(v, 'currentTime', { value: 35436, writable: true });
+    let live = false;
+    win.document.getElementById('ytlr-player__player-container-player').getVideoData = () => ({ isLive: live });
+    const text = () => (win.document.getElementById('ytaf-time-remaining') || {}).textContent || '';
+    await new Promise((r) => setTimeout(r, 1100));
+    t('remaining time shown on a normal video', /ends /.test(text()), text());
+    live = true;
+    await new Promise((r) => setTimeout(r, 1100));
+    t('remaining time hidden on a live stream', !/ends /.test(text()), text());
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);
