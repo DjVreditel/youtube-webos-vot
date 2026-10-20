@@ -155,6 +155,16 @@ setTimeout(async () => {
     const btn = win.document.querySelector('.ytaf-list-action');
     t('channel button falls back to the title tray', !!btn && btn.style.display === '' &&
       /: Linus Tech Tips$/.test(btn.textContent), btn && btn.textContent + ' / ' + btn.style.display);
+    // The same channel again with other letter case: no duplicate, and it says so.
+    const input = btn.closest('.ytaf-list-editor').querySelector('.ytaf-text-input');
+    input.value = 'Foo Channel';
+    input.ytafSubmit();
+    input.value = 'FOO channel';
+    input.ytafSubmit();
+    const entries = btn.closest('.ytaf-list-editor').querySelectorAll('.ytaf-list-entries .ytaf-list-btn').length;
+    const msgs = [...win.document.querySelectorAll('.message')].map((m) => m.textContent);
+    t('a duplicate channel is not added and says Already blocked',
+      entries === 1 && msgs.includes('Already blocked: FOO channel'), entries + ' / ' + msgs.join(' | '));
     t('no jsdomError on the watch page', errors.length === 0, errors[0]);
   }
 

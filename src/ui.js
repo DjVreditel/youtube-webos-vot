@@ -633,7 +633,10 @@ function createListEditor(key, { placeholder, emptyText, channelButton }) {
     const values = configRead(key);
     const lower = value.toLowerCase();
     for (let i = 0; i < values.length; i++) {
-      if (String(values[i]).toLowerCase() === lower) return;
+      if (String(values[i]).toLowerCase() === lower) {
+        showNotification((key === 'blockedChannels' ? 'Already blocked: ' : 'Already in the list: ') + value);
+        return;
+      }
     }
     configWrite(key, values.concat([value]));
   };
