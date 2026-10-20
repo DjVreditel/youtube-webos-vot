@@ -8,7 +8,7 @@ import { initLogoStyle } from './logo-style.js';
 import { initMathLetters } from './math-letters.js';
 // import { initPlaybackSpeed, stepSpeed, resetSpeed } from './playback-speed.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
-import { sendKey, REMOTE_KEYS, COLOR_CODE_MAP, isGuestMode, isWatchPage, isShortsPage, isSearchPage, SELECTORS, getVideo, SYNTHETIC_KEY_FLAG } from './utils.js';
+import { sendKey, REMOTE_KEYS, COLOR_CODE_MAP, isGuestMode, invalidateGuestModeCache, isWatchPage, isShortsPage, isSearchPage, SELECTORS, getVideo, SYNTHETIC_KEY_FLAG } from './utils.js';
 import { syncAdblockHook, initTrackingBlock, destroyTrackingBlock } from './adblock.js';
 import logoOrangeUrl from './icons/logo-orange.png';
 import logoBlueUrl from './icons/logo-blue.png';
@@ -2111,6 +2111,10 @@ function initGlobalStyles() {
             animation-iteration-count: 1 !important;
             scroll-behavior: auto !important;
         }
+
+        /* Not display:none: YouTube still focuses it at start, and a hidden element
+           cannot take focus, which would leave focus nowhere. */
+        html.ytaf-hide-guest-nudge ytlr-feed-nudge-renderer { opacity: 0 !important; height: 0 !important; overflow: hidden !important; }
     `;
     document.head.appendChild(style);
 
@@ -2124,6 +2128,27 @@ function initGlobalStyles() {
         syncClass(cls, key);
         configAddChangeListener(key, () => syncClass(cls, key));
     }
+
+    // Guest mode, Hide Sign-in Buttons: the guest home's sign-in nudge comes in
+    // the session's first response, which YouTube parses before the JSON.parse
+    // hook (adblock.js) is in, so it is hidden here as well. Focus landing on
+    // the hidden nudge is passed to the guide.
+    const passFocus = (el) => {
+        if (el && el.closest && el.closest('ytlr-feed-nudge-renderer')) sendKey(REMOTE_KEYS.LEFT, el);
+    };
+    const syncGuestNudge = () => {
+        invalidateGuestModeCache();
+        const on = isGuestMode() && !!configRead('enableAdBlock') && !!configRead('hideGuestSignInPrompts');
+        if (on) passFocus(document.activeElement);
+        document.documentElement.classList.toggle('ytaf-hide-guest-nudge', on);
+    };
+    syncGuestNudge();
+    configAddChangeListener('hideGuestSignInPrompts', syncGuestNudge);
+    configAddChangeListener('enableAdBlock', syncGuestNudge);
+    window.addEventListener('ytaf-page-update', syncGuestNudge);
+    document.addEventListener('focusin', (evt) => {
+        if (document.documentElement.classList.contains('ytaf-hide-guest-nudge')) passFocus(evt.target);
+    }, true);
 }
 
 const LOGO_URLS = {

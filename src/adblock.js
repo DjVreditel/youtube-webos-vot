@@ -765,6 +765,7 @@ function applySchemaFilters(data, responseType, config) {
         }
         break;
     case 'HOME_BROWSE':
+      if (config.hideGuestPrompts) dropSignInPromoButton(getByPath(data, ['contents', 'tvBrowseRenderer', 'content', 'tvSurfaceContentRenderer', 'content']));
       if (schema?.mainContent) {
         let contents = getByPath(data, schema.mainContent);
         if (!contents) {
@@ -1147,6 +1148,13 @@ function isReelAd(item) {
 
 function hasAdRenderer(item) {
   return !!(item.adSlotRenderer || item.tvMastheadRenderer);
+}
+
+// A guest's Subscriptions and Library are one whole-page sign-in promo. The
+// text stays, so the page is not blank; its Sign in button goes.
+function dropSignInPromoButton(content) {
+  const promo = content && content.genericPromoRenderer;
+  if (promo?.actionButton?.buttonRenderer?.navigationEndpoint?.signInEndpoint) delete promo.actionButton;
 }
 
 function isGuestPrompt(item) {

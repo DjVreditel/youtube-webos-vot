@@ -198,6 +198,19 @@ setTimeout(() => {
     t('forged sentinels stripped, not honoured', ftxt === 'not-an-emoji plain', JSON.stringify(ftxt));
   }
 
+  // A guest's whole-page sign-in promo (Subscriptions, Library): the button
+  // goes, the text stays; a promo whose button does something else is kept.
+  {
+    const promo = (endpoint) => P(nativeStringify({ responseContext: { _pad: pad },
+      contents: { tvBrowseRenderer: { content: { tvSurfaceContentRenderer: { content: { genericPromoRenderer: {
+        title: { runs: [{ text: 'Sign in to see your library' }] },
+        actionButton: { buttonRenderer: { navigationEndpoint: endpoint } } } } } } } }
+    })).contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.genericPromoRenderer;
+    const signIn = promo({ signInEndpoint: { nextEndpoint: { browseEndpoint: { browseId: 'FElibrary' } } } });
+    t('guest sign-in promo loses its button, keeps its text', !signIn.actionButton && !!signIn.title);
+    t('other promo keeps its button', !!promo({ browseEndpoint: { browseId: 'x' } }).actionButton);
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 }, 400);

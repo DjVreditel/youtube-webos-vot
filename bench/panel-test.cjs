@@ -14,7 +14,7 @@ const { applyChrome38Downgrade, UA, setUserAgent, dispatchTrusted } = require('.
 const bundlePath = process.argv[2] || 'dist/webOSUserScripts/userScript.js';
 const GREEN = 404;
 
-function boot(bodyClass = 'WEB_PAGE_TYPE_BROWSE', extraHtml = '') {
+function boot(bodyClass = 'WEB_PAGE_TYPE_BROWSE', extraHtml = '', setup = null) {
   const errors = [];
   const vc = new VirtualConsole();
   vc.on('jsdomError', (e) => errors.push(e.message));
@@ -32,6 +32,7 @@ function boot(bodyClass = 'WEB_PAGE_TYPE_BROWSE', extraHtml = '') {
     enableReturnYouTubeDislike: true, upgradeThumbnails: false, enableAutoLogin: true,
     enableScrollSeek: true, showTimeRemaining: true, logoStyle: 'premium'
   }));
+  if (setup) setup(win);
   applyChrome38Downgrade(win);
   win.eval(fs.readFileSync(bundlePath, 'utf8'));
   return { win, errors, pump: () => { const q = rafQ; rafQ = []; for (const cb of q) cb(Date.now()); } };
@@ -229,6 +230,26 @@ setTimeout(async () => {
     typeKey('Enter', 13);
     t('typed natively', box.textContent === 'lo', box.textContent);
     t('Enter presses the on-screen search key', searched === 1 && okOnA === 0, `searched=${searched} okOnA=${okOnA}`);
+  }
+
+  // ---- Case 8: guest home's sign-in nudge (parsed before the hook) is hidden, focus leaves it ----
+  {
+    const { win } = boot('WEB_PAGE_TYPE_BROWSE',
+      '<ytlr-feed-nudge-renderer><button id="nudgeBtn">Sign in</button></ytlr-feed-nudge-renderer>',
+      (w) => {
+        w.localStorage.setItem('yt.leanback.default::last-identity-used',
+          JSON.stringify({ data: { identityType: 'UNAUTHENTICATED_IDENTITY_TYPE_GUEST' } }));
+        const c = JSON.parse(w.localStorage.getItem('ytaf-configuration'));
+        c.hideGuestSignInPrompts = true;
+        w.localStorage.setItem('ytaf-configuration', JSON.stringify(c));
+      });
+    const btn = win.document.getElementById('nudgeBtn');
+    let left = 0;
+    btn.addEventListener('keydown', (e) => { if (e.keyCode === 37) left++; });
+    btn.focus();
+    await new Promise((r) => setTimeout(r, 50));
+    t('guest nudge hidden', win.document.documentElement.classList.contains('ytaf-hide-guest-nudge'));
+    t('focus on the hidden nudge is passed left', left === 1, 'left=' + left);
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);
