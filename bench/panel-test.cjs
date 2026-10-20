@@ -200,6 +200,37 @@ setTimeout(async () => {
     t('premium logo re-applied after a repaint', /premium/.test(img.style.backgroundImage), img.style.backgroundImage);
   }
 
+  // ---- Case 7: keyboard Enter submits the search when YouTube types natively (webOS 25) ----
+  {
+    const { win } = boot('WEB_PAGE_TYPE_SEARCH',
+      '<ytlr-search-text-box></ytlr-search-text-box>' +
+      '<yt-keyboard-key tabindex="0">A</yt-keyboard-key><yt-keyboard-key>KERESÉS</yt-keyboard-key>');
+    const d = win.document;
+    const [keyA, keySearch] = d.querySelectorAll('yt-keyboard-key');
+    const box = d.querySelector('ytlr-search-text-box');
+    for (const k of [keyA, keySearch]) k.getBoundingClientRect = () => ({ left: 0, top: 0, width: 50, height: 50 });
+    keyA.focus();
+    let searched = 0, okOnA = 0;
+    keySearch.addEventListener('mousedown', () => searched++);
+    // YouTube's side: types printable keys itself; Enter is OK on the focused key.
+    d.addEventListener('keydown', (e) => {
+      if (e.defaultPrevented) return;
+      if (e.key && e.key.length === 1) box.textContent += e.key;
+      else if (e.keyCode === 13 && d.activeElement === keyA) okOnA++;
+    });
+    const typeKey = (k, code) => {
+      const e = new win.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true });
+      Object.defineProperty(e, 'keyCode', { get: () => code, configurable: true });
+      dispatchTrusted(d.activeElement, e);
+    };
+    typeKey('l', 76);
+    await new Promise((r) => setTimeout(r, 500));
+    typeKey('o', 79);
+    typeKey('Enter', 13);
+    t('typed natively', box.textContent === 'lo', box.textContent);
+    t('Enter presses the on-screen search key', searched === 1 && okOnA === 0, `searched=${searched} okOnA=${okOnA}`);
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 }, 500);

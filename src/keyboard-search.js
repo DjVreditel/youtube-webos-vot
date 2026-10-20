@@ -286,6 +286,8 @@ function onKeyDown(evt) {
   const code = evt.keyCode;
 
   if (code === KEY_BACKSPACE) {
+    // YouTube deletes by itself in native mode; it still counts as typing.
+    if (mode === 'native' && typedCount > 0) lastTypedAt = now;
     // Only what was typed here, and only when we are the ones typing.
     if (mode !== 'osk' || typedCount === 0) return;
     const key = findSpecialKey(onScreenKeys(), BACKSPACE_LABEL, BACKSPACE_ICON);
@@ -298,12 +300,15 @@ function onKeyDown(evt) {
 
   if (code === KEY_ENTER) {
     // The remote's OK sends the same code: Enter submits only right after
-    // keyboard typing.
-    if (mode !== 'osk' || !typing || typedCount === 0) return;
+    // keyboard typing. In native mode too: YouTube types by itself there but
+    // takes Enter as OK on the focused on-screen key (webOS 25).
+    if ((mode !== 'osk' && mode !== 'native') || !typing || typedCount === 0) return;
     const key = findSpecialKey(onScreenKeys(), SEARCH_LABEL, SEARCH_ICON);
     if (!key) return;
     swallow(evt);
-    press(key, pressStrategy);
+    // ponytail: native mode never probed a press; the pointer press is the one
+    // that works on webOS 25 (click() does not). Probe here if another build differs.
+    press(key, mode === 'osk' ? pressStrategy : 1);
     lastTypedAt = 0;
     typedCount = 0;
     return;
