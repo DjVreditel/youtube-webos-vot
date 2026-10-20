@@ -1,5 +1,5 @@
 import { configRead, configAddChangeListener } from './config.js';
-import { isWatchPage, getVideo } from './utils.js';
+import { isWatchPage, getVideo, SELECTORS } from './utils.js';
 import { formatTime, cssString } from './sponsorblock-labels.js';
 import './time-remaining.css';
 
@@ -61,10 +61,20 @@ export function buildCss(duration, currentTime, playbackRate, now) {
   return `${TIME_SELECTOR}{content:${cssString(text)};}`;
 }
 
+// webOS 25 gives a live stream a finite duration (its rewind window), so the
+// player is asked as well.
+function isLive() {
+  try {
+    return !!document.getElementById(SELECTORS.PLAYER_ID)?.getVideoData?.()?.isLive;
+  } catch {
+    return false;
+  }
+}
+
 function tick() {
   if (!controlsVisible()) return;
   const video = getVideo();
-  write(video ? buildCss(video.duration, video.currentTime, video.playbackRate, Date.now()) : '');
+  write(video && !isLive() ? buildCss(video.duration, video.currentTime, video.playbackRate, Date.now()) : '');
 }
 
 function sync() {
