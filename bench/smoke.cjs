@@ -112,6 +112,18 @@ const done = () => {
   } catch (e) { strOk = false; strErr = String(e); }
   push('hooked JSON.stringify injects+restores flag', strOk, strErr);
 
+  // A relaunch navigates only when it brings something to open; jsdom reports
+  // each navigation as "Not implemented: navigation".
+  const relaunch = (detail) => {
+    const before = errors.length;
+    win.document.dispatchEvent(new win.CustomEvent('webOSRelaunch', { detail }));
+    const navigated = errors.slice(before).some((e) => /navigation/.test(e));
+    errors.length = before;
+    return navigated;
+  };
+  push('plain relaunch stays on the page', !relaunch({ displayAffinity: 0 }));
+  push('relaunch with a video navigates', relaunch({ contentTarget: 'v=dQw4w9WgXcQ' }));
+
   push('no console.error / jsdomError', errors.length === 0, errors.slice(0, 3).join(' || '));
 
   let fail = 0;

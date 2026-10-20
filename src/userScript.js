@@ -57,7 +57,10 @@ document.addEventListener(
         console.info('[Main] Relaunch detected on Account Selector. Triggering bypass.');
         attemptActiveBypass(true);
     }
-    handleLaunch(evt.detail);
+    // A plain relaunch (the app icon, `ares-launch`) brings only
+    // displayAffinity: the app stays where it is instead of reloading Home.
+    const detail = evt.detail;
+    if (detail && typeof detail === 'object' && (detail.target || detail.contentTarget)) handleLaunch(detail);
   },
   true
 );

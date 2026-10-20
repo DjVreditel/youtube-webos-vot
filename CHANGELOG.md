@@ -29,6 +29,7 @@ Feed filters, DeArrow, the original audio over dubbed tracks, separate settings 
 
 ## Fixes
 
++ Opening the app again while it runs (its icon, `ares-launch`) no longer reloads it and jumps to Home: only a relaunch that brings a video, a search or a cast opens something new.
 + Blocked Channels and Hide Videos Whose Title Contains: adding a name that is already in the list says so ("Already blocked", "Already in the list") instead of doing nothing.
 + Return YouTube Dislike: the label follows YouTube's language ("Diszlájkok" beside "Lájkok" in Hungarian, 15 languages, English otherwise), and on webOS 22+ the count is written the way YouTube writes its like count ("4,3 E").
 + Return YouTube Dislike: the video id is URL-encoded in the API request.
