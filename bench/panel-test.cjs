@@ -252,6 +252,25 @@ setTimeout(async () => {
     t('focus on the hidden nudge is passed left', left === 1, 'left=' + left);
   }
 
+  // ---- Case 9: Toggle Comments finds the button by its data, whatever the UI language (webOS 25) ----
+  {
+    const { win } = boot('WEB_PAGE_TYPE_WATCH',
+      '<ytlr-player-actions-container><ytlr-button-renderer idomkey="item-1">' +
+      '<yt-button-container aria-label="Megjegyzések"><yt-icon class="MjctSe ieYpu nGYLgf"></yt-icon></yt-button-container>' +
+      '</ytlr-button-renderer></ytlr-player-actions-container><video></video>',
+      (w) => {
+        const c = JSON.parse(w.localStorage.getItem('ytaf-configuration'));
+        c.shortcut_key_8 = 'toggle_comments';
+        w.localStorage.setItem('ytaf-configuration', JSON.stringify(c));
+      });
+    const d = win.document;
+    d.querySelector('ytlr-button-renderer').__instance = { props: { data: { icon: { iconType: 'COMMENT' } } } };
+    let selected = 0;
+    d.querySelector('yt-button-container').__instance = { onSelect: () => selected++ };
+    key(win, 56);
+    t('digit bound to Toggle Comments presses the comments button', selected === 1, 'onSelect calls=' + selected);
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 }, 500);

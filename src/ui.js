@@ -115,6 +115,26 @@ function resolveCached(cacheKey, selectors) {
     return null;
 }
 
+// A player button found by what it does (its icon or the panel it opens), not
+// by its label or class: those change with the UI language and YouTube's
+// builds. On webOS 25 in Hungarian the comments button is "Megjegyzések" with a
+// new icon class, so no selector above matched it.
+const panelTargetOf = (d) => d.command && d.command.changeEngagementPanelVisibilityAction && d.command.changeEngagementPanelVisibilityAction.targetId;
+const iconTypeOf = (d) => (d.icon && d.icon.iconType) || '';
+const isCommentsButton = (d) => iconTypeOf(d) === 'COMMENT' || panelTargetOf(d) === 'comment-item-section';
+const isDescriptionButton = (d) => panelTargetOf(d) === 'video-description-ep-identifier';
+const isSaveButton = (d) => iconTypeOf(d).indexOf('BOOKMARK') === 0;
+
+function findPlayerButton(match) {
+    const renderers = document.querySelectorAll('ytlr-player-actions-container ytlr-button-renderer');
+    for (let i = 0; i < renderers.length; i++) {
+        const inst = renderers[i].__instance;
+        const data = inst && inst.props && inst.props.data;
+        if (data && match(data)) return renderers[i].querySelector('yt-button-container, ytlr-button');
+    }
+    return null;
+}
+
 window.addEventListener('ytaf-page-update', (e) => {
     // Audio-only ends with the watch page, so home-screen previews are not
     // left invisible.
@@ -1464,7 +1484,7 @@ function toggleSubtitlesLogic(player) {
 }
 
 function toggleCommentsLogic() {
-    const target = resolveCached('comments', COMMENT_SELECTORS);
+    const target = findPlayerButton(isCommentsButton) || resolveCached('comments', COMMENT_SELECTORS);
     let commBtn = target ? target.closest('yt-button-container, ytlr-button') : null;
     let isLiveChat = false;
 
@@ -1494,9 +1514,9 @@ function toggleCommentsLogic() {
 }
 
 function toggleDescriptionLogic() {
-    let target = null;
+    let target = findPlayerButton(isDescriptionButton);
 
-    if (cachedSelectors.description) {
+    if (!target && cachedSelectors.description) {
         const cachedEl = document.querySelector(cachedSelectors.description);
         target = cachedEl ? cachedEl.closest('yt-button-container') : null;
     }
@@ -1538,7 +1558,7 @@ function toggleDescriptionLogic() {
 }
 
 function saveToPlaylistLogic() {
-    const el = resolveCached('save', SAVE_SELECTORS);
+    const el = findPlayerButton(isSaveButton) || resolveCached('save', SAVE_SELECTORS);
     // Structural check rather than comparing against the selector string, so
     // this keeps working if the selector text ever changes.
     const target = el && el.tagName === 'YT-ICON' ? el.closest('yt-button-container') : el;
