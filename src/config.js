@@ -214,7 +214,7 @@ const configOptions = new Map([
   ['loadRowsAhead', { default: true, desc: 'Load Rows Ahead' }],
   ['keyboardSearch', { default: true, desc: 'Type in Search with a Keyboard' }],
   ['removeBlackBorders', { default: false, desc: 'New Liquid Glass UI' }],
-  ['forcePreviews', { default: 'disabled', desc: 'Force Previews' }],
+  ['forcePreviews', { default: 'disabled', desc: 'Previews With Sound' }],
   ['mutePreviews', { default: false, desc: 'Mute Video Previews' }],
   ['fitPageBesideGuide', { default: false, desc: 'Fit Page Beside Open Menu' }],
   ['enableLegacyEmojiFix', { default: true, desc: 'Emoji + Characters Fix' }],

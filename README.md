@@ -252,7 +252,7 @@ The actions each key can take are listed under [Remote control](#-remote-control
 |---|---|
 | Video shelf opacity (needs OLED-Care Mode) | 100% |
 | UI Brightness (dims menus and thumbnails, never the video) | 100% |
-| Force Previews (Disabled, Force On, Force Off) | Disabled |
+| Previews With Sound (Disabled, Force On, Force Off; sets YouTube's own setting) | Disabled |
 | Mute Video Previews | Off |
 | Fit Page Beside Open Menu | Off |
 | Fix Multiline Titles | On |

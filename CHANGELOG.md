@@ -25,6 +25,7 @@ Feed filters, DeArrow, the original audio over dubbed tracks, separate settings 
 + SponsorBlock asks the official server (sponsor.ajay.app) first, and the community mirror (sponsorblock.inf.re) only when the official one fails.
 + The launch and relaunch log lines name the launch parameters without their values, which can hold a search, a voice query or a cast pairing code.
 + The app is called **YouTube** on the TV (the home screen, the inputs list), instead of YouTube AdFree.
++ Force Previews is renamed **Previews With Sound**: the YouTube setting it sets is the one for previews with sound, not previews on or off. Where YouTube shows no previews (webOS 25) it has no effect.
 
 ## Fixes
 
