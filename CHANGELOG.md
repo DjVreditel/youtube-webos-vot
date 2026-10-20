@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.8.8] - 2026/10/18
+## [0.8.8] - 2026/10/20
 
 Feed filters, DeArrow, the original audio over dubbed tracks, separate settings for each account and a page that fits beside the open menu. Features from MickLesk's fork (fork watch #26) and Dazzyelv's fork (fork watch #29), and fixes from a security review of 0.8.7. Ships both packages: `_webOS22+.ipk` for webOS 22 and newer, and the legacy `.ipk` for webOS 3-6.
 
@@ -18,6 +18,7 @@ Feed filters, DeArrow, the original audio over dubbed tracks, separate settings 
 + **Start Page** (UI Tweaks): the app can open on Subscriptions, the Library or the History instead of Home. A launch into a video, a cast or a voice search is left alone. From MickLesk's fork.
 + **Left/Right Seek Step** (Player, YouTube's default): while the player controls are hidden, Left and Right seek by 5, 10, 15, 30 or 60 seconds, and quick presses add up to one seek. With the controls on screen the keys move along them as before. From MickLesk's fork.
 + **DeArrow** (UI Tweaks, off by default): titles, and optionally thumbnails, submitted by the community in place of clickbait ones (dearrow.ajay.app). Like SponsorBlock, a request names only the first four characters of the SHA-256 of a video id, never the id. A video looked up for the first time gets its new title on the tiles YouTube draws after the answer comes, and on every later page. From MickLesk's fork.
++ **Waits for the network** at launch: when the TV opens the app before it is online (autostart), the launcher shows a note and opens YouTube by itself once the network is back, instead of YouTube's error page. OK opens it at once. Idea from webosbrew/youtube-webos PR #487 (#326).
 
 ## Changed
 
@@ -29,6 +30,20 @@ Feed filters, DeArrow, the original audio over dubbed tracks, separate settings 
 
 ## Fixes
 
++ Force Max Quality: a 1440p60 video stayed in 720p, as any named level counted as the best; the video's own best level is the target now.
++ Force Video Codec: with a codec pinned (e.g. AV1), the player's startup probes with `framerate=` or `width=` were declined, so every 60 fps format was dropped and a 1440p60 video played in 480p30. The probes get the TV's true answer now.
++ Remove Shorts: Shorts in search results (sent as lockups in an ordinary row) stayed in; they are removed now. Remove Top Live Games and Remove Most Relevant also know the Hungarian row titles.
++ Block the channel of this video (panel): the button never showed on webOS 25, where the player gives no author; the channel now comes from the title line.
++ The History page is filtered too (channels, title words, Shorts), and DeArrow and the long-press entries reach it; it keeps watched videos as before.
++ DeArrow: every answer names about 170 videos, and caching all of them pushed the videos on screen out of the cache, so their new titles never showed. Only the asked videos are cached now.
++ SponsorBlock: Auto Skip to Highlight was undone on a partly watched video, as YouTube seeks to the saved position right after; the jump is repeated once.
++ Toggle Comments (and the description and save shortcuts) said "Comments Unavailable" when YouTube is not in English (webOS 25); the buttons are found by what they do, not by their English label.
++ Scroll Wheel Seeks did nothing on webOS 25, which marks the focused bar differently.
++ Show Time Remaining: hidden on live streams, where webOS 25 gave a countdown to the live edge.
++ YouTube Logo: the Premium logo went back to YouTube's own after "Who's watching"; it is applied again.
++ Keyboard search: on webOS 25, Enter typed an extra letter instead of searching; it presses the on-screen search key now.
++ Guest Mode: Hide Sign-in Buttons did nothing on webOS 25: the Home nudge is hidden on the page (focus moves on to the menu), and the Sign in button of the Subscriptions and Library promo is removed.
++ Fox theme with OLED-Care: the notifications were brown, not black.
 + Opening the app again while it runs (its icon, `ares-launch`) no longer reloads it and jumps to Home: only a relaunch that brings a video, a search or a cast opens something new.
 + Blocked Channels and Hide Videos Whose Title Contains: adding a name that is already in the list says so ("Already blocked", "Already in the list") instead of doing nothing.
 + Return YouTube Dislike: the label follows YouTube's language ("Diszlájkok" beside "Lájkok" in Hungarian, 15 languages, English otherwise), and on webOS 22+ the count is written the way YouTube writes its like count ("4,3 E").
