@@ -290,13 +290,15 @@ of the project; credits are in [CHANGELOG.md](CHANGELOG.md).
 - *0.8.8:* from MickLesk's fork, Prefer Original Audio over Dubbed, Feed Filters (watched videos, short
   videos, blocked channels, title keywords), "Block channel" / "Not interested" / "Don't recommend channel" in the
   long-press menu, Start Page, a Left/Right seek step and DeArrow; from Dazzyelv's fork, Fit Page Beside Open Menu.
+  The app waits for the network at launch instead of stopping on YouTube's error page.
 
 <details>
 <summary><b>Fixed</b></summary>
 
 - Ad blocking holds up against YouTube's "property locker"; previously playback could stall a few seconds in.
 - webOS 25: the webOS Cast service is no longer blocked when a cast starts the app. Casting can still fail while
-  the app is open; see *Known issues* in [CHANGELOG.md](CHANGELOG.md).
+  the app is open; see *Known issues* in [CHANGELOG.md](CHANGELOG.md). Some unofficial phone apps (e.g. ReVanced)
+  send the video to the TV's hidden, preloaded copy of the app, so it plays unseen: open YouTube on the TV first.
 - SponsorBlock: Non-Music segments are actually fetched; muted segments now mute; failed requests are retried.
 - Back closes the settings panel, and colour-button seeks no longer fire twice.
 - The OLED overlay no longer hides the notifications.
@@ -314,6 +316,13 @@ of the project; credits are in [CHANGELOG.md](CHANGELOG.md).
   - the settings panel: the SponsorBlock switch could not be reached with the arrows; it is about 16 KiB
     lighter without the spatial-navigation polyfill;
   - webOS 3/4: focus highlight, emoji sequences; webOS 22+: "fancy font" channel names.
+- *0.8.8:* about 20 more, found in a full test on a webOS 25 TV:
+  - Force Max Quality stuck at 720p, and a pinned codec dropping every 60 fps format;
+  - webOS 25: scroll-wheel seeking, Toggle Comments in other languages, Hide Sign-in Buttons in guest mode,
+    the button that blocks the playing video's channel, Enter in keyboard search, remaining time on live streams;
+  - Shorts left in search results, the History page left unfiltered, DeArrow titles that never showed,
+    the Highlight jump undone on a partly watched video;
+  - opening the running app again no longer reloads it and jumps to Home.
 </details>
 
 <details>
@@ -368,7 +377,8 @@ luna-send-pub -n 1 'luna://com.webos.service.eim/addDevice' '{"appId":"youtube.l
 
 "YouTube" then appears as an input next to HDMI and Live TV. If it was the last selected input, it starts when the
 TV is turned on. It also starts much faster, because it keeps running in the background; the cost is somewhat
-higher idle memory use, which is barely noticeable in practice.
+higher idle memory use, which is barely noticeable in practice. If the TV is not online yet when the app starts,
+the app waits and opens YouTube by itself once the network is up.
 
 To turn autostart off:
 
