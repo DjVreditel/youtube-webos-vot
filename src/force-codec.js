@@ -129,6 +129,17 @@ function isVideoMime(type) {
 }
 
 /**
+ * Whether a probe carries a parameter besides codecs (framerate=30, width=640,
+ * eotf=bt709...). At startup the player asks these with an AVC codec to learn
+ * which parameters the platform understands; declining them made it drop every
+ * 60 fps format, so a pinned AV1 played a 1440p60 video in 480p30. They are
+ * answered truthfully; the plain codec probes still narrow.
+ */
+function isFeatureProbe(type) {
+  return /;\s*(?!codecs\s*=)[a-z-]+\s*=/i.test(type);
+}
+
+/**
  * Whether the current mode permits a given codec.
  *
  * Deliberately does not consult `unsatisfiable`. That flag relaxes the
@@ -258,7 +269,7 @@ function installHooks() {
   if (window.MediaSource && typeof MediaSource.isTypeSupported === 'function') {
     origIsTypeSupported = MediaSource.isTypeSupported;
     MediaSource.isTypeSupported = function (type) {
-      if (narrowing() && typeof type === 'string' && isVideoMime(type)) {
+      if (narrowing() && typeof type === 'string' && isVideoMime(type) && !isFeatureProbe(type)) {
         const codec = detectCodec(type);
         if (codec !== null && !allowsCodec(codec)) {
           debugLog('declined', type);
@@ -273,7 +284,7 @@ function installHooks() {
   if (window.HTMLMediaElement) {
     origCanPlayType = HTMLMediaElement.prototype.canPlayType;
     HTMLMediaElement.prototype.canPlayType = function (type) {
-      if (narrowing() && typeof type === 'string' && isVideoMime(type)) {
+      if (narrowing() && typeof type === 'string' && isVideoMime(type) && !isFeatureProbe(type)) {
         const codec = detectCodec(type);
         if (codec !== null && !allowsCodec(codec)) return '';
       }

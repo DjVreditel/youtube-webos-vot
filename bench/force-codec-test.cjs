@@ -152,6 +152,10 @@ console.log('\nforcing av1 narrows video only');
   eq('canPlayType declines vp9', m.canPlayType('video/webm; codecs="vp9"'), '');
   eq('canPlayType allows av1', m.canPlayType('video/mp4; codecs="av01.0.08M.08"'), 'probably');
   eq('canPlayType allows audio', m.canPlayType('audio/mp4; codecs="mp4a.40.2"'), 'probably');
+  // The player's parameter feature tests: declining them drops all 60 fps formats.
+  eq('framerate feature probe answered', m.isTypeSupported('video/mp4; codecs="avc1.4d401e"; framerate=30'), true);
+  eq('width feature probe answered', m.isTypeSupported('video/mp4; codecs="avc1.4d401e"; width=640'), true);
+  eq('vp9 with codecs= only still declined', m.isTypeSupported('video/webm;codecs=vp9'), false);
 }
 
 console.log('\nforcing av1 filters the offer');
