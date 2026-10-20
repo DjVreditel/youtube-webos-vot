@@ -10,10 +10,9 @@
  * absolute `left` that is calculated from that width, so swapping the image
  * alone leaves it misaligned. Both values are set together.
  *
- * Applied once at startup: the element is rendered by the app shell rather than
- * per-page, so navigating or watching a video does not revert it. A short
- * bounded wait covers the shell not having painted yet; no observer is left
- * running afterwards.
+ * Applied at startup and again on each page change, for a few seconds each
+ * time: picking an account repaints the header with YouTube's own wordmark.
+ * No observer is left running afterwards.
  */
 import { configRead, configAddChangeListener } from './config.js';
 
@@ -69,22 +68,25 @@ export function applyLogoStyle() {
   return applyToElement(logo, style);
 }
 
-export function initLogoStyle() {
-  if (applyLogoStyle()) return bindChanges();
-
-  // The app shell may not have painted yet. Poll briefly rather than leaving a
-  // MutationObserver on the document for the life of the session.
-  const deadline = Date.now() + MAX_WAIT_MS;
-  const tick = () => {
-    if (applyLogoStyle() || Date.now() > deadline) {
+// Keeps applying for a while instead of stopping at the first success: after
+// "Who's watching" YouTube repaints the header with its own wordmark. A short
+// poll rather than a MutationObserver left on the document for the session.
+function applyFor(ms) {
+  const deadline = Date.now() + ms;
+  if (pollTimer) clearInterval(pollTimer);
+  applyLogoStyle();
+  pollTimer = setInterval(() => {
+    applyLogoStyle();
+    if (Date.now() > deadline) {
       clearInterval(pollTimer);
       pollTimer = null;
     }
-  };
-  pollTimer = setInterval(tick, POLL_MS);
-  bindChanges();
+  }, POLL_MS);
 }
 
-function bindChanges() {
+export function initLogoStyle() {
+  applyFor(MAX_WAIT_MS);
   configAddChangeListener('logoStyle', () => applyLogoStyle());
+  // A page change covers picking an account, which repaints the header.
+  window.addEventListener('ytaf-page-update', () => applyFor(5000));
 }

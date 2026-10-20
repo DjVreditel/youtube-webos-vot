@@ -30,7 +30,7 @@ function boot(bodyClass = 'WEB_PAGE_TYPE_BROWSE', extraHtml = '') {
   win.localStorage.setItem('ytaf-configuration', win.JSON.stringify({
     enableAdBlock: true, enableLegacyEmojiFix: true, enableSponsorBlock: true,
     enableReturnYouTubeDislike: true, upgradeThumbnails: false, enableAutoLogin: true,
-    enableScrollSeek: true, showTimeRemaining: true
+    enableScrollSeek: true, showTimeRemaining: true, logoStyle: 'premium'
   }));
   applyChrome38Downgrade(win);
   win.eval(fs.readFileSync(bundlePath, 'utf8'));
@@ -185,6 +185,19 @@ setTimeout(async () => {
     live = true;
     await new Promise((r) => setTimeout(r, 1100));
     t('remaining time hidden on a live stream', !/ends /.test(text()), text());
+  }
+
+  // ---- Case 6: the Premium logo comes back after YouTube repaints the header ----
+  {
+    const { win } = boot('WEB_PAGE_TYPE_BROWSE',
+      '<ytlr-logo-entity><ytlr-thumbnail-details></ytlr-thumbnail-details></ytlr-logo-entity>');
+    const img = win.document.querySelector('ytlr-thumbnail-details');
+    await new Promise((r) => setTimeout(r, 600));
+    t('premium logo applied at startup', /premium/.test(img.style.backgroundImage), img.style.backgroundImage);
+    img.style.backgroundImage = 'url("https://www.gstatic.com/youtube/img/branding/livingroom/youtube/wordmark/x.png")';
+    win.dispatchEvent(new win.CustomEvent('ytaf-page-update', { detail: {} }));
+    await new Promise((r) => setTimeout(r, 600));
+    t('premium logo re-applied after a repaint', /premium/.test(img.style.backgroundImage), img.style.backgroundImage);
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);
