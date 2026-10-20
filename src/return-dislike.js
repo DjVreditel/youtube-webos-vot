@@ -34,6 +34,43 @@ function closestMenuItem(el) {
 // Shown while the count is still unknown, so the factoid can be laid out
 // immediately instead of appearing late.
 const DISLIKE_PLACEHOLDER = '\u2014'; // em dash
+
+// YouTube's UI language (its own setting, not the TV's), lower case.
+function uiLang() {
+  try {
+    const hl = window.ytcfg && typeof window.ytcfg.get === 'function' && window.ytcfg.get('HL');
+    if (hl) return String(hl).toLowerCase();
+  } catch { /* fall back below */ }
+  return String(navigator.language || 'en').toLowerCase();
+}
+
+// The label beside the count, next to YouTube's own "Likes" factoid. YouTube
+// ships no such word on the TV, so the common UI languages are listed here;
+// any other language keeps the English label.
+const DISLIKE_LABELS = {
+  hu: 'Diszl\u00e1jkok', de: 'Mag ich nicht', fr: 'Je n\u2019aime pas', es: 'No me gusta',
+  it: 'Non mi piace', pt: 'N\u00e3o gostei', nl: 'Niet leuk', pl: 'Nie podoba mi si\u0119',
+  cs: 'Nel\u00edb\u00ed se mi', sk: 'Nep\u00e1\u010di sa mi', ro: 'Nu-mi place', tr: 'Be\u011fenmedim',
+  ru: '\u041d\u0435 \u043d\u0440\u0430\u0432\u0438\u0442\u0441\u044f', uk: '\u041d\u0435 \u043f\u043e\u0434\u043e\u0431\u0430\u0454\u0442\u044c\u0441\u044f', el: '\u0394\u03b5\u03bd \u03bc\u03bf\u03c5 \u03b1\u03c1\u03ad\u03c3\u03b5\u03b9'
+};
+function dislikeLabel() {
+  const lang = uiLang();
+  return DISLIKE_LABELS[lang] || DISLIKE_LABELS[lang.split(/[-_]/)[0]] || 'Dislikes';
+}
+
+// "4,3 E" in Hungarian, as YouTube writes its like count. Only where the
+// browser has compact number formatting (not webOS 3-6) and not in English,
+// which keeps the "4.3k" form below.
+function compactFormat(num) {
+  const lang = uiLang();
+  if (lang.indexOf('en') === 0 || typeof Intl === 'undefined' || !Intl.NumberFormat) return null;
+  try {
+    const nf = new Intl.NumberFormat(lang, { notation: 'compact', maximumFractionDigits: 1 });
+    return nf.resolvedOptions().notation === 'compact' ? nf.format(num) : null;
+  } catch {
+    return null;
+  }
+}
 const FETCH_MAX_RETRIES = 3;
 const FETCH_RETRY_BASE_MS = 1200;
 
@@ -235,7 +272,7 @@ class ReturnYouTubeDislike {
     if (valueElement.textContent === text) return;
     valueElement.textContent = text;
     if (this.dislikeFactoidElement) {
-      this.dislikeFactoidElement.setAttribute('aria-label', `${text} Dislikes`);
+      this.dislikeFactoidElement.setAttribute('aria-label', `${text} ${dislikeLabel()}`);
       this.compensateHeaderGrowth(this.dislikeFactoidElement.parentElement);
     }
   }
@@ -751,8 +788,8 @@ class ReturnYouTubeDislike {
           ? DISLIKE_PLACEHOLDER
           : this.formatNumber(this.dislikesValue);
         valueElement.textContent = dislikeText;
-        labelElement.textContent = 'Dislikes';
-        dislikeElement.setAttribute('aria-label', `${dislikeText} Dislikes`);
+        labelElement.textContent = dislikeLabel();
+        dislikeElement.setAttribute('aria-label', `${dislikeText} ${dislikeLabel()}`);
         // Keep handles so updateDislikeDisplay() can fill this in later.
         this.dislikeValueElement = valueElement;
         this.dislikeFactoidElement = dislikeElement;
@@ -769,6 +806,8 @@ class ReturnYouTubeDislike {
   }
 
   formatNumber(num) {
+    const compact = compactFormat(num);
+    if (compact) return compact;
     // Rounded first, so a count just under a unit moves up to it: 999,950 is
     // "1m", not "1000k".
     const fmt = (value, unit) => value.toFixed(1).replace(/\.0$/, '') + unit;

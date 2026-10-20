@@ -20,7 +20,7 @@ const ROOT = path.resolve(__dirname, '..');
 const bundlePath = process.argv[2] || ROOT + '/dist/webOSUserScripts/userScript.js';
 const legacy = process.argv[3] !== 'modern';
 
-function boot(fetchImpl) {
+function boot(fetchImpl, hl) {
   const dom = new JSDOM(
     '<!doctype html><html><body class="WEB_PAGE_TYPE_WATCH"><ytlr-app>' +
     '<div id="ytlr-player__player-container"><video></video></div></ytlr-app></body></html>',
@@ -41,6 +41,7 @@ function boot(fetchImpl) {
   // AFTER the downgrade: it deletes window.fetch (Chrome 38 has none), which
   // would wipe the mock and hand the request to the whatwg-fetch polyfill.
   win.fetch = fetchImpl;
+  if (hl) win.ytcfg = { get: (k) => (k === 'HL' ? hl : undefined) };
   win.eval(fs.readFileSync(bundlePath, 'utf8'));
   return { win, pump: () => { const q = rafQ; rafQ = []; for (const cb of q) cb(0); } };
 }
@@ -147,6 +148,20 @@ const t = (n, ok, extra) => { if (ok) { pass++; console.log('PASS ' + n); }
     openPanel(win);
     await wait(700); pump(); await wait(100);
     t('a real zero still renders as 0', valueOf(win) === '0', valueOf(win));
+  }
+
+  // ---- 5. YouTube in Hungarian: Hungarian label and number format ----
+  {
+    const { win, pump } = boot(() => Promise.resolve({
+      ok: true, status: 200, json: () => Promise.resolve({ dislikes: 4321 }) }), 'hu');
+    await wait(800); pump();
+    openPanel(win);
+    await wait(700); pump(); await wait(100);
+    const f = factoid(win);
+    const label = f && f.querySelector('.ytLrVideoDescriptionHeaderRendererLabel');
+    t('Hungarian UI: label and number follow YouTube\'s language',
+      label && label.textContent === 'Diszlájkok' && valueOf(win) === '4,3 E',
+      (label && label.textContent) + ' / ' + JSON.stringify(valueOf(win)));
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);
