@@ -211,6 +211,18 @@ setTimeout(() => {
     t('other promo keeps its button', !!promo({ browseEndpoint: { browseId: 'x' } }).actionButton);
   }
 
+  // A browse page whose content is a bare grid (History) is filtered too.
+  {
+    const grid = P(nativeStringify({ responseContext: { _pad: pad },
+      contents: { tvBrowseRenderer: { content: { tvSurfaceContentRenderer: { content: { gridRenderer: { items: [
+        { tileRenderer: { style: 'TILE_STYLE_YTLR_DEFAULT' } },
+        { tileRenderer: { style: 'TILE_STYLE_YTLR_SHORTS' } },
+        { adSlotRenderer: {} }
+      ] } } } } } }
+    })).contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items;
+    t('browse grid: ad and Shorts tile removed', grid.length === 1, 'got ' + grid.length + ' items');
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 }, 400);

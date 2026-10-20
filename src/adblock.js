@@ -773,6 +773,8 @@ function applySchemaFilters(data, responseType, config) {
             if (DEBUG && contents) debugLog(`${responseType}: Using fallback search`);
         }
         if (Array.isArray(contents)) processSectionListOptimized(contents, config, responseType);
+        // History comes as a bare grid, with no section list.
+        else filterItemsOptimized(getByPath(data, ['contents', 'tvBrowseRenderer', 'content', 'tvSurfaceContentRenderer', 'content', 'gridRenderer', 'items']), config);
       }
       break;
     case 'BROWSE_TABS':
