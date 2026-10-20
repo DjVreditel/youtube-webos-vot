@@ -1348,7 +1348,8 @@ function performBurstSeek(seconds, video) {
 // jesvijonathan's fork, onto the burst-seek path so rapid notches coalesce
 // into one seek and one notification.
 const SCROLL_SEEK_STEP_S = 10;
-const isProgressBarFocused = () => !!document.querySelector('ytlr-progress-bar.ytLrProgressBarFocused, ytlr-progress-bar[focused]');
+// webOS 25 marks the focused bar with zylon-focus only.
+const isProgressBarFocused = () => !!document.querySelector('ytlr-progress-bar.ytLrProgressBarFocused, ytlr-progress-bar[focused], ytlr-progress-bar.zylon-focus');
 
 function handleScrollSeek(evt) {
     if (!configRead('enableScrollSeek') || optionsPanelVisible) return;
