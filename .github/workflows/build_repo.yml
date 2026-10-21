@@ -99,7 +99,9 @@ jobs:
 
               manifest = {
                   "id": pkg_id,
-                  "version": app_info.get('version'),
+                  # The release tag, not assets/appinfo.json: the Draft release workflow
+                  # can build a version that package.json does not carry yet.
+                  "version": release_data['tag_name'].lstrip('v'),
                   "type": app_info.get('type', 'web'),
                   "title": title,
                   "appDescription": description,

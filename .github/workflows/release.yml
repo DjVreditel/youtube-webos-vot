@@ -1,8 +1,7 @@
 name: Draft release
 
 # Every push to main builds both packages - the webOS 22+ one and the legacy
-# one for webOS 3-6 - and puts them in a DRAFT release for the version in
-# package.json (tag v<version>). Drafts are visible
+# one for webOS 3-6 - and puts them in a DRAFT release. Drafts are visible
 # only to people with write access, so nothing is published yet:
 #
 #   1. Download the .ipk for your TV from the draft on the Releases page and
@@ -12,9 +11,14 @@ name: Draft release
 # Publishing creates the tag and runs "Update Homebrew Repository"
 # (build_repo.yml), which points repo.json at the new release.
 #
-# Later pushes to main with the same version refresh the same draft. Once a
-# version is published, nothing happens until package.json gets a new version
-# number - that starts the next draft.
+# The version of the draft:
+#   - the one in package.json, while it is not published yet (a bump by
+#     hand, for example to 0.9.0, wins);
+#   - otherwise the version of the open draft, so later pushes refresh it;
+#   - otherwise the latest published release plus one patch (0.8.8 -> 0.8.9),
+#     which starts a new draft.
+# The build writes that version into package.json and appinfo.json on the
+# runner only; nothing is committed.
 #
 # Drafts of other versions are deleted when a draft is made, so only the
 # current test build is on the Releases page.
@@ -39,43 +43,43 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Read version
+      - name: Pick the version
         id: version
-        run: |
-          version="$(node -p "require('./package.json').version")"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=v$version" >> "$GITHUB_OUTPUT"
-
-      - name: Check whether this version is already published
-        id: state
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.version.outputs.tag }}
         run: |
-          if gh release view "$TAG" --json isDraft --jq .isDraft > draft.txt 2>/dev/null; then
-            if [ "$(cat draft.txt)" = "false" ]; then
-              echo "$TAG is already published - bump the version in package.json to start a new draft." | tee -a "$GITHUB_STEP_SUMMARY"
-              echo "skip=true" >> "$GITHUB_OUTPUT"
-              exit 0
+          is_published() { [ "$(gh release view "v$1" --json isDraft --jq .isDraft 2>/dev/null)" = "false" ]; }
+          version="$(node -p "require('./package.json').version")"
+          if is_published "$version"; then
+            draft="$(gh api "repos/${{ github.repository }}/releases?per_page=100" --jq '[.[] | select(.draft)][0].tag_name // empty')"
+            if [ -n "$draft" ]; then
+              version="${draft#v}"
+            else
+              latest="$(gh api "repos/${{ github.repository }}/releases/latest" --jq .tag_name)"
+              IFS=. read -r major minor patch <<< "${latest#v}"
+              version="$major.$minor.$((patch + 1))"
             fi
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
-          echo "skip=false" >> "$GITHUB_OUTPUT"
+          if gh release view "v$version" > /dev/null 2>&1; then exists=true; else exists=false; fi
+          echo "Draft version: $version (draft exists: $exists)" | tee -a "$GITHUB_STEP_SUMMARY"
+          {
+            echo "version=$version"
+            echo "tag=v$version"
+            echo "exists=$exists"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        if: steps.state.outputs.skip == 'false'
         with:
           node-version: lts/*
           cache: npm
 
       - name: Build both packages
-        if: steps.state.outputs.skip == 'false'
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           npm ci
+          npm pkg set version="$VERSION"
+          node tools/sync-version.cjs
           # Start clean before each build so no earlier package ends up
           # inside a new one.
           rm -rf dist out legacy
@@ -92,7 +96,6 @@ jobs:
           sha256sum out/*.ipk | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Write release notes
-        if: steps.state.outputs.skip == 'false'
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
@@ -111,13 +114,12 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create or refresh the draft release
-        if: steps.state.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          if [ "${{ steps.state.outputs.exists }}" = "true" ]; then
+          if [ "${{ steps.version.outputs.exists }}" = "true" ]; then
             gh release edit "$TAG" --draft --target "$GITHUB_SHA" --title "YouTube AdFree $VERSION" --notes-file notes.md
             gh release upload "$TAG" out/*.ipk --clobber
           else
@@ -126,7 +128,6 @@ jobs:
           echo "Draft release $TAG is ready: ${{ github.server_url }}/${{ github.repository }}/releases" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Remove drafts of other versions
-        if: steps.state.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}

@@ -48,9 +48,10 @@ awk -v v="$version" '
   { print }
 ' CHANGELOG.md > "$changes"
 
+# A draft of the next version can come before its changelog section.
 if [ ! -s "$changes" ]; then
   echo "CHANGELOG.md has no section for $version" >&2
-  exit 1
+  echo "_No CHANGELOG.md section for $version yet._" > "$changes"
 fi
 
 # Hidden once published; tells a tester which commit a draft was built from.
