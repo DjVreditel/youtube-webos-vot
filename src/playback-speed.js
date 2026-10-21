@@ -241,6 +241,9 @@ export function createSpeedController({ win, getPlayer, notify, configRead }) {
 
   // On webOS 25, loadVideoById(id, at) starts up to ~25 s before `at`, even at
   // 1x without the engine. Seek back once the reloaded video plays.
+  // Above 1.25x the 1080p cap is set again then too: the reload drops it, and
+  // with a 60 fps video the frames a 60 Hz screen cannot show count as dropped,
+  // so YouTube falls to 480p. 2160p cannot keep up at 1.5x (85% dropped).
   function restorePosition(player, at) {
     let tries = 40;
     const timer = win.setInterval(() => {
@@ -253,6 +256,7 @@ export function createSpeedController({ win, getPlayer, notify, configRead }) {
       }
       if (state === 1) {
         if (Math.abs(now - at) > 2) player.seekTo(at, true);
+        if (currentSpeed > 1.25) player.setPlaybackQualityRange('hd1080', 'hd1080');
         win.clearInterval(timer);
       } else if (--tries <= 0 || state === null) {
         win.clearInterval(timer);

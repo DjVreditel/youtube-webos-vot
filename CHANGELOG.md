@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.8.9] - Unreleased
+
+Playback speed on webOS: 0.25× to 2× with the pitch kept, from YouTube's own Speed menu or the button mapping. From NicholasBly/youtube-webos PR #194, a port of webosbrew/youtube-webos PR #484, with gorrdy's fixes (fork watch #32). Ships both packages: `_webOS22+.ipk` for webOS 22 and newer, and the legacy `.ipk` for webOS 3-6.
+
+## Added
+
++ **Playback Speed Control** (Player, on by default): webOS ignores the video's playback rate, so the video decoder stays at 1×, the container timeline is rescaled and the audio is time-stretched (WebCodecs AudioDecoder + WSOLA), which keeps the pitch. YouTube's Settings > Speed menu is unlocked, and the button mapping gets **Playback Speed +**, **Playback Speed −** and **Playback Speed Reset (1x)**. Needs WebCodecs (Chromium 94+): the legacy webOS 3-6 package and likely webOS 22 do not get it. At 1× playback is not touched, and every launch starts at 1×.
+  + A speed change keeps the position (YouTube's reload started up to 25 s early on webOS 25).
+  + Above 1.25× the video plays at 1080p at most: the TV cannot decode 2160p fast enough (at 1.5× it dropped 85% of the frames). Back at 1×, Force Max Quality applies again.
+  + Turning the option off goes back to 1× at once.
+  + Yellow is not taken: it keeps YouTube's search unless a speed action is mapped to it.
+
+## Changed
+
++ The app no longer turns off the browser's cross-origin checks (`allowCrossDomain` in appinfo.json). Every outside service it uses (SponsorBlock, DeArrow, Return YouTube Dislike, the thumbnail check) allows it anyway. From gorrdy's fork.
+
+## Fixes
+
++ Playback speed: the audio of a whole video was kept in memory; now only the last 60 s behind the playhead are.
+
+## Build
+
++ CI actions are pinned to commits, and the checkout no longer keeps the token where nothing pushes. From gorrdy's fork.
++ After a release, the next push to main starts a draft of the next version by itself (0.8.8 → 0.8.9).
+
 ## [0.8.8] - 2026/10/20
 
 Feed filters, DeArrow, the original audio over dubbed tracks, separate settings for each account and a page that fits beside the open menu. Features from MickLesk's fork (fork watch #26) and Dazzyelv's fork (fork watch #29), and fixes from a security review of 0.8.7. Ships both packages: `_webOS22+.ipk` for webOS 22 and newer, and the legacy `.ipk` for webOS 3-6.

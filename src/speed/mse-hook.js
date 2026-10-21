@@ -448,6 +448,10 @@ export function installMseHook(
   }
 
   const MAX_REST = 4 * 1024 * 1024;
+  // Audio kept behind the playhead. A real SourceBuffer evicts by itself on
+  // append; this one kept every chunk of the video (YouTube never calls
+  // remove() here), ~75 chunks a second at 1.5x.
+  const BACK_BUFFER_S = 60;
 
   class FakeAudioSourceBuffer extends win.EventTarget {
     constructor(win, mime, speed, sink, onError) {
@@ -687,7 +691,20 @@ export function installMseHook(
         if (this.onError) this.onError(new Error('unparsable audio data'));
       }
 
+      this._evictBehind();
       this._finishLater();
+    }
+
+    _evictBehind() {
+      const video = this.sink.video;
+      if (!video || !this.bufferedRanges.length) return;
+      const cut = video.currentTime - BACK_BUFFER_S;
+      if (!(cut > this.bufferedRanges[0].start)) return;
+      this.sink.discard(0, cut);
+      // YouTube must see it gone, or a seek back finds no audio to fetch.
+      this.bufferedRanges = this.bufferedRanges
+        .filter((r) => r.end > cut)
+        .map((r) => (r.start < cut ? { start: cut, end: r.end } : r));
     }
 
     _finishLater() {
