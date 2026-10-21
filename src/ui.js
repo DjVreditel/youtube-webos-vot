@@ -6,7 +6,7 @@ import './return-dislike.js';
 import { initVideoQuality } from './video-quality.js';
 import { initLogoStyle } from './logo-style.js';
 import { initMathLetters } from './math-letters.js';
-// import { initPlaybackSpeed, stepSpeed, resetSpeed } from './playback-speed.js';
+import { initPlaybackSpeed, stepSpeed, resetSpeed } from './playback-speed.js';
 import sponsorBlockUI from './Sponsorblock-UI.js';
 import { sendKey, REMOTE_KEYS, COLOR_CODE_MAP, isGuestMode, invalidateGuestModeCache, isWatchPage, isShortsPage, isSearchPage, SELECTORS, getVideo, SYNTHETIC_KEY_FLAG } from './utils.js';
 import { syncAdblockHook, initTrackingBlock, destroyTrackingBlock } from './adblock.js';
@@ -163,10 +163,10 @@ const ACTION_SCOPES = {
     sb_skip_prev: 'VIDEO',
     sb_manual_skip: 'VIDEO',
     audio_only: 'VIDEO',
-    jump_to_live: 'VIDEO'
-    // speed_up: 'VIDEO',
-    // speed_down: 'VIDEO',
-    // speed_reset: 'VIDEO'
+    jump_to_live: 'VIDEO',
+    speed_up: 'VIDEO',
+    speed_down: 'VIDEO',
+    speed_reset: 'VIDEO'
 };
 
 function updateShortcutCache(key) {
@@ -1001,7 +1001,7 @@ function createOptionsPanel() {
   makePage(1).appendChild(createSection('Video Player',
   [createConfigCheckbox('forceHighResVideo'),
   createConfigCheckbox('showQualityOnStart'),
-  //createConfigCheckbox('enablePlaybackSpeed'),
+  createConfigCheckbox('enablePlaybackSpeed'),
   createVideoCodecControl(),
   createAlignedCycleControl('subtitleTranslateLang', subtitleTranslateLanguages),
   createSubtitleAutoEnableControl(),
@@ -1808,17 +1808,17 @@ function handleShortcutAction(action) {
         jumpToLiveLogic(video);
         break;
 
-    // case 'speed_up':
-        // stepSpeed(1);
-        // break;
+    case 'speed_up':
+        stepSpeed(1);
+        break;
 
-    // case 'speed_down':
-        // stepSpeed(-1);
-        // break;
+    case 'speed_down':
+        stepSpeed(-1);
+        break;
 
-    // case 'speed_reset':
-        // resetSpeed();
-        // break;
+    case 'speed_reset':
+        resetSpeed();
+        break;
     case 'toggle_subs':
         // Resolved here rather than above the switch: only this one action
         // needs it, and the .html5-video-player fallback is a full-document
@@ -2257,7 +2257,7 @@ initGlobalStyles();
 initVideoQuality();
 initLogoStyle();
 initMathLetters();
-// initPlaybackSpeed();
+initPlaybackSpeed();
 
 // Initial apply (will skip UI elements if they don't exist yet, but handle global styles)
 applyOledMode(configRead('enableOledCareMode'));

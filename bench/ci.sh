@@ -6,9 +6,7 @@
 #   npm run coverage    the same under c8, with unminified, source-mapped builds
 #
 # Left out: the timing benches (hook-bench, panel-bench, module-hotpath-bench,
-# emoji-amplify-test), which measure rather than pass or fail, and the
-# playback-speed tests (speed-test, speed-hardware-test, settings-speed-test),
-# whose module is not part of the app (its import is commented out in ui.js).
+# emoji-amplify-test), which measure rather than pass or fail.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

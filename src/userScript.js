@@ -7,6 +7,7 @@ import './perf_mon.js';
 // otherwise sent as "[object Object]".
 import './polyfills.js';
 import 'whatwg-fetch';
+import './playback-speed.js';
 import './adblock.js';
 import './hooks/json-stringify';
 import './force-codec.js';

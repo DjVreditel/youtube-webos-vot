@@ -78,10 +78,10 @@ export const shortcutActions = {
   audio_only: 'Toggle Audio-Only Mode',
   sb_manual_skip: 'Manual Skip / Jump to Highlight',
   jump_to_live: 'Jump to Live',
-  config_menu: 'Open/Close Settings'
-  //speed_up: 'Playback Speed +',
-  //speed_down: 'Playback Speed -',
-  //speed_reset: 'Playback Speed Reset (1x)'
+  config_menu: 'Open/Close Settings',
+  speed_up: 'Playback Speed +',
+  speed_down: 'Playback Speed -',
+  speed_reset: 'Playback Speed Reset (1x)'
 };
 
 
@@ -224,7 +224,7 @@ const configOptions = new Map([
   ['forceVideoCodec', { default: 'auto', desc: 'Force Video Codec' }],
   ['subtitleTranslateLang', { default: 'off', desc: 'Auto-Translate Subtitles' }],
   ['subtitleAutoEnable', { default: false, desc: 'Turn On Translated Subtitles Automatically' }],
-  //['enablePlaybackSpeed', { default: true, desc: 'Playback Speed Control' }],
+  ['enablePlaybackSpeed', { default: true, desc: 'Playback Speed Control' }],
   ['blockWebosCast', { default: true, desc: 'Block webOS Cast Service (webOS 25)' }],
   ['disableNotifications', { default: false, desc: 'Disable Notifications' }],
   // A fox button in the top-right corner that the Magic Remote pointer can
