@@ -2,6 +2,7 @@ import { configRead, configAddChangeListener } from './config.js';
 import { showNotification } from './notifications.js';
 import { isWebOS25 } from './webos-utils.js';
 import { sendKey, REMOTE_KEYS, SELECTORS, isWatchPage, getVideo } from './utils.js';
+import { speedCapsQuality } from './playback-speed.js';
 
 const DEBUG = false;
 
@@ -42,7 +43,7 @@ const STATE_BUFFERING = 3;
 // const STATE_CUED = 5;
 
 function isForceEnabled() {
-  return _shouldForce && (!player?.isInline || !player.isInline());
+  return _shouldForce && (!player?.isInline || !player.isInline()) && !speedCapsQuality();
 }
 
 async function ensurePlaybackStarts() {
@@ -579,4 +580,4 @@ function setupListeners() {
     window.addEventListener('beforeunload', destroyVideoQuality);
 }
 
-setupListeners();
+setupListeners();

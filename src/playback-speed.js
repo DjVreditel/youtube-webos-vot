@@ -158,6 +158,11 @@ export const SPEEDS = [1, 1.25, 1.5, 1.75, 2];
 
 export const RELOAD_DELAY_MS = 800;
 
+// Above this speed the video plays at 1080p at most: the TV cannot decode
+// 2160p fast enough (at 1.5x it dropped 85% of the frames and reached 1.43x).
+const CAP_ABOVE = 1.25;
+const ABOVE_1080 = ['highres', 'hd2880', 'hd2160', 'hd1440'];
+
 export function createSpeedController({ win, getPlayer, notify, configRead }) {
   let currentSpeed = 1;
   let activeSink = null;
@@ -213,9 +218,9 @@ export function createSpeedController({ win, getPlayer, notify, configRead }) {
     releaseAudioSink();
     const player = getPlayer();
     if (!player) return;
-    if (currentSpeed > 1.25) {
+    if (currentSpeed > CAP_ABOVE) {
       player.setPlaybackQualityRange('hd1080', 'hd1080');
-    } else if (fromSpeed > 1.25) {
+    } else if (fromSpeed > CAP_ABOVE) {
       const quality = configRead('forceHighResVideo') ? 'highres' : 'auto';
       player.setPlaybackQualityRange(quality, quality);
     }
@@ -241,7 +246,7 @@ export function createSpeedController({ win, getPlayer, notify, configRead }) {
 
   // On webOS 25, loadVideoById(id, at) starts up to ~25 s before `at`, even at
   // 1x without the engine. Seek back once the reloaded video plays.
-  // Above 1.25x the 1080p cap is set again then too: the reload drops it, and
+  // Above CAP_ABOVE the 1080p cap is set again then too: the reload drops it, and
   // with a 60 fps video the frames a 60 Hz screen cannot show count as dropped,
   // so YouTube falls to 480p. 2160p cannot keep up at 1.5x (85% dropped).
   function restorePosition(player, at) {
@@ -256,7 +261,7 @@ export function createSpeedController({ win, getPlayer, notify, configRead }) {
       }
       if (state === 1) {
         if (Math.abs(now - at) > 2) player.seekTo(at, true);
-        if (currentSpeed > 1.25) player.setPlaybackQualityRange('hd1080', 'hd1080');
+        if (currentSpeed > CAP_ABOVE) player.setPlaybackQualityRange('hd1080', 'hd1080');
         win.clearInterval(timer);
       } else if (--tries <= 0 || state === null) {
         win.clearInterval(timer);
@@ -367,6 +372,11 @@ export function createSpeedController({ win, getPlayer, notify, configRead }) {
 
 let speedInstance = null;
 
+/** Whether the speed caps quality at 1080p now (Force Max Quality then waits). */
+export function speedCapsQuality() {
+  return !!speedInstance && speedInstance.controller.getSpeed() > CAP_ABOVE;
+}
+
 export function installSpeedFeature(win, { notify, configRead: cfgRead, getPlayer }) {
   if (
     typeof win.AudioDecoder === 'undefined' ||
@@ -418,10 +428,21 @@ export function initPlaybackSpeed() {
       document.querySelector('.html5-video-player')
   });
   window.ytafSpeed = speedInstance ? speedInstance.controller : null;
-  if (speedInstance)
+  if (speedInstance) {
     configAddChangeListener('enablePlaybackSpeed', ({ detail }) => {
       if (!detail.newValue) speedInstance.controller.stop();
     });
+    // The next video (autoplay, a tile) keeps the speed but starts at the
+    // quality YouTube picks, 2160p on a 4K TV: cap it once it plays.
+    window.addEventListener('yt-player-state-change', ({ detail }) => {
+      if (!detail || detail.state !== 1 || !speedCapsQuality()) return;
+      const player =
+        document.getElementById(SELECTORS.PLAYER_ID) ||
+        document.querySelector('.html5-video-player');
+      if (player && ABOVE_1080.includes(player.getPlaybackQuality()))
+        player.setPlaybackQualityRange('hd1080', 'hd1080');
+    });
+  }
   return speedInstance;
 }
 
