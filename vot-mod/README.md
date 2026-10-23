@@ -35,8 +35,10 @@ npm run package         # = node patch.cjs
 5. Патчит `../src/ui.js` — красная кнопка открывает панель VOT (обрабатывается там же, где зелёная кнопка настроек; добавлены доп. коды красной кнопки: 398, 112 (F1), 114, 166, 108 и fallback на `keyCode`). Плюс отладка: опция «Show remote key codes (debug)» в зелёном меню показывает код каждой нажатой кнопки тостом на экране
 6. Заменяет иконки/сплэш/фон в `../assets/` файлами из `vot-mod/assets/`
 7. Патчит `../assets/appinfo.json` (id → `youtube.djvreditel.v4`, title → `YouTube VOT`), а также `package.json` и `tools/deploy.js` под новый app ID
-8. Патчит `package.json` — переключает менеджер пакетов с pnpm на npm (апстрим жёстко требует pnpm через `devEngines`, что ломает `npm run build`)
-9. `npm install` → `npm run build` → `npm run package` в корне — собирает `.ipk`
+8. Добавляет в `.husky/pre-commit` защиту от коммита сгенерированных файлов
+9. `pnpm install` → `pnpm run build` → `pnpm run package` в корне — собирает `.ipk`
+
+Корневой проект собирается только через pnpm, как в апстриме (`devEngines` в `package.json`). `npm install` в корне не запускать.
 
 Все патчи идемпотентны (маркер `// @vot-mod`) — повторный запуск безопасен.
 
@@ -58,7 +60,7 @@ npm test                # юнит-тесты логики синхрониза�
 В корне проекта:
 
 ```bash
-npm run deploy && npm run launch
+pnpm run deploy && pnpm run launch
 ```
 
 > ТВ должно быть включено, в режиме разработчика, IP прописан в настройках webOS CLI.
@@ -67,7 +69,7 @@ npm run deploy && npm run launch
 
 ## Обновление апстрима
 
-Репозиторий настроен по схеме vendor-branch: `master` — это история
+Репозиторий настроен по схеме vendor-branch: `main` — это история
 [webosbrew/youtube-webos](https://github.com/webosbrew/youtube-webos) плюс коммит
 с `vot-mod/`. Когда выходит новая версия (например `v0.5.4`):
 
