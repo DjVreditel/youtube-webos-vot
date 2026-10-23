@@ -1,0 +1,30 @@
+{
+  "paging": {
+    "page": 1,
+    "count": 1,
+    "maxPage": 1,
+    "itemsTotal": 1
+  },
+  "packages": [
+    {
+      "id": "youtube.djvreditel.v4",
+      "title": "YouTube VOT",
+      "description": "YouTube без рекламы с закадровым переводом (VOT)",
+      "iconUri": "https://raw.githubusercontent.com/DjVreditel/youtube-webos-vot/main/vot-mod/assets/icon.png",
+      "manifest": {
+        "id": "youtube.djvreditel.v4",
+        "version": "1.0.0",
+        "type": "web",
+        "title": "YouTube VOT",
+        "appDescription": "YouTube без рекламы с закадровым переводом (VOT)",
+        "iconUri": "https://raw.githubusercontent.com/DjVreditel/youtube-webos-vot/main/vot-mod/assets/icon.png",
+        "sourceUrl": "https://github.com/DjVreditel/youtube-webos-vot",
+        "rootRequired": false,
+        "ipkUrl": "https://github.com/DjVreditel/youtube-webos-vot/releases/download/v1.0.0/youtube.djvreditel.v4_1.0.0_all.ipk",
+        "ipkHash": {
+          "sha256": "a79855b43f0c70353fba96124152c764132ef8dce75f07c87d0d76bf35089cfb"
+        }
+      }
+    }
+  ]
+}

@@ -19,6 +19,8 @@ const PATCH_MARKER = '// @vot-mod';
 const OLD_APP_ID = 'youtube.leanback.v4';
 const NEW_APP_ID = 'youtube.djvreditel.v4';
 const NEW_APP_TITLE = 'YouTube VOT';
+const MOD_VERSION = require('./package.json').version;
+const GITHUB_REPO = 'DjVreditel/youtube-webos-vot';
 
 const GENERATED_PATHS = 'src/ assets/ package.json tools/deploy.js';
 
@@ -333,6 +335,7 @@ function patchAppId() {
     const info = JSON.parse(fs.readFileSync(appInfoPath, 'utf8'));
     info.id = NEW_APP_ID;
     info.title = NEW_APP_TITLE;
+    info.version = MOD_VERSION;
     info.iconColor = '#f4afc3';
     info.vendorExtension = { ...info.vendorExtension, allowCrossDomain: true };
     for (const [field, file] of Object.entries(APP_ICONS)) {
@@ -358,6 +361,52 @@ function patchAppId() {
     );
     process.stdout.write(`  ${rel} patched\n`);
   }
+
+  const pkgPath = path.join(PROJECT_ROOT, 'package.json');
+  const pkg = fs.readFileSync(pkgPath, 'utf8');
+  fs.writeFileSync(
+    pkgPath,
+    pkg.replace(/"version": "[^"]*"/, `"version": "${MOD_VERSION}"`),
+    'utf8'
+  );
+  process.stdout.write(`  package.json version set to ${MOD_VERSION}\n`);
+}
+
+function writeRepoJson() {
+  const ipkName = `${NEW_APP_ID}_${MOD_VERSION}_all.ipk`;
+  const ipk = fs.readFileSync(path.join(PROJECT_ROOT, 'dist', ipkName));
+  const sha256 = require('crypto').createHash('sha256').update(ipk).digest('hex');
+  const iconUri = `https://raw.githubusercontent.com/${GITHUB_REPO}/main/vot-mod/assets/icon.png`;
+  const description = 'YouTube без рекламы с закадровым переводом (VOT)';
+  const repo = {
+    paging: { page: 1, count: 1, maxPage: 1, itemsTotal: 1 },
+    packages: [
+      {
+        id: NEW_APP_ID,
+        title: NEW_APP_TITLE,
+        description,
+        iconUri,
+        manifest: {
+          id: NEW_APP_ID,
+          version: MOD_VERSION,
+          type: 'web',
+          title: NEW_APP_TITLE,
+          appDescription: description,
+          iconUri,
+          sourceUrl: `https://github.com/${GITHUB_REPO}`,
+          rootRequired: false,
+          ipkUrl: `https://github.com/${GITHUB_REPO}/releases/download/v${MOD_VERSION}/${ipkName}`,
+          ipkHash: { sha256 }
+        }
+      }
+    ]
+  };
+  fs.writeFileSync(
+    path.join(__dirname, 'repo.json'),
+    JSON.stringify(repo, null, 2) + '\n',
+    'utf8'
+  );
+  process.stdout.write(`  vot-mod/repo.json written (${ipkName}, sha256 ${sha256})\n`);
 }
 
 process.stdout.write(`VOT_MOD patcher\nProject: ${PROJECT_ROOT}\n`);
@@ -437,6 +486,9 @@ if (!PATCH_ONLY) {
 
   step('Packaging...');
   run('npm run package');
+
+  step('Writing Homebrew Channel repo manifest...');
+  writeRepoJson();
 
   process.stdout.write('\n✓ Done! IPK package is ready in dist/\n');
 }

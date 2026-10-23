@@ -69,6 +69,28 @@ npm test                # юнит-тесты логики синхрониза�
 Тесты foxi69 (в том числе smoke-тест бандла в эмуляции Chromium 38) — в корне:
 `npm test` после `npm run patch`.
 
+## Установка и обновления через Homebrew Channel
+
+На ТВ с Homebrew Channel: Settings → Add repository →
+
+```
+https://raw.githubusercontent.com/DjVreditel/youtube-webos-vot/main/vot-mod/repo.json
+```
+
+(короткая ссылка — в описании репозитория). После этого YouTube VOT появится
+в каталоге Homebrew Channel, а новые версии будут предлагаться как обновление.
+Перед установкой удалите другие YouTube-приложения: все они делят хранилище
+youtube.com, и удаление любого из них стирает вход в аккаунт и настройки.
+
+### Выпуск новой версии
+
+1. Поднять `version` в `vot-mod/package.json` (Homebrew Channel предлагает
+   обновление только при росте версии).
+2. `cd vot-mod && npm run package` — собирает `dist/youtube.djvreditel.v4_<версия>_all.ipk`
+   и пересчитывает `vot-mod/repo.json` (версия, ссылка на релиз, sha256).
+3. Закоммитить `vot-mod/` и запушить.
+4. Создать GitHub Release с тегом `v<версия>` и приложить `.ipk` из `dist/`.
+
 ## Деплой на ТВ
 
 В корне проекта:
