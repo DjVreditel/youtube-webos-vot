@@ -8,21 +8,21 @@
   "packages": [
     {
       "id": "youtube.leanback.v4",
-      "title": "YouTube",
-      "description": "YouTube",
+      "title": "YouTube VOT",
+      "description": "YouTube без рекламы с закадровым переводом (VOT)",
       "iconUri": "https://raw.githubusercontent.com/DjVreditel/youtube-webos-vot/main/assets/icon.png",
       "manifest": {
         "id": "youtube.leanback.v4",
-        "version": "1.0.0",
+        "version": "101.2.0",
         "type": "web",
-        "title": "YouTube",
-        "appDescription": "YouTube",
+        "title": "YouTube VOT",
+        "appDescription": "YouTube без рекламы с закадровым переводом (VOT)",
         "iconUri": "https://raw.githubusercontent.com/DjVreditel/youtube-webos-vot/main/assets/icon.png",
         "sourceUrl": "https://github.com/DjVreditel/youtube-webos-vot",
         "rootRequired": false,
-        "ipkUrl": "https://github.com/DjVreditel/youtube-webos-vot/releases/download/v1.0.0/youtube.djvreditel.v4_1.0.0_all.ipk",
+        "ipkUrl": "https://github.com/DjVreditel/youtube-webos-vot/releases/download/v1.2.0/youtube.leanback.v4_101.2.0_all.ipk",
         "ipkHash": {
-          "sha256": "a79855b43f0c70353fba96124152c764132ef8dce75f07c87d0d76bf35089cfb"
+          "sha256": "3e0d906b39449d85a5b32ccca487398143b255bd2250943fdee25105ab866a53"
         }
       }
     }

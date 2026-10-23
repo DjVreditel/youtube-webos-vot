@@ -21,6 +21,25 @@ const APP_TITLE = 'YouTube VOT';
 const MOD_VERSION = require('./package.json').version;
 const APP_VERSION = MOD_VERSION.replace(/^\d+/, (major) => String(Number(major) + 100));
 const GITHUB_REPO = 'DjVreditel/youtube-webos-vot';
+const APP_VENDOR = 'DjVreditel';
+const PROJECT_DOCS = path.join(__dirname, 'project');
+
+const THEME_COLORS = {
+  '#17110c': '#170c11',
+  '#ff7a1a': '#e8799b',
+  '#ff8c2a': '#f4afc3',
+  'rgba(255, 122, 26,': 'rgba(232, 121, 155,',
+  'rgba(255, 140, 42,': 'rgba(244, 175, 195,',
+  'rgba(26, 16, 8,': 'rgba(26, 8, 16,',
+  '#ffb347': '#f8c8d6',
+  '#f0e0d0': '#f0d0dc',
+  '#d9b89c': '#d99cb3',
+  '#b08060': '#b06080',
+  '#6b4a33': '#6b334a',
+  '#4a3528': '#4a2835',
+  '#3a2a1f': '#3a1f2a',
+  '#2a1d14': '#2a141d'
+};
 
 const GENERATED_PATHS = 'src/ assets/ package.json';
 
@@ -160,6 +179,18 @@ function patchConfig() {
   );
   patched = replaceOnce(
     patched,
+    "  fox: 'Fox',",
+    "  fox: 'VOT',",
+    'config.js theme name'
+  );
+  patched = replaceOnce(
+    patched,
+    "desc: 'Fox theme applied once'",
+    "desc: 'Default theme applied once'",
+    'config.js theme flag description'
+  );
+  patched = replaceOnce(
+    patched,
     "if (color === 'red') def = 'oled_toggle';",
     "if (color === 'red') def = 'vot_panel';",
     'config.js red button default'
@@ -259,6 +290,18 @@ function patchUiJs() {
     "  if (action === 'vot_panel') {\n      showVotPanel();\n      return;\n  }\n  if (action === 'config_menu') {\n",
     'ui.js shortcut dispatch'
   );
+  patched = replaceOnce(
+    patched,
+    "createElement('span', { text: 'YouTube Extended' })",
+    `createElement('span', { text: '${APP_TITLE}' })`,
+    'ui.js panel title'
+  );
+  patched = replaceOnce(
+    patched,
+    "title: 'YouTube Extended settings',",
+    `title: '${APP_TITLE} settings',`,
+    'ui.js pointer button title'
+  );
 
   fs.writeFileSync(filePath, patched, 'utf8');
   process.stdout.write('  ui.js patched\n');
@@ -303,6 +346,32 @@ function patchPerformance() {
   ]);
 }
 
+function patchThemeCss() {
+  const filePath = path.join(PROJECT_SRC, 'ui.css');
+  const marker = '/* @vot-mod */';
+  const content = readSource(filePath);
+  if (content.includes(marker)) {
+    process.stdout.write('  ui.css already patched — skip\n');
+    return;
+  }
+  let patched = content;
+  for (const [from, to] of Object.entries(THEME_COLORS)) {
+    if (!patched.includes(from)) warn(`ui.css: theme colour ${from} not found`);
+    patched = patched.split(from).join(to);
+  }
+  fs.writeFileSync(filePath, `${marker}\n${patched}`, 'utf8');
+  process.stdout.write('  ui.css patched\n');
+}
+
+function copyProjectDocs() {
+  for (const name of ['README.md', 'CHANGELOG.md']) {
+    const from = path.join(PROJECT_DOCS, name);
+    if (!fs.existsSync(from)) continue;
+    fs.copyFileSync(from, path.join(PROJECT_ROOT, name));
+    process.stdout.write(`  ${name} copied\n`);
+  }
+}
+
 function patchAssets() {
   // Overwrite upstream icons / splash / background with the mod's branding
   if (!fs.existsSync(MOD_ASSETS)) {
@@ -327,6 +396,7 @@ function patchAppInfo() {
   const info = JSON.parse(fs.readFileSync(appInfoPath, 'utf8'));
   info.title = APP_TITLE;
   info.version = APP_VERSION;
+  info.vendor = APP_VENDOR;
   info.vendorExtension = { ...info.vendorExtension, allowCrossDomain: true };
   for (const [field, file] of Object.entries(APP_IMAGES)) {
     if (fs.existsSync(path.join(PROJECT_ASSETS, file))) info[field] = file;
@@ -338,7 +408,11 @@ function patchAppInfo() {
   const pkg = fs.readFileSync(pkgPath, 'utf8');
   fs.writeFileSync(
     pkgPath,
-    pkg.replace(/"version": "[^"]*"/, `"version": "${APP_VERSION}"`),
+    pkg
+      .replace(/"version": "[^"]*"/, `"version": "${APP_VERSION}"`)
+      .replace(/"repository": "[^"]*"/, `"repository": "github:${GITHUB_REPO}"`)
+      .replace(/"bugs": "[^"]*"/, `"bugs": "https://github.com/${GITHUB_REPO}/issues"`)
+      .replace(/"homepage": "[^"]*"/, `"homepage": "https://github.com/${GITHUB_REPO}#readme"`),
     'utf8'
   );
   process.stdout.write(`  package.json version set to ${APP_VERSION}\n`);
@@ -373,12 +447,14 @@ function writeRepoJson() {
       }
     ]
   };
-  fs.writeFileSync(
-    path.join(__dirname, 'repo.json'),
-    JSON.stringify(repo, null, 2) + '\n',
-    'utf8'
-  );
-  process.stdout.write(`  vot-mod/repo.json written (${ipkName}, sha256 ${sha256})\n`);
+  for (const dir of [__dirname, PROJECT_ROOT]) {
+    fs.writeFileSync(
+      path.join(dir, 'repo.json'),
+      JSON.stringify(repo, null, 2) + '\n',
+      'utf8'
+    );
+  }
+  process.stdout.write(`  repo.json + vot-mod/repo.json written (${ipkName}, sha256 ${sha256})\n`);
 }
 
 process.stdout.write(`VOT_MOD patcher\nProject: ${PROJECT_ROOT}\n`);
@@ -417,8 +493,14 @@ patchConfig();
 patchAccountToken();
 patchAuthServerUrl();
 
-step('Patching ui.js (VOT panel shortcut)...');
+step('Patching ui.js (VOT panel shortcut, branding)...');
 patchUiJs();
+
+step('Patching ui.css (VOT theme colours)...');
+patchThemeCss();
+
+step('Copying project README and CHANGELOG...');
+copyProjectDocs();
 
 step('Patching old-TV performance...');
 patchPerformance();

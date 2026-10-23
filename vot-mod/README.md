@@ -37,21 +37,28 @@ npm run package         # = node patch.cjs
 2. Патчит `../src/userScript.js` — добавляет импорт полифилла и вызов `initVot()`
 3. Патчит `../src/config.js` — добавляет VOT-настройки и действие пульта `vot_panel`
    («Open/Close VOT Panel»), назначает его на красную кнопку по умолчанию
-4. Патчит `../src/ui.js` — обработка действия `vot_panel` в системе кнопок foxi69
+4. Патчит `../src/ui.js` — обработка действия `vot_panel` в системе кнопок апстрима,
+   заголовок настроек «YouTube VOT»; `../src/ui.css` — тема VOT (розовая) вместо
+   оранжевой темы апстрима; логотипы `vot-mod/src/icons/` заменяют апстримные
 5. Оптимизации для старых ТВ:
    - `../src/launch.js` — на Chromium < 79 (webOS ≤ 5) YouTube больше не
      принуждается к режиму полной анимации и сам включает облегчённый режим
      (`limited-memory`), как задумано для слабых устройств
    - `../src/math-letters.js` — на webOS ≤ 4 отключает лишний
      `MutationObserver` на весь `<body>`
-6. Добавляет сплэш и фон VOT из `vot-mod/assets/` (иконка остаётся оригинальной иконкой YouTube из foxi69)
-7. Патчит `../assets/appinfo.json`: title → `YouTube VOT`, версия, `allowCrossDomain`.
+6. Добавляет сплэш и фон VOT из `vot-mod/assets/` (иконка приложения — оригинальная иконка YouTube)
+7. Патчит `../assets/appinfo.json`: title → `YouTube VOT`, vendor, версия, `allowCrossDomain`;
+   в `../package.json` — версию и ссылки на этот репозиторий.
    ID остаётся оригинальным `youtube.leanback.v4` (кнопка YouTube на пульте, каст с
    телефона и голосовой поиск открывают именно его). Версия = версия из
    `vot-mod/package.json` с мажором +100 (1.1.0 → 101.1.0), как в апстриме webosbrew:
    иначе LG Content Store может «обновить» приложение официальным YouTube
-8. `npm ci` → `npm run build` → `npm run package` в корне — собирает
-   `dist/youtube.leanback.v4_<версия+100>_all.ipk` (легаси-сборка, для webOS 3+)
+8. Копирует `vot-mod/project/README.md` и `CHANGELOG.md` в корень — README репозитория
+   принадлежит проекту и не теряется при слиянии апстрима (при конфликте берите любую
+   сторону и перезапустите патчер)
+9. `npm ci` → `npm run build` → `npm run package` в корне — собирает
+   `dist/youtube.leanback.v4_<версия+100>_all.ipk` (легаси-сборка, для webOS 3+) и пишет
+   `repo.json` и `vot-mod/repo.json` (манифест Homebrew Channel)
 
 Все патчи идемпотентны (маркер `// @vot-mod`) — повторный запуск безопасен.
 
@@ -122,6 +129,14 @@ git merge foxi69/main
 # 3. Пере-применить мод и собрать
 cd vot-mod && npm run package
 ```
+
+Конфликты слияния в файлах проекта разрешаются так:
+
+- `README.md`, `CHANGELOG.md`, `repo.json` — взять любую сторону, патчер на шаге 3
+  перезапишет их версиями проекта;
+- файлы, удалённые из проекта (`repo-webos22.json`, `.github/ISSUE_TEMPLATE/`,
+  `.github/release-notes.md`, `.github/dependabot.yml`, релизные workflow апстрима,
+  `tools/fork-watch.py`, `tools/release-notes.sh`) — оставить удалёнными (`git rm`).
 
 Если патчер выдал `WARNING: ... anchor not found` — апстрим изменил патчуемый
 файл, нужно поправить соответствующий якорь в `patch.cjs`.
