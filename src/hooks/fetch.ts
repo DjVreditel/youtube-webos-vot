@@ -8,6 +8,11 @@ export type FetchTarget = Request | StringConvertible;
 
 let registry: FetchRegistry | null = null;
 
+type HookedType = 'request' | 'response';
+
+const isHookedType = (t: unknown): t is HookedType =>
+  t === 'request' || t === 'response';
+
 export interface RequestInfo {
   url: URL;
   resource: FetchTarget;
@@ -22,6 +27,24 @@ interface EventMap {
 export class FetchRegistry extends CustomEventTarget<EventMap> {
   #originalFetch: typeof fetch;
   #fetchCount = 0;
+  #listeners: Record<HookedType, Set<unknown>> = {
+    request: new Set(),
+    response: new Set()
+  };
+
+  override addEventListener(type: any, callback: any, options?: any): void {
+    super.addEventListener(type, callback, options);
+    if (callback && isHookedType(type)) this.#listeners[type].add(callback);
+  }
+
+  override removeEventListener(
+    type: any,
+    callback: any,
+    options?: any
+  ): void {
+    super.removeEventListener(type, callback, options);
+    if (callback && isHookedType(type)) this.#listeners[type].delete(callback);
+  }
 
   private constructor() {
     super();
@@ -42,7 +65,7 @@ export class FetchRegistry extends CustomEventTarget<EventMap> {
 
     const fr = new FileReader();
 
-    const res = new Promise((resolve) => {
+    const res = new Promise<string | ArrayBuffer | null>((resolve) => {
       fr.addEventListener('load', () => {
         resolve(fr.result);
       });
@@ -53,7 +76,21 @@ export class FetchRegistry extends CustomEventTarget<EventMap> {
     return res;
   }
 
-  #customFetch = async (resource: FetchTarget, init?: RequestInit) => {
+  #customFetch = async (
+    resource: FetchTarget,
+    init?: RequestInit
+  ): Promise<Response> => {
+    // Fast path: no listeners and not debugging — pass straight through with
+    // zero allocations (no URL object, no CustomEvent dispatch). Tracking
+    // block off is the common case for most sessions.
+    if (
+      !window.__ytaf_debug__ &&
+      this.#listeners.request.size === 0 &&
+      this.#listeners.response.size === 0
+    ) {
+      return this.#originalFetch(resource as Parameters<typeof fetch>[0], init);
+    }
+
     if (window.__ytaf_debug__) {
       console.debug(`Request ${this.#fetchCount}:`, resource);
       init && console.debug(`Options  ${this.#fetchCount}:`, init);
@@ -64,16 +101,21 @@ export class FetchRegistry extends CustomEventTarget<EventMap> {
       }
     }
 
-    const url = new URL(
-      resource instanceof Request ? resource.url : resource.toString(),
-      document.location.href
-    );
-    const reqAllowed = this.dispatchEvent(
-      new TypedCustomEvent('request', {
-        detail: { url, resource, init },
-        cancelable: true
-      })
-    );
+    let reqAllowed = true;
+    if (this.#listeners.request.size > 0) {
+      const url =
+        resource instanceof Request
+          ? new URL(resource.url)
+          : new URL(resource.toString(), document.location.href);
+
+      reqAllowed = this.dispatchEvent(
+        new TypedCustomEvent('request', {
+          detail: { url, resource, init },
+          cancelable: true
+        })
+      );
+    }
+
     if (!reqAllowed) {
       console.info(
         `Fetch request ${this.#fetchCount} was cancelled by listener.`,
@@ -83,7 +125,6 @@ export class FetchRegistry extends CustomEventTarget<EventMap> {
       throw new TypeError('Failed to fetch');
     }
 
-    // @ts-expect-error
     const res = await this.#originalFetch(resource, init);
 
     if (window.__ytaf_debug__) {
@@ -93,9 +134,12 @@ export class FetchRegistry extends CustomEventTarget<EventMap> {
       resBody && console.debug(`Response Body ${this.#fetchCount}:`, resBody);
     }
 
-    const resAllowed = this.dispatchEvent(
-      new TypedCustomEvent('response', { detail: res, cancelable: true })
-    );
+    let resAllowed = true;
+    if (this.#listeners.response.size > 0) {
+      resAllowed = this.dispatchEvent(
+        new TypedCustomEvent('response', { detail: res, cancelable: true })
+      );
+    }
 
     if (!resAllowed) {
       console.info(
@@ -122,5 +166,3 @@ export class FetchRegistry extends CustomEventTarget<EventMap> {
     registry = null;
   }
 }
-
-registry = FetchRegistry.getInstance();

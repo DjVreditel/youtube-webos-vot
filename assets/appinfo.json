@@ -1,28 +1,30 @@
 {
   "id": "youtube.leanback.v4",
+  "version": "0.8.8",
   "vendor": "webosbrew.org",
   "type": "web",
   "main": "index.html",
-  "title": "YouTube AdFree",
+  "bgImage": "9262051282473701_youtube_leanback_preview.png",
+  "title": "YouTube",
   "icon": "icon.png",
   "largeIcon": "largeIcon.png",
-  "mediumLargeIcon": "mediumLargeIcon.png",
-  "extraLargeIcon": "extraLargeIcon.png",
-  "playIcon": "playIcon.png",
-  "iconColor": "#ff0000",
-  "splashBackground": "splashBackground-v1.png",
-  "imageForRecents": "imageForRecents.png",
-  "bgImage": "bgImage.png",
+  "iconColor": "#FFFFFF",
+  "splashBackground": "9262051307371701_youtube_leanback_splash.png",
   "support360Content": true,
   "checkUpdateOnLaunch": false,
   "accessibility": {
     "supportsAudioGuidance": true
   },
+  "volumeRatioOnTTS": 50,
   "vendorExtension": {
-    "userAgent": "$browserName$/$browserVersion$ ($platformName$-$platformVersion$), _TV_O18/$firmwareVersion$ (LG, $modelName$, $networkMode$)",
-    "allowCrossDomain": true
+    "userAgent": "$browserName$/$browserVersion$ ($platformName$-$platformVersion$), _TV_$chipSetName$/$firmwareVersion$ (LG, $modelName$, $networkMode$)",
+    "reloadAtLanguageChanged": true,
+    "backgroundColor": "0xFF212121",
+    "enableMouse": true,
+    "mouseMoveForMouseOff": false,
+    "enableKeyboard": false
   },
-  "deeplinkingParams": "{\"contentTarget\":\"v=$CONTENTID\"}",
+  "deeplinkingParams": "{\"contentTarget\":\"https://www.youtube.com/tv?v=$CONTENTID\"}",
   "inAppSearchParams": "{\"target\":\"q=$SEARCH_KEYWORD\"}",
   "inAppVoiceIntent": "{\"target\":{\"intent\":\"$INTENT\",\"intentParam\":\"$INTENT_PARAM\",\"languageCode\":\"$LANG_CODE\"}}",
   "supportQueryRouting": "{\"amazonAlexa\":true,\"googleAssistant\":true}",
@@ -32,6 +34,5 @@
   "supportQuickStart": true,
   "dialAppName": "YouTube",
   "disableBackHistoryAPI": true,
-  "supportGIP": true,
-  "wolwowlan": true
+  "supportGIP": true
 }

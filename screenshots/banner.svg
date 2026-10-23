@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1280" height="360" viewBox="0 0 1280 360">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0c0c0c"/><stop offset="0.55" stop-color="#1b0e06"/><stop offset="1" stop-color="#0c0c0c"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ff7a1a" stop-opacity="0.55"/><stop offset="1" stop-color="#ff7a1a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="tvglow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ff3d3d" stop-opacity="0.25"/><stop offset="1" stop-color="#ff3d3d" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="title" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffb066"/><stop offset="1" stop-color="#ff6a00"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1d1d1d"/><stop offset="1" stop-color="#0a0a0a"/>
+    </linearGradient>
+    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="#ffffff" opacity="0.025"/></pattern>
+  </defs>
+  <rect width="1280" height="360" rx="24" fill="url(#bg)"/>
+  <rect width="1280" height="360" rx="24" fill="url(#scan)"/>
+  <circle cx="160" cy="180" r="170" fill="url(#glow)"/>
+  <circle cx="160" cy="180" r="92" fill="#1a1009" stroke="#ff8a2a" stroke-width="4"/>
+  <image x="90" y="110" width="140" height="140" xlink:href="data:image/png;base64,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"/>
+
+  <text x="300" y="150" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="66" font-weight="800" fill="#ffffff" letter-spacing="-1">YouTube <tspan fill="url(#title)">AdFree</tspan></text>
+  <text x="304" y="196" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="30" font-weight="600" fill="#ff9a4a" letter-spacing="6">FOR LG webOS TVs</text>
+  <text x="304" y="242" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="21" fill="#b9b9b9">No ads · SponsorBlock · Return Dislike · DeArrow</text>
+  <text x="304" y="270" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="21" fill="#b9b9b9">Programmable remote · Auto-translated subtitles</text>
+
+  <g font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="16" font-weight="700">
+    <rect x="304" y="294" width="148" height="34" rx="17" fill="#ff7a1a" fill-opacity="0.15" stroke="#ff7a1a" stroke-opacity="0.6"/>
+    <text x="378" y="317" text-anchor="middle" fill="#ffb27a">webOS 3 → 25+</text>
+    <rect x="464" y="294" width="176" height="34" rx="17" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.25"/>
+    <text x="552" y="317" text-anchor="middle" fill="#dddddd">Homebrew Channel</text>
+    <rect x="652" y="294" width="118" height="34" rx="17" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.25"/>
+    <text x="711" y="317" text-anchor="middle" fill="#dddddd">GPL-3.0</text>
+  </g>
+
+  <circle cx="1082" cy="170" r="190" fill="url(#tvglow)"/>
+  <rect x="912" y="74" width="340" height="190" rx="14" fill="#050505" stroke="#3a3a3a" stroke-width="3"/>
+  <rect x="921" y="83" width="322" height="172" rx="8" fill="url(#screen)"/>
+  <rect x="1048" y="134" width="68" height="48" rx="13" fill="#ff0033"/>
+  <path d="M1074 145 L1074 171 L1095 158 Z" fill="#ffffff"/>
+  <g font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="800">
+    <rect x="936" y="98" width="56" height="22" rx="5" fill="#ff0033" fill-opacity="0.18" stroke="#ff4d6d"/>
+    <text x="964" y="114" text-anchor="middle" fill="#ff6b84" text-decoration="line-through">AD</text>
+    <rect x="1138" y="196" width="92" height="22" rx="5" fill="#00d400" fill-opacity="0.18" stroke="#00d400"/>
+    <text x="1184" y="212" text-anchor="middle" fill="#7dff7d">SKIPPED ⏭</text>
+  </g>
+  <rect x="934" y="230" width="296" height="7" rx="2" fill="#ffffff" opacity="0.12"/>
+  <rect x="934" y="230" width="52" height="7" rx="2" fill="#00d400" opacity="1"/><rect x="986" y="230" width="110" height="7" rx="2" fill="#ffffff" opacity="0.35"/><rect x="1096" y="230" width="30" height="7" rx="2" fill="#ffff00" opacity="1"/><rect x="1126" y="230" width="80" height="7" rx="2" fill="#ffffff" opacity="0.35"/><rect x="1206" y="230" width="24" height="7" rx="2" fill="#0202ed" opacity="1"/>
+  <circle cx="1037" cy="233.5" r="7" fill="#ff0033" stroke="#ffffff" stroke-width="2"/>
+  <rect x="1057" y="264" width="50" height="14" fill="#2a2a2a"/>
+  <rect x="1022" y="276" width="120" height="8" rx="4" fill="#2a2a2a"/>
+</svg>

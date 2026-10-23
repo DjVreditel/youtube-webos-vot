@@ -1,0 +1,165 @@
+name: Update Homebrew Repository
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+jobs:
+  update-repo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        # Keeps the checkout credentials: a later step pushes with git.
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.x'
+      - name: Generate repo.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_NAME: ${{ github.repository }}
+        run: |
+          import json
+          import os
+          import sys
+          import urllib.request
+          import hashlib
+          
+          # --- CONFIGURATION ---
+          APP_INFO_PATH = 'assets/appinfo.json' 
+          ICON_PATH_IN_REPO = 'assets/icon.png'
+          # ---------------------
+          
+          if not os.path.exists(APP_INFO_PATH):
+              print(f"Error: {APP_INFO_PATH} not found.")
+              sys.exit(1)
+              
+          with open(APP_INFO_PATH, 'r') as f:
+              app_info = json.load(f)
+          
+          repo_name = os.environ['REPO_NAME']
+          api_url = f"https://api.github.com/repos/{repo_name}/releases/latest"
+          
+          req = urllib.request.Request(api_url)
+          req.add_header('Authorization', f"Bearer {os.environ['GITHUB_TOKEN']}")
+          
+          try:
+              with urllib.request.urlopen(req) as response:
+                  release_data = json.load(response)
+          except Exception as e:
+              print(f"Failed to fetch release: {e}")
+              sys.exit(1)
+          
+          standard_asset = None
+          modern_asset = None
+
+          for asset in release_data['assets']:
+              if asset['name'].endswith('.ipk'):
+                  if 'webOS22+' in asset['name']:
+                      modern_asset = asset
+                  else:
+                      standard_asset = asset
+          
+          if not standard_asset and not modern_asset:
+              print("No .ipk files found in the latest release")
+              sys.exit(1)
+              
+          def create_package(asset, is_modern=False):
+              ipk_url = asset['browser_download_url']
+              print(f"Downloading IPK from {ipk_url}")
+              
+              try:
+                  req = urllib.request.Request(ipk_url)
+                  with urllib.request.urlopen(req) as response:
+                      ipk_data = response.read()
+                      sha256_hash = hashlib.sha256(ipk_data).hexdigest()
+              except Exception as e:
+                  print(f"Failed to download asset: {e}")
+                  return None
+              
+              print(f"SHA256: {sha256_hash}")
+              
+              # Default values
+              pkg_id = app_info.get('id')
+              title = app_info.get('title')
+              description = app_info.get('description', title)
+              
+              # Both .ipk files install as the same app (assets/appinfo.json), and
+              # Homebrew Channel matches a repository entry to the installed app
+              # by id. So each build gets its own repository file with the real
+              # id: a webOS 22+ TV that follows repo-webos22.json is offered the
+              # 22+ package as its update, never the legacy one.
+              if is_modern:
+                  title = f"{title} (webOS 22+)"
+                  description = "YouTube AdFree for webOS 22 and newer. Lighter optimized build supporting newer hardware."
+
+              manifest = {
+                  "id": pkg_id,
+                  # The release tag, not assets/appinfo.json: the Draft release workflow
+                  # can build a version that package.json does not carry yet.
+                  "version": release_data['tag_name'].lstrip('v'),
+                  "type": app_info.get('type', 'web'),
+                  "title": title,
+                  "appDescription": description,
+                  "iconUri": f"https://raw.githubusercontent.com/{repo_name}/main/{ICON_PATH_IN_REPO}",
+                  "sourceUrl": f"https://github.com/{repo_name}",
+                  "rootRequired": False,
+                  "ipkUrl": ipk_url,
+                  "ipkHash": {
+                      "sha256": sha256_hash
+                  }
+              }
+              
+              return {
+                  "id": pkg_id,
+                  "title": title,
+                  "description": description,
+                  "iconUri": f"https://raw.githubusercontent.com/{repo_name}/main/{ICON_PATH_IN_REPO}",
+                  "manifest": manifest
+              }
+
+          def write_repo(path, pkg):
+              data = {
+                  "paging": {"page": 1, "count": 1, "maxPage": 1, "itemsTotal": 1},
+                  "packages": [pkg]
+              }
+              with open(path, 'w') as f:
+                  json.dump(data, f, indent=2)
+              print(f"{path} generated")
+
+          # repo.json: the legacy package (webOS 3 and newer), which runs on every
+          # TV, so a link that was added before the split keeps working.
+          # repo-webos22.json: the lighter webOS 22+ package.
+          legacy_pkg = create_package(standard_asset) if standard_asset else None
+          modern_pkg = create_package(modern_asset, is_modern=True) if modern_asset else None
+          if not legacy_pkg and not modern_pkg:
+              sys.exit(1)
+          write_repo('repo.json', legacy_pkg or modern_pkg)
+          if modern_pkg:
+              write_repo('repo-webos22.json', modern_pkg)
+
+        shell: python
+        
+      - name: Commit and Push the repository files
+        run: |
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+          
+          # Checkout the main branch explicitly
+          git fetch origin main
+          git checkout main
+          
+          # Add and commit changes
+          git add repo*.json
+          
+          # Only commit if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update repo.json for new release"
+            git push origin main
+          fi

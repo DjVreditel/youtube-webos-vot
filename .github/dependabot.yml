@@ -1,29 +1,20 @@
+# Dependabot version updates for the GitHub Actions in .github/workflows only:
+# one grouped pull request a month. They touch CI, never the TV packages.
+#
+# The npm dependencies are left out on purpose. They are almost all build
+# tools (webpack, Babel, postcss), and an update there can break the legacy
+# webOS 3-6 bundle in ways CI does not catch, since CI only checks that it
+# builds. Security alerts and security updates for them are separate, in the
+# repository settings (Code security), and do not need this file.
 version: 2
 updates:
-  - package-ecosystem: 'github-actions'
-    directory: '/'
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: 'weekly'
-  - package-ecosystem: 'npm'
-    directory: '/'
-    versioning-strategy: 'increase'
-    schedule:
-      interval: 'weekly'
+      interval: monthly
     groups:
-      minor-and-patch:
-        applies-to: version-updates
-        update-types:
-          - 'minor'
-          - 'patch'
-      security:
-        applies-to: security-updates
+      github-actions:
         patterns:
           - '*'
-    ignore:
-      - dependency-name: '*'
-        versions: ['0.x']
-        update-types:
-          - 'version-update:semver-minor'
-      - dependency-name: '*'
-        update-types:
-          - 'version-update:semver-major'
+    commit-message:
+      prefix: CI

@@ -1,0 +1,21 @@
+/*
+ * While the guide (left menu) is open, YouTube slides the 1920px page right
+ * without shrinking it: the right part leaves the screen and the guide's
+ * background covers the first letters. Instead the page is shrunk to fit
+ * beside the guide (guide-fit.js sets the attribute and the variables on
+ * <html>), and made taller by the same factor so its rows still reach the
+ * bottom of the screen.
+ */
+html[data-ytaf-guide-open] ytlr-surface-page {
+  /* Newer YouTube (webOS 25) slides the page with margin-left instead of a
+     transform; left in place, it would add to the shift below. */
+  margin-left: 0 !important;
+  transform: translateX(var(--ytaf-guide-shift)) scale(var(--ytaf-guide-scale)) !important;
+  transform-origin: 0 0 !important;
+  height: calc(100vh / var(--ytaf-guide-scale)) !important;
+}
+
+html[data-ytaf-guide-open] ytlr-surface-page ytlr-tv-surface-content-renderer,
+html[data-ytaf-guide-open] ytlr-surface-page ytlr-section-list-renderer > yt-virtual-list {
+  height: calc(100vh / var(--ytaf-guide-scale)) !important;
+}

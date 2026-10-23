@@ -6,40 +6,6 @@ type TypedEventPartial<T extends EventTarget, U> = {
 type BaseTypedEvent<T extends EventTarget, E extends Event, U> = E &
   TypedEventPartial<T, U>;
 
-type EventInstanceType<T, O> = T extends abstract new (
-  type: string,
-  options?: O
-) => infer R
-  ? R
-  : never;
-
-type EventOptionsType<T> = T extends new (
-  type: string,
-  options?: infer O
-) => Event
-  ? O
-  : never;
-
-export function asTypedEvent<
-  const E extends Event,
-  const A = EventInit
->(event: { new (type: string, options?: A): E }) {
-  return event as {
-    new <
-      T extends EventTarget,
-      const U,
-      const O extends EventOptionsType<typeof event>
-    >(
-      type: U,
-      options?: O
-    ): BaseTypedEvent<T, EventInstanceType<typeof event, O>, U>;
-    prototype: BaseTypedEvent<EventTarget, E, string>;
-  };
-}
-
-export type TypedEvent<T extends EventTarget, U> = BaseTypedEvent<T, Event, U>;
-export const TypedEvent = asTypedEvent(Event);
-
 export type TypedCustomEvent<
   D,
   T extends EventTarget,
@@ -67,7 +33,7 @@ interface EventListener<
   T extends EmptyEventMap,
   EventName extends keyof T
 > {
-  (this: Self, evt: T[EventName] & TypedEvent<Self, EventName>): void;
+  (this: Self, evt: T[EventName] & TypedEventPartial<Self, EventName>): void;
 }
 
 interface EventListenerObject<
@@ -105,12 +71,67 @@ interface CustomEventTarget<T extends EmptyEventMap> {
   ): boolean;
 }
 
-export const CustomEventTarget = EventTarget as {
+/**
+ * `new EventTarget()` only works from Chrome 64. On webOS 3-6 (Chrome 38-79)
+ * it throws "Illegal constructor", which took FetchRegistry - and with it the
+ * Tracking Block's request hook - down on the legacy build. This minimal
+ * stand-in covers what the registry uses: add/remove and a synchronous
+ * dispatch that reports preventDefault().
+ */
+class EventTargetShim {
+  private readonly listenerMap = new Map<string, any[]>();
+
+  addEventListener(type: string, callback: any): void {
+    if (!callback) return;
+    const list = this.listenerMap.get(type) || [];
+    if (list.indexOf(callback) === -1) list.push(callback);
+    this.listenerMap.set(type, list);
+  }
+
+  removeEventListener(type: string, callback: any): void {
+    const list = this.listenerMap.get(type);
+    if (!list) return;
+    const at = list.indexOf(callback);
+    if (at !== -1) list.splice(at, 1);
+  }
+
+  dispatchEvent(event: Event): boolean {
+    const list = this.listenerMap.get(event.type);
+    if (list) {
+      // A snapshot, as a real EventTarget runs listeners: one removed or
+      // added during the dispatch does not change this round.
+      for (const callback of list.slice()) {
+        try {
+          if (typeof callback === 'function') callback.call(this, event);
+          else if (callback && typeof callback.handleEvent === 'function') callback.handleEvent(event);
+        } catch (err) {
+          console.error('[CustomEventTarget] listener failed', err);
+        }
+      }
+    }
+    return !event.defaultPrevented;
+  }
+}
+
+function isEventTargetConstructible() {
+  try {
+    new EventTarget();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const EventTargetBase: typeof EventTarget = isEventTargetConstructible()
+  ? EventTarget
+  : (EventTargetShim as unknown as typeof EventTarget);
+
+export const CustomEventTarget = EventTargetBase as {
   new <T extends EmptyEventMap>(): CustomEventTarget<T>;
   prototype: CustomEventTarget<EmptyEventMap>;
 };
 
 export type EventMapOf<T> =
   T extends CustomEventTarget<infer U>
-    ? { [K in keyof U]: U[K] & TypedEvent<T, K> }
-    : never;
+    ? { [K in keyof U]: U[K] & TypedEventPartial<T, K> }
+    : never;

@@ -1,6 +1,0 @@
-{
-  "checkBrowser": true,
-  "files": [
-    "./dist/**/*.js"
-  ]
-}

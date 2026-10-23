@@ -1,8 +1,11 @@
-blank_issues_enabled: false
+blank_issues_enabled: true
 contact_links:
-  - name: webOS Brew Discord
-    url: https://discord.gg/xWqRVEm
-    about: Join our Discord community for discussions and support.
-  - name: webOS Brew App Repository
-    url: https://github.com/webosbrew/apps-repo
-    about: Report issues with a webOS Brew app not related to youtube-webos.
+  - name: 📦 Download and install
+    url: https://github.com/foxi69/youtube-webos#-installation
+    about: Which package fits your TV, and the Homebrew Channel repository links.
+  - name: ⚙️ Every setting and its default
+    url: https://github.com/foxi69/youtube-webos#%EF%B8%8F-settings
+    about: What each option of the settings panel does.
+  - name: 🍺 webOS Homebrew Channel
+    url: https://github.com/webosbrew/webos-homebrew-channel
+    about: Installing Homebrew Channel, and rooting or developer mode on the TV.

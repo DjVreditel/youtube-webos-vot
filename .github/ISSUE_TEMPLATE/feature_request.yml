@@ -1,0 +1,40 @@
+name: ✨ Feature request
+description: An idea for a new option, or a better way for an existing one to work.
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Got an idea? 🦊 Every [setting the app has](https://github.com/foxi69/youtube-webos#%EF%B8%8F-settings) is in the README; please check it is not there already.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like?
+      description: What you want to do on the TV, and what gets in the way today.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: How could it work?
+      description: Where the option would live (which tab), what it does, and its default.
+
+  - type: input
+    id: elsewhere
+    attributes:
+      label: Seen it somewhere else?
+      description: A fork, an upstream issue or another app that already does it (a link is perfect).
+      placeholder: "https://github.com/..."
+
+  - type: dropdown
+    id: tvs
+    attributes:
+      label: Which TVs is it for?
+      options:
+        - All
+        - webOS 22 and newer
+        - webOS 3-6
+        - Magic Remote users
