@@ -921,7 +921,7 @@ export async function stopTranslation() {
   setStatus('idle');
 }
 
-function videoAudioLanguage(manager: PlayerManager): string {
+export function videoAudioLanguage(manager: PlayerManager): string {
   const videoData = manager.player.getVideoData();
   const raw =
     videoData.defaultAudioLanguage || videoData.audioTracks?.[0]?.language;

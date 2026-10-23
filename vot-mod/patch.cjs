@@ -64,6 +64,7 @@ const VOT_CONFIG_ENTRIES = `  ${PATCH_MARKER}
   ['votOriginalVolume', { default: 0.15, desc: 'Original video volume while VOT is active (0 = muted, 1 = full)' }],
   ['votLivelyVoice', { default: false, desc: 'VOT lively voice (experimental, en->ru only)' }],
   ['votAccountToken', { default: '', desc: 'Yandex account token for lively voice' }],
+  ['votSubtitles', { default: 'off', desc: 'VOT Yandex subtitles (off/translated/original)' }],
 `;
 
 function step(msg) {
@@ -271,12 +272,12 @@ function patchUiJs() {
     return;
   }
 
-  let patched = `${PATCH_MARKER}\nimport { showVotPanel } from './vot/ui';\n${content}`;
+  let patched = `${PATCH_MARKER}\nimport { showVotPanel, isVotUiFocused } from './vot/ui';\n${content}`;
   patched = replaceOnce(
     patched,
-    'function nearestInDirection(from, dir, candidates) {',
-    'export function nearestInDirection(from, dir, candidates) {',
-    'ui.js nearestInDirection'
+    '  if (!step || optionsPanelVisible || !isWatchPage() || isShortsPage()) return;',
+    '  if (!step || optionsPanelVisible || isVotUiFocused() || !isWatchPage() || isShortsPage()) return;',
+    'ui.js seek step guard'
   );
   patched = replaceOnce(
     patched,

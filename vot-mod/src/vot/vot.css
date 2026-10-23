@@ -1,144 +1,155 @@
-.ytaf-vot-panel {
-  position: absolute;
-  bottom: 12%;
-  right: 3%;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(8px);
-  color: #fff;
-  border-radius: 12px;
-  padding: 1.2em 1.5em;
-  z-index: 1100;
-  min-width: 300px;
-  font-size: 1.3rem;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-}
-
-.ytaf-vot-panel h2 {
-  margin: 0 0 0.8em;
-  font-size: 1.4rem;
+.ytaf-vot-root {
+  position: fixed;
+  top: 3.5vh;
+  left: 0;
+  right: 0;
+  z-index: 1150;
   text-align: center;
-  color: #eee;
+  pointer-events: none;
+  font-family: Roboto, Arial, sans-serif;
 }
 
-.ytaf-vot-panel-row {
+.ytaf-vot-bar {
+  display: inline-flex;
+  align-items: stretch;
+  height: 6.2vh;
+  border-radius: 1.6vh;
+  background: rgb(32, 33, 36);
+  border: 0.15vh solid rgba(227, 227, 227, 0.14);
+  box-shadow: 0 0.6vh 2.4vh rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.ytaf-vot-seg {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.7em;
-  gap: 1em;
-}
-
-.ytaf-vot-panel-row:last-child {
-  margin-bottom: 0;
-}
-
-.ytaf-vot-panel-label {
-  color: #ccc;
-  flex-shrink: 0;
-}
-
-.ytaf-vot-status {
-  font-size: 1.1rem;
-  padding: 0.3em 0.8em;
-  border-radius: 6px;
-  font-weight: bold;
-  flex-shrink: 0;
-}
-
-.ytaf-vot-status--idle {
-  background: rgba(255, 255, 255, 0.1);
-  color: #aaa;
-}
-
-.ytaf-vot-status--loading {
-  background: rgba(255, 200, 0, 0.2);
-  color: #ffc800;
-}
-
-.ytaf-vot-status--waiting {
-  background: rgba(255, 140, 0, 0.2);
-  color: #ff8c00;
-}
-
-.ytaf-vot-status--retrying {
-  background: rgba(255, 100, 0, 0.2);
-  color: #ff6400;
-}
-
-.ytaf-vot-status--playing {
-  background: rgba(0, 200, 80, 0.2);
-  color: #00c850;
-}
-
-.ytaf-vot-status--error {
-  background: rgba(255, 60, 60, 0.2);
-  color: #ff3c3c;
-}
-
-.ytaf-vot-btn {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  padding: 0.4em 1.2em;
-  font-size: 1.2rem;
-  cursor: pointer;
+  border: 0;
+  margin: 0;
+  padding: 0 2.2vh;
+  background: transparent;
+  color: rgba(227, 227, 227, 0.87);
+  font-family: inherit;
+  font-size: 2.5vh;
+  white-space: nowrap;
   outline: none;
-  transition:
-    background 0.15s,
-    border-color 0.15s;
 }
 
-.ytaf-vot-btn:focus {
-  outline: 4px red solid;
-  background: rgba(240, 248, 255, 0.2);
+.ytaf-vot-seg + .ytaf-vot-seg {
+  border-left: 0.15vh solid rgba(227, 227, 227, 0.14);
 }
 
-.ytaf-vot-btn--active {
-  background: rgba(0, 200, 80, 0.2);
-  border-color: rgba(0, 200, 80, 0.5);
-  color: #00c850;
+.ytaf-vot-seg:focus {
+  background: rgba(139, 180, 245, 0.22);
+  box-shadow: inset 0 0 0 0.3vh rgb(139, 180, 245);
 }
 
-.ytaf-vot-btn--active:focus {
-  outline: 4px red solid;
+.ytaf-vot-seg--main {
+  max-width: 62vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.ytaf-vot-volume-display {
-  font-size: 1.2rem;
-  min-width: 3em;
-  text-align: center;
-  color: #ddd;
+.ytaf-vot-seg--menu {
+  font-size: 3vh;
+  padding: 0 1.8vh;
 }
 
-.ytaf-vot-lang-picker {
+.ytaf-vot-icon {
+  font-weight: 700;
+  font-size: 2.2vh;
+  margin-right: 1.2vh;
+  padding: 0.3vh 0.7vh;
+  border-radius: 0.6vh;
+  background: rgba(227, 227, 227, 0.12);
+}
+
+.ytaf-vot-bar--playing .ytaf-vot-seg--main {
+  color: rgb(139, 180, 245);
+}
+
+.ytaf-vot-bar--playing .ytaf-vot-icon {
+  background: rgb(139, 180, 245);
+  color: rgb(32, 33, 36);
+}
+
+.ytaf-vot-bar--error .ytaf-vot-seg--main {
+  color: rgb(242, 139, 130);
+}
+
+.ytaf-vot-bar--loading .ytaf-vot-icon,
+.ytaf-vot-bar--waiting .ytaf-vot-icon,
+.ytaf-vot-bar--retrying .ytaf-vot-icon {
+  -webkit-animation: ytaf-vot-pulse 1.2s ease-in-out infinite;
+  animation: ytaf-vot-pulse 1.2s ease-in-out infinite;
+}
+
+@-webkit-keyframes ytaf-vot-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes ytaf-vot-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.ytaf-vot-menu {
+  width: 62vh;
+  margin: 1.2vh auto 0;
+  padding: 1.4vh 0;
+  border-radius: 1.6vh;
+  background: rgb(32, 33, 36);
+  border: 0.15vh solid rgba(227, 227, 227, 0.14);
+  box-shadow: 0 0.6vh 2.4vh rgba(0, 0, 0, 0.55);
+  text-align: left;
+  pointer-events: auto;
+}
+
+.ytaf-vot-menu-title {
+  padding: 0.4vh 2.6vh 1.2vh;
+  color: rgb(227, 227, 227);
+  font-size: 2.6vh;
+  font-weight: 500;
+}
+
+.ytaf-vot-row {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 0.4em;
+  padding: 1.2vh 2.6vh;
+  font-size: 2.3vh;
+  color: rgba(227, 227, 227, 0.87);
+  outline: none;
 }
 
-.ytaf-vot-lang-display {
-  min-width: 6.5em;
-  text-align: center;
-  color: #ddd;
-  font-size: 1.1rem;
+.ytaf-vot-row-value {
+  margin-left: 2vh;
+  color: rgb(139, 180, 245);
+  text-align: right;
 }
 
-.ytaf-vot-btn--icon {
-  padding: 0.4em 0.8em;
+.ytaf-vot-row--focused {
+  background: rgba(139, 180, 245, 0.22);
+  box-shadow: inset 0.5vh 0 0 rgb(139, 180, 245);
 }
 
-.ytaf-vot-status-msg {
-  font-size: 1rem;
-  color: #aaa;
-  margin-top: 0.4em;
-  text-align: center;
-  min-height: 1.4em;
+.ytaf-vot-row--focused .ytaf-vot-row-value:before {
+  content: '‹ ';
+}
+
+.ytaf-vot-row--focused .ytaf-vot-row-value:after {
+  content: ' ›';
 }
 
 .ytaf-vot-qr-overlay {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 1200;
   display: flex;
   align-items: center;
@@ -147,39 +158,64 @@
 }
 
 .ytaf-vot-qr-box {
-  background: #1a1a1a;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-radius: 14px;
-  padding: 1.6em 2em;
+  background: rgb(32, 33, 36);
+  border: 0.15vh solid rgba(227, 227, 227, 0.14);
+  border-radius: 1.6vh;
+  padding: 3vh 4vh;
   text-align: center;
   max-width: 70%;
-  color: #fff;
+  color: rgb(227, 227, 227);
 }
 
 .ytaf-vot-qr-title {
-  font-size: 1.6rem;
-  margin-bottom: 0.8em;
+  font-size: 3vh;
+  margin-bottom: 1.5vh;
 }
 
 .ytaf-vot-qr-img {
-  width: 260px;
-  height: 260px;
+  width: 26vh;
+  height: 26vh;
   background: #fff;
-  padding: 8px;
-  border-radius: 8px;
+  padding: 0.8vh;
+  border-radius: 0.8vh;
 }
 
 .ytaf-vot-qr-code {
-  font-size: 2rem;
+  font-size: 3.8vh;
   letter-spacing: 0.15em;
   font-weight: 700;
-  margin: 0.6em 0;
-  color: #ffd54a;
+  margin: 1.2vh 0;
+  color: rgb(139, 180, 245);
 }
 
 .ytaf-vot-qr-info {
-  font-size: 1.15rem;
-  color: #ccc;
+  font-size: 2.2vh;
+  color: rgba(227, 227, 227, 0.75);
   line-height: 1.5;
-  margin-top: 0.4em;
+  margin-top: 0.8vh;
+}
+
+.ytaf-vot-seg--on {
+  color: rgb(139, 180, 245);
+}
+
+.ytaf-vot-subtitles {
+  display: none;
+  position: fixed;
+  left: 50%;
+  bottom: 9vh;
+  max-width: 80vw;
+  -webkit-transform: translateX(-50%);
+  transform: translateX(-50%);
+  z-index: 1140;
+  padding: 0.6vh 1.6vh;
+  border-radius: 0.8vh;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-family: Roboto, Arial, sans-serif;
+  font-size: 3.6vh;
+  line-height: 1.35;
+  text-align: center;
+  white-space: pre-line;
+  pointer-events: none;
 }

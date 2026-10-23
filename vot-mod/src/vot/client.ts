@@ -148,11 +148,15 @@ class ProtoReader {
     return this.readVarint();
   }
 
-  readString(): string {
+  readBytes(): Uint8Array {
     const len = this.readVarint();
     const bytes = this.buf.slice(this.pos, this.pos + len);
     this.pos += len;
-    return new TextDecoder().decode(bytes);
+    return bytes;
+  }
+
+  readString(): string {
+    return new TextDecoder().decode(this.readBytes());
   }
 
   skip(type: number) {
@@ -473,15 +477,16 @@ async function workerRequest(
 async function getVtransHeaders(
   session: Session,
   body: Uint8Array,
-  path: string
+  path: string,
+  secType: 'Vtrans' | 'Vsubs' = 'Vtrans'
 ): Promise<Record<string, string>> {
   const token = `${session.uuid}:${path}:${COMPONENT_VERSION}`;
   const tokenSign = await getSignature(new TextEncoder().encode(token));
   const bodySign = await getSignature(body);
   return {
-    'Vtrans-Signature': bodySign,
-    'Sec-Vtrans-Sk': session.secretKey,
-    'Sec-Vtrans-Token': `${tokenSign}:${token}`
+    [`${secType}-Signature`]: bodySign,
+    [`Sec-${secType}-Sk`]: session.secretKey,
+    [`Sec-${secType}-Token`]: `${tokenSign}:${token}`
   };
 }
 
@@ -1093,6 +1098,60 @@ function waitPoll(signal: AbortSignal, remainingTime = 0): Promise<void> {
 }
 
 // --- Public API ---
+
+export type YandexSubtitleTrack = {
+  language: string;
+  url: string;
+  translatedLanguage: string;
+  translatedUrl: string;
+};
+
+function decodeSubtitleTrack(data: Uint8Array): YandexSubtitleTrack {
+  const reader = new ProtoReader(data);
+  const track: YandexSubtitleTrack = {
+    language: '',
+    url: '',
+    translatedLanguage: '',
+    translatedUrl: ''
+  };
+  while (reader.position < reader.length) {
+    const { field, type } = reader.readTag();
+    if (field === 1) track.language = reader.readString();
+    else if (field === 2) track.url = reader.readString();
+    else if (field === 4) track.translatedLanguage = reader.readString();
+    else if (field === 5) track.translatedUrl = reader.readString();
+    else reader.skip(type);
+  }
+  return track;
+}
+
+export async function getYandexSubtitles(
+  videoId: string,
+  fromLang: string,
+  signal: AbortSignal
+): Promise<{ waiting: boolean; tracks: YandexSubtitleTrack[] }> {
+  const path = '/video-subtitles/get-subtitles';
+  const session = await getSession();
+  const body = new ProtoWriter()
+    .string(1, `https://youtu.be/${videoId}`)
+    .string(2, fromLang)
+    .finish();
+  const headers = await getVtransHeaders(session, body, path, 'Vsubs');
+  const res = await workerRequest('POST', path, { proto: body }, headers, signal);
+  if (!res.success || !(res.data instanceof ArrayBuffer)) {
+    throw new Error(`Subtitles: ${typeof res.data === 'string' ? res.data : res.status}`);
+  }
+  const reader = new ProtoReader(new Uint8Array(res.data));
+  let waiting = false;
+  const tracks: YandexSubtitleTrack[] = [];
+  while (reader.position < reader.length) {
+    const { field, type } = reader.readTag();
+    if (field === 1) waiting = reader.readInt32() === 1;
+    else if (field === 2) tracks.push(decodeSubtitleTrack(reader.readBytes()));
+    else reader.skip(type);
+  }
+  return { waiting, tracks };
+}
 
 export async function translateVideo(
   videoId: string,
