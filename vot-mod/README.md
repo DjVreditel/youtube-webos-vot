@@ -1,13 +1,18 @@
 # vot-mod — Voice Over Translation для youtube-webos
 
-Мод добавляет озвучку от Яндекса в приложение [youtube-webos](https://github.com/webosbrew/youtube-webos) для LG SmartTV (webOS).
+Мод добавляет озвучку от Яндекса в приложение YouTube для LG SmartTV (webOS).
+Основа — форк [foxi69/youtube-webos](https://github.com/foxi69/youtube-webos)
+(построен на [NicholasBly/youtube-webos](https://github.com/NicholasBly/youtube-webos)),
+в нём есть отдельная сборка для старых ТВ (webOS 3–6) и много оптимизаций.
+Версия на базе [webosbrew/youtube-webos](https://github.com/webosbrew/youtube-webos)
+осталась в ветке `webosbrew-upstream`.
 
-Папка `vot-mod/` лежит в корне проекта youtube-webos и не пересекается с файлами
-апстрима: все свои исходники — здесь, в дерево `../src/` они попадают только при
-запуске патчера.
+Папка `vot-mod/` лежит в корне проекта и не пересекается с файлами апстрима:
+все свои исходники — здесь, в дерево `../src/` они попадают только при запуске
+патчера.
 
 ```
-youtube-webos/         ← корень проекта (git: master = апстрим + этот каталог)
+youtube-webos-vot/     ← корень проекта (git: main = foxi69 + этот каталог)
 ├── vot-mod/
 │   ├── patch.cjs      # Патчер
 │   └── src/           # Исходники мода
@@ -29,16 +34,22 @@ npm run package         # = node patch.cjs
 Команда выполняет последовательно:
 
 1. Копирует файлы мода (`vot-mod/src/`) в `../src/`
-2. Патчит `../src/userScript.ts` — добавляет импорт полифилла и вызов `initVot()`
-3. Патчит `../src/config.js` — добавляет VOT-настройки
-4. Патчит `../src/player_api/manager.ts` и `yt-api.ts` — событие `noVideo` и поля аудиодорожек
-5. Патчит `../src/ui.js` — красная кнопка открывает панель VOT (обрабатывается там же, где зелёная кнопка настроек; добавлены доп. коды красной кнопки: 398, 112 (F1), 114, 166, 108 и fallback на `keyCode`). Плюс отладка: опция «Show remote key codes (debug)» в зелёном меню показывает код каждой нажатой кнопки тостом на экране
+2. Патчит `../src/userScript.js` — добавляет импорт полифилла и вызов `initVot()`
+3. Патчит `../src/config.js` — добавляет VOT-настройки и действие пульта `vot_panel`
+   («Open/Close VOT Panel»), назначает его на красную кнопку по умолчанию
+4. Патчит `../src/ui.js` — обработка действия `vot_panel` в системе кнопок foxi69
+5. Оптимизации для старых ТВ:
+   - `../src/launch.js` — на Chromium < 79 (webOS ≤ 5) YouTube больше не
+     принуждается к режиму полной анимации и сам включает облегчённый режим
+     (`limited-memory`), как задумано для слабых устройств
+   - `../src/math-letters.js` — на webOS ≤ 4 отключает лишний
+     `MutationObserver` на весь `<body>`
 6. Заменяет иконки/сплэш/фон в `../assets/` файлами из `vot-mod/assets/`
-7. Патчит `../assets/appinfo.json` (id → `youtube.djvreditel.v4`, title → `YouTube VOT`), а также `package.json` и `tools/deploy.js` под новый app ID
-8. Добавляет в `.husky/pre-commit` защиту от коммита сгенерированных файлов
-9. `pnpm install` → `pnpm run build` → `pnpm run package` в корне — собирает `.ipk`
-
-Корневой проект собирается только через pnpm, как в апстриме (`devEngines` в `package.json`). `npm install` в корне не запускать.
+7. Патчит `../assets/appinfo.json` (id → `youtube.djvreditel.v4`, title →
+   `YouTube VOT`, иконки, `allowCrossDomain`), а также `package.json` и
+   `tools/deploy.js` под новый app ID
+8. `npm ci` → `npm run build` → `npm run package` в корне — собирает
+   `dist/youtube.djvreditel.v4_<версия>_all.ipk` (легаси-сборка, для webOS 3+)
 
 Все патчи идемпотентны (маркер `// @vot-mod`) — повторный запуск безопасен.
 
@@ -55,38 +66,41 @@ npm test                # юнит-тесты логики синхрониза�
 покрыта тестами `tests/sync-core.test.mjs` — прогоняйте `npm test` после
 любых правок звукового движка.
 
+Тесты foxi69 (в том числе smoke-тест бандла в эмуляции Chromium 38) — в корне:
+`npm test` после `npm run patch`.
+
 ## Деплой на ТВ
 
 В корне проекта:
 
 ```bash
-pnpm run deploy && pnpm run launch
+npm run deploy && npm run launch
 ```
 
-> ТВ должно быть включено, в режиме разработчика, IP прописан в настройках webOS CLI.
+> ТВ должно быть включено, в режиме разработчика или с root, устройство
+> прописано в webOS CLI (`ares-setup-device`).
 
 ---
 
 ## Обновление апстрима
 
-Репозиторий настроен по схеме vendor-branch: `main` — это история
-[webosbrew/youtube-webos](https://github.com/webosbrew/youtube-webos) плюс коммит
-с `vot-mod/`. Когда выходит новая версия (например `v0.5.4`):
+`main` — это история [foxi69/youtube-webos](https://github.com/foxi69/youtube-webos)
+плюс `vot-mod/`. Когда там появляются изменения:
 
 ```bash
 # 1. Откатить патчи из рабочего дерева
 cd vot-mod && npm run restore && cd ..
 
 # 2. Подтянуть и влить новую версию
-git fetch upstream --tags
-git merge v0.5.4
+git fetch foxi69
+git merge foxi69/main
 
 # 3. Пере-применить мод и собрать
 cd vot-mod && npm run package
 ```
 
-Если патчер выдал `WARNING: ... pattern not found` — апстрим изменил патчуемый
-файл, нужно поправить соответствующий regex/паттерн в `patch.cjs`.
+Если патчер выдал `WARNING: ... anchor not found` — апстрим изменил патчуемый
+файл, нужно поправить соответствующий якорь в `patch.cjs`.
 
 > `../src/` после патча — генерируемое состояние. Всё своё редактировать только в `vot-mod/src/`.
 
@@ -103,10 +117,11 @@ cd vot-mod && npm run package
 | `votToLang`            | `ru`         | Язык перевода                                                                                                                                |
 | `votTranslationVolume` | `0.9`        | Громкость озвучки (0–1)                                                                                                                      |
 | `votOriginalVolume`    | `0.15`       | Громкость оригинала при активном переводе (0–1)                                                                                              |
-| `votShowKeyCodes`      | `false`      | Показывать коды кнопок пульта (отладка)                                                                                                      |
 | `votLivelyVoice`       | `false`      | «Живой голос» (только en→ru; для реальной работы нужен токен Яндекс-аккаунта — см. ниже; без токена автоматический откат на обычную озвучку) |
 | `votAccountToken`      | `''`         | Токен Яндекс-аккаунта (вшивается патчером из `vot-mod/account-token.txt`)                                                                    |
-| `votPerfMode`          | `true`       | Performance mode: отключает CSS-анимации YouTube — отзывчивее пульт на старых ТВ. Чекбокс в зелёном меню                                     |
+
+Отключение анимаций, кодек, качество превью и прочие настройки производительности —
+в зелёном меню foxi69 (вкладки Player / Interface).
 
 ### Живой голос: как включить по-настоящему
 
@@ -128,12 +143,12 @@ cd vot-mod && npm run package
 
 ## Управление на ТВ
 
-| Кнопка         | Действие                      |
-| -------------- | ----------------------------- |
-| **RED**        | Открыть / закрыть панель VOT  |
-| **ESC / Back** | Закрыть панель                |
-| **↑↓←→**       | Навигация по элементам панели |
-| **OK**         | Нажать кнопку                 |
+| Кнопка         | Действие                                                                 |
+| -------------- | ------------------------------------------------------------------------ |
+| **RED**        | Открыть / закрыть панель VOT (переназначается: зелёное меню → Shortcuts) |
+| **ESC / Back** | Закрыть панель                                                           |
+| **↑↓←→**       | Навигация по элементам панели                                            |
+| **OK**         | Нажать кнопку                                                            |
 
 ---
 
@@ -147,13 +162,13 @@ vot-mod/
 ├── assets/                   # Иконки/сплэш/фон — копируются поверх ../assets/
 └── src/
     ├── config.d.ts           # Stub-тип для изолированной typecheck
-    ├── player_api.d.ts       # Stub-тип для изолированной typecheck
     ├── abort-controller-polyfill.ts
     └── vot/
         ├── client.ts         # API Яндекс + Innertube
         ├── index.ts          # Точка входа
+        ├── player.ts         # События плеера YouTube (newVideo / noVideo)
         ├── translation.ts    # Аудио движок
         ├── types.ts
-        ├── ui.ts             # Панель управления + перехват RED
+        ├── ui.ts             # Панель управления
         └── vot.css
 ```

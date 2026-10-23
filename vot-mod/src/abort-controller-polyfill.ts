@@ -36,6 +36,7 @@ if (typeof AbortController === 'undefined') {
     }
   }
 
-  (globalThis as Record<string, unknown>).AbortController = AbortControllerImpl;
-  (globalThis as Record<string, unknown>).AbortSignal = AbortSignalImpl;
+  (window as unknown as Record<string, unknown>).AbortController =
+    AbortControllerImpl;
+  (window as unknown as Record<string, unknown>).AbortSignal = AbortSignalImpl;
 }

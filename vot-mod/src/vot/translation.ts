@@ -1,7 +1,6 @@
 import { configRead } from '../config';
-import { getPlayerManager } from '../player_api';
-import { PlayerMode } from '../player_api';
-import type { PlayerManager, VideoID } from '../player_api';
+import { getPlayerManager, PlayerMode } from './player';
+import type { PlayerManager, VideoID } from './player';
 import { translateVideo } from './client';
 import type { VotTranslationStatus } from './types';
 import {
@@ -607,7 +606,12 @@ function writeUrlCache(cache: Record<string, CachedUrl>) {
     }
     window.localStorage.setItem(
       TRANSLATION_CACHE_KEY,
-      JSON.stringify(Object.fromEntries(entries))
+      JSON.stringify(
+        entries.reduce<Record<string, unknown>>((acc, [key, value]) => {
+          acc[key] = value;
+          return acc;
+        }, {})
+      )
     );
   } catch {
     // localStorage full/unavailable — cache is best-effort
@@ -939,10 +943,11 @@ export async function initVotTranslation() {
   // stuck in Waiting kept polling/uploading forever. The reliable signal is
   // the WEB_PAGE_TYPE_WATCH class on <body> (upstream screensaver-fix uses
   // the same) — when it disappears while a translation is running, stop.
-  const WATCH_CLASS = 'WEB_PAGE_TYPE_WATCH';
+  let isWatchPage = document.body.classList.contains('WEB_PAGE_TYPE_WATCH');
   let leftWatchTimer: ReturnType<typeof setTimeout> | null = null;
-  const bodyClassObs = new MutationObserver(() => {
-    if (document.body.classList.contains(WATCH_CLASS)) {
+  window.addEventListener('ytaf-page-update', (evt) => {
+    isWatchPage = !!(evt as CustomEvent<{ isWatch: boolean }>).detail.isWatch;
+    if (isWatchPage) {
       if (leftWatchTimer !== null) {
         clearTimeout(leftWatchTimer);
         leftWatchTimer = null;
@@ -954,18 +959,11 @@ export async function initVotTranslation() {
     // Debounce: page-transition flicker must not kill an active translation
     leftWatchTimer = setTimeout(() => {
       leftWatchTimer = null;
-      if (
-        !document.body.classList.contains(WATCH_CLASS) &&
-        (isTranslationActive() || isTranslationInProgress())
-      ) {
+      if (!isWatchPage && (isTranslationActive() || isTranslationInProgress())) {
         console.log('[VOT] left watch page — stopping translation');
         void stopTranslation();
       }
     }, 1500);
-  });
-  bodyClassObs.observe(document.body, {
-    attributes: true,
-    attributeFilter: ['class']
   });
 
   const manager = await getPlayerManager();

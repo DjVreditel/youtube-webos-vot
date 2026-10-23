@@ -577,8 +577,10 @@ async function fetchInnertubeContext(
   }
   if (visitorData) {
     ctx.visitorData = visitorData
-      .replaceAll('\\u0026', '&')
-      .replaceAll('\\/', '/');
+      .split('\\u0026')
+      .join('&')
+      .split('\\/')
+      .join('/');
   }
   return ctx;
 }

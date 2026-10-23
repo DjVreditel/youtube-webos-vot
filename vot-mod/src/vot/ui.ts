@@ -10,7 +10,7 @@ import {
   setStatusCallback,
   setManuallyStopped
 } from './translation';
-import { getPlayerManager } from '../player_api';
+import { getPlayerManager } from './player';
 import {
   isAuthServerConfigured,
   startDeviceAuth,
@@ -505,8 +505,6 @@ function createPanel(): HTMLDivElement {
   return container;
 }
 
-// Returns a status string — surfaced as a debug toast by the patched
-// upstream ui.js when votShowKeyCodes is enabled
 export function showVotPanel(visible?: boolean): string {
   visible ??= !panelVisible;
 
