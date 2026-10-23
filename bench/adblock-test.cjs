@@ -31,6 +31,22 @@ win.localStorage.setItem('ytaf-configuration', nativeStringify({
   hideEndcards: true, enableLegacyEmojiFix: true, enableSponsorBlock: false,
   enableReturnYouTubeDislike: false, upgradeThumbnails: false
 }));
+// The first home screen YouTube's page fetches and parses before the
+// userScript is injected (early-browse.js); already resolved by then.
+const earlyBrowse = { response: win.JSON.parse(nativeStringify({
+  responseContext: { visitorData: 'x' },
+  contents: { tvBrowseRenderer: { content: { tvSurfaceContentRenderer: { content: { sectionListRenderer: { contents: [
+    { shelfRenderer: { title: { runs: [{ text: 'Keep me' }] }, content: { horizontalListRenderer: { items: [
+      { adSlotRenderer: {} },
+      { tileRenderer: { style: 'TILE_STYLE_YTLR_DEFAULT' } },
+      { tileRenderer: { style: 'TILE_STYLE_YTLR_SHORTS' } }
+    ] } } } },
+    { shelfRenderer: { tvhtml5ShelfRendererType: 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS' } },
+    { tvMastheadRenderer: {} }
+  ] } } } } } }
+})) };
+win.pendingEarlyBrowse = win.Promise.resolve(earlyBrowse);
+
 if (legacy) applyChrome38Downgrade(win);
 win.eval(fs.readFileSync(bundlePath, 'utf8'));
 
@@ -43,6 +59,15 @@ const t = (name, ok, extra) => {
 setTimeout(() => {
   const P = win.JSON.parse;
   const pad = 'z'.repeat(600); // keep every payload over the 500-byte gate
+
+  // --- The early home screen, parsed before the hook ---
+  {
+    const secs = earlyBrowse.response.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents;
+    t('early browse: Shorts shelf and masthead removed', secs.length === 1, 'got ' + secs.length + ' sections');
+    const tiles = secs[0]?.shelfRenderer?.content?.horizontalListRenderer?.items || [];
+    t('early browse: ad and Shorts tile removed from the first shelf', tiles.length === 1 && !!tiles[0].tileRenderer,
+      nativeStringify(tiles));
+  }
 
   // --- HOME_BROWSE: ads, Shorts shelves, titled shelves ---
   const browse = {

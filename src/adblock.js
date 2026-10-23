@@ -682,6 +682,28 @@ function filterSafely(data, text) {
   }
 }
 
+/**
+ * Filters an InnerTube response that was parsed before the hook was in place,
+ * in place, as if it had come through JSON.parse (early-browse.js). Only the
+ * trackingParams blanking is left out: that is done on the text, before the
+ * parse. Returns whether the response was filtered.
+ */
+export function filterParsedResponse(data) {
+  if (!isHooked || !anyFilterEnabled || !data || typeof data !== 'object') return false;
+  if (data.responseContext === undefined && data.continuationContents === undefined) return false;
+  if (data.botguardData) return false;
+  let text;
+  try {
+    // For the checks that look at the text: its size, and whether it has an emoji in it.
+    text = JSON.stringify(data);
+  } catch {
+    return false;
+  }
+  if (typeof text !== 'string') return false;
+  filterSafely(data, text);
+  return true;
+}
+
 function filterResponse(data, text) {
   const responseType = detectResponseType(data);
   // Before the Shorts guard below: a browse response parsed while a Short

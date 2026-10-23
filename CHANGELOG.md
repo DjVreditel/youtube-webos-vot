@@ -23,6 +23,7 @@ Playback speed on webOS: 0.25× to 2× with the pitch kept, from YouTube's own S
 
 ## Fixes
 
++ Ad Blocking, Shorts and the feed filters now also apply to the first home screen after a fresh start. YouTube's page fetches it before the userScript is injected, so its ad tiles ("Sponsored") and Shorts stayed until the next page. Max Thumbnail Quality applies to it too. From aktiwers' fork (webosbrew/youtube-webos PR #488, fork watch #41).
 + Playback speed: the audio of a whole video was kept in memory; now only the last 60 s behind the playhead are.
 
 ## Build

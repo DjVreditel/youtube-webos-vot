@@ -12,6 +12,7 @@ import './adblock.js';
 import './hooks/json-stringify';
 import './force-codec.js';
 import './subtitle-translate.js';
+import './early-browse.js';
 
 import { SELECTORS } from './utils';
 import { handleLaunch, extractLaunchParams } from './launch.js';
