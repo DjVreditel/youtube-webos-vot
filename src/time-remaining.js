@@ -4,9 +4,10 @@ import { formatTime, cssString } from './sponsorblock-labels.js';
 import './time-remaining.css';
 
 /**
- * Show Remaining Time and End Time: "-41:58 · ends 21:45" in front of the
+ * Show Remaining Time / End Time: "-41:58 · ends 21:45" in front of the
  * duration under the seek bar, the end time on the TV's clock and in its
- * locale's format. (Idea from MickLesk's fork.)
+ * locale's format. Either half can be shown alone ("-41:58", "ends 21:45").
+ * (Idea from MickLesk's fork; the choice from NicholasBly/youtube-webos#195.)
  *
  * Like the SponsorBlock readouts in sponsorblock-labels.js, it is a
  * pseudo-element whose content this module writes into one <style>: a node
@@ -53,11 +54,17 @@ function formatEnd(ms) {
   return endFormatter.format(new Date(ms));
 }
 
-/** The rule for the video's current position, or '' when there is nothing to show. */
-export function buildCss(duration, currentTime, playbackRate, now) {
+/**
+ * The rule for the video's current position, or '' when there is nothing to
+ * show. `mode` is 'remaining', 'end' or 'both' (timeRemainingModes).
+ */
+export function buildCss(duration, currentTime, playbackRate, now, mode = 'both') {
   if (!(duration > 0) || !isFinite(duration) || isNaN(currentTime)) return '';
   const remaining = Math.max(0, duration - currentTime) / (playbackRate > 0 ? playbackRate : 1);
-  const text = `-${formatTime(remaining)} · ends ${formatEnd(now + remaining * 1000)}`;
+  const parts = [];
+  if (mode !== 'end') parts.push(`-${formatTime(remaining)}`);
+  if (mode !== 'remaining') parts.push(`ends ${formatEnd(now + remaining * 1000)}`);
+  const text = parts.join(' · ');
   return `${TIME_SELECTOR}{content:${cssString(text)};}`;
 }
 
@@ -74,11 +81,13 @@ function isLive() {
 function tick() {
   if (!controlsVisible()) return;
   const video = getVideo();
-  write(video && !isLive() ? buildCss(video.duration, video.currentTime, video.playbackRate, Date.now()) : '');
+  write(video && !isLive()
+    ? buildCss(video.duration, video.currentTime, video.playbackRate, Date.now(), configRead('timeRemainingMode'))
+    : '');
 }
 
 function sync() {
-  const on = configRead('showTimeRemaining') && isWatchPage();
+  const on = configRead('timeRemainingMode') !== 'off' && isWatchPage();
   if (on && !timer) {
     timer = setInterval(tick, TICK_MS);
     tick();
@@ -90,5 +99,9 @@ function sync() {
 }
 
 window.addEventListener('ytaf-page-update', sync);
-configAddChangeListener('showTimeRemaining', sync);
+// From one shown mode to another the timer keeps running: the text changes at once.
+configAddChangeListener('timeRemainingMode', () => {
+  sync();
+  if (timer) tick();
+});
 sync();

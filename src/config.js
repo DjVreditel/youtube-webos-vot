@@ -33,6 +33,14 @@ export const clockModes = {
   datetime: 'Date and Time'
 };
 
+/** What the time label under the seek bar adds before the duration (NicholasBly/youtube-webos#195). */
+export const timeRemainingModes = {
+  off: 'Off',
+  remaining: 'Remaining',
+  end: 'End Time',
+  both: 'Both'
+};
+
 export const logoStyles = {
   default: 'Default',
   premium: 'Premium',
@@ -200,8 +208,8 @@ const configOptions = new Map([
   // Drops the dubbed audio tracks from the player response, so the original plays.
   ['forceOriginalAudio', { default: false, desc: 'Prefer Original Audio over Dubbed' }],
   ['seekStep', { default: '0', desc: 'Left/Right Seek Step (Controls Hidden)' }],
-  // Remaining time and the wall-clock end time beside the duration.
-  ['showTimeRemaining', { default: false, desc: 'Show Remaining Time and End Time' }],
+  // Remaining time and/or the wall-clock end time beside the duration.
+  ['timeRemainingMode', { default: 'off', desc: 'Show Remaining Time / End Time' }],
   ['enableScrollSeek', { default: false, desc: 'Magic Remote: Scroll Wheel Seeks on Progress Bar' }],
   ['enableAutoLogin', { default: true, desc: 'Bypass Nag Screens' }],
   ['autoSelectAccount', { default: true, desc: 'Auto Login (off: always ask who is watching)' }],
@@ -314,8 +322,19 @@ function loadStored(key) {
   if (storage === null) return null;
   try {
     const parsed = JSON.parse(storage);
-    return parsed && typeof parsed === 'object' ? parsed : null;
+    return parsed && typeof parsed === 'object' ? migrateStored(parsed) : null;
   } catch { return null; }
+}
+
+// Show Remaining Time and End Time was an on/off switch (showTimeRemaining)
+// before either half could be picked. Done on every stored set, the shared one
+// and each account's, as the switch may be in any of them.
+function migrateStored(stored) {
+  if ('showTimeRemaining' in stored) {
+    if (!('timeRemainingMode' in stored)) stored.timeRemainingMode = stored.showTimeRemaining ? 'both' : 'off';
+    delete stored.showTimeRemaining;
+  }
+  return stored;
 }
 
 function collectIdFields(obj, fieldRe, prefix, out, depth) {

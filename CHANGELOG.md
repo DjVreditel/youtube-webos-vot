@@ -18,6 +18,7 @@ Playback speed on webOS: 0.25× to 2× with the pitch kept, from YouTube's own S
 
 ## Changed
 
++ **Show Remaining Time / End Time** (Player): the on/off switch is now a choice of Off, Remaining ("-41:58"), End Time ("ends 21:45") or Both ("-41:58 · ends 21:45"), so the end time can be shown alone, as Kodi does. Still only while the seek bar is on screen. A switch that was on becomes Both. From NicholasBly/youtube-webos#195.
 + The app no longer turns off the browser's cross-origin checks (`allowCrossDomain` in appinfo.json). Every outside service it uses (SponsorBlock, DeArrow, Return YouTube Dislike, the thumbnail check) allows it anyway. From gorrdy's fork.
 
 ## Fixes

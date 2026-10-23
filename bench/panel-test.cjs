@@ -193,9 +193,44 @@ setTimeout(async () => {
     const text = () => (win.document.getElementById('ytaf-time-remaining') || {}).textContent || '';
     await new Promise((r) => setTimeout(r, 1100));
     t('remaining time shown on a normal video', /ends /.test(text()), text());
+    // The config above still has the old on/off switch: on becomes Both.
+    t('old showTimeRemaining: true shows both halves', /"-59:45 · ends [^"]+"/.test(text()), text());
     live = true;
     await new Promise((r) => setTimeout(r, 1100));
     t('remaining time hidden on a live stream', !/ends /.test(text()), text());
+  }
+
+  // ---- Case 5b: End Time alone, then Remaining alone (NicholasBly/youtube-webos#195) ----
+  {
+    const { win } = boot('WEB_PAGE_TYPE_WATCH',
+      '<div idomkey="time-label"><span idomkey="duration"></span></div><video></video>',
+      (w) => {
+        const c = JSON.parse(w.localStorage.getItem('ytaf-configuration'));
+        delete c.showTimeRemaining;
+        c.timeRemainingMode = 'end';
+        w.localStorage.setItem('ytaf-configuration', JSON.stringify(c));
+      });
+    const v = win.document.querySelector('video');
+    Object.defineProperty(v, 'duration', { value: 600 });
+    Object.defineProperty(v, 'currentTime', { value: 60, writable: true });
+    const text = () => (win.document.getElementById('ytaf-time-remaining') || {}).textContent || '';
+    await new Promise((r) => setTimeout(r, 1100));
+    t('End Time shows only the end time', /content:"ends [^"]+"/.test(text()), text());
+    key(win, GREEN);
+    win.document.querySelectorAll('.ytaf-tab-btn')[1].click();
+    const row = [...win.document.querySelectorAll(PAGES[1] + ' .shortcut-control-row')]
+      .find((r) => /Show Remaining Time \/ End Time/.test(r.textContent));
+    const value = () => row && row.querySelector('.current-value').textContent;
+    t('the setting is a choice on the Player page', value() === 'End Time', row ? value() : 'no row');
+    row && row.click();
+    t('the next choice is Both', value() === 'Both', value());
+    t('Both shows at once, without waiting for the next tick', /content:"-9:00 · ends [^"]+"/.test(text()), text());
+    row && row.click();
+    t('Off after Both', value() === 'Off', value());
+    t('Off clears the text', !/content:/.test(text()), text());
+    row && row.click();
+    await new Promise((r) => setTimeout(r, 1100));
+    t('Remaining shows only the remaining time', /content:"-9:00"/.test(text()), text());
   }
 
   // ---- Case 6: the Premium logo comes back after YouTube repaints the header ----

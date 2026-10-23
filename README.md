@@ -166,7 +166,7 @@ keyboard (OK on the box) or a USB/Bluetooth one, then OK; select an entry to rem
 | Turn On Translated Subtitles Automatically | Off |
 | Don't Turn On Subtitles by Themselves | Off |
 | Prefer Original Audio over Dubbed | Off |
-| Show Remaining Time and End Time | Off |
+| Show Remaining Time / End Time (Remaining, End Time, Both) | Off |
 | Hide Endcards | Off |
 | Magic Remote: Scroll Wheel Seeks on Progress Bar | Off |
 | Left/Right Seek Step (5, 10, 15, 30, 60 s) | YouTube's default |

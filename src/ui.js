@@ -1,4 +1,4 @@
-import { logoStyles, thumbnailQualityModes, videoCodecModes, uiThemes, clockModes, startPageModes, minVideoLengthModes, seekStepModes } from './config.js';
+import { logoStyles, timeRemainingModes, thumbnailQualityModes, videoCodecModes, uiThemes, clockModes, startPageModes, minVideoLengthModes, seekStepModes } from './config.js';
 import { configAddChangeListener, configRead, configWrite, configGetDesc, segmentTypes, configGetDefault, shortcutActions, sbModes, sbModesHighlight, forcePreviewModes, configGetProfileStatus } from './config.js';
 import './ui.css';
 import './auto-login.js';
@@ -1007,7 +1007,7 @@ function createOptionsPanel() {
   createSubtitleAutoEnableControl(),
   createConfigCheckbox('disableAutoCaptions'),
   createConfigCheckbox('forceOriginalAudio'),
-  createConfigCheckbox('showTimeRemaining'),
+  createAlignedCycleControl('timeRemainingMode', timeRemainingModes),
   createConfigCheckbox('hideEndcards'),
   createConfigCheckbox('enableScrollSeek'),
   createAlignedCycleControl('seekStep', seekStepModes),
