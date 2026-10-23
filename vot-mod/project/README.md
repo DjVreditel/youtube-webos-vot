@@ -23,6 +23,13 @@
 - **Как настоящий YouTube.** ID приложения — `youtube.leanback.v4`: кнопка YouTube на
   пульте, трансляция с телефона и голосовой поиск открывают именно его.
 
+<p align="center">
+  <img src="vot-mod/project/images/settings.png" alt="Настройки YouTube VOT" height="420">
+  &nbsp;
+  <img src="vot-mod/project/images/vot-panel.png" alt="Панель перевода VOT" height="420">
+</p>
+<p align="center"><sub>Настройки (зелёная кнопка) и панель перевода (красная кнопка)</sub></p>
+
 ## Установка
 
 Нужен ТВ LG с webOS 3 или новее и [Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel).
