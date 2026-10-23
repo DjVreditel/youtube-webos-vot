@@ -44,12 +44,14 @@ npm run package         # = node patch.cjs
      (`limited-memory`), как задумано для слабых устройств
    - `../src/math-letters.js` — на webOS ≤ 4 отключает лишний
      `MutationObserver` на весь `<body>`
-6. Заменяет иконки/сплэш/фон в `../assets/` файлами из `vot-mod/assets/`
-7. Патчит `../assets/appinfo.json` (id → `youtube.djvreditel.v4`, title →
-   `YouTube VOT`, иконки, `allowCrossDomain`), а также `package.json` и
-   `tools/deploy.js` под новый app ID
+6. Добавляет сплэш и фон VOT из `vot-mod/assets/` (иконка остаётся оригинальной иконкой YouTube из foxi69)
+7. Патчит `../assets/appinfo.json`: title → `YouTube VOT`, версия, `allowCrossDomain`.
+   ID остаётся оригинальным `youtube.leanback.v4` (кнопка YouTube на пульте, каст с
+   телефона и голосовой поиск открывают именно его). Версия = версия из
+   `vot-mod/package.json` с мажором +100 (1.1.0 → 101.1.0), как в апстриме webosbrew:
+   иначе LG Content Store может «обновить» приложение официальным YouTube
 8. `npm ci` → `npm run build` → `npm run package` в корне — собирает
-   `dist/youtube.djvreditel.v4_<версия>_all.ipk` (легаси-сборка, для webOS 3+)
+   `dist/youtube.leanback.v4_<версия+100>_all.ipk` (легаси-сборка, для webOS 3+)
 
 Все патчи идемпотентны (маркер `// @vot-mod`) — повторный запуск безопасен.
 
@@ -86,7 +88,7 @@ youtube.com, и удаление любого из них стирает вхо�
 
 1. Поднять `version` в `vot-mod/package.json` (Homebrew Channel предлагает
    обновление только при росте версии).
-2. `cd vot-mod && npm run package` — собирает `dist/youtube.djvreditel.v4_<версия>_all.ipk`
+2. `cd vot-mod && npm run package` — собирает `dist/youtube.leanback.v4_<версия+100>_all.ipk`
    и пересчитывает `vot-mod/repo.json` (версия, ссылка на релиз, sha256).
 3. Закоммитить `vot-mod/` и запушить.
 4. Создать GitHub Release с тегом `v<версия>` и приложить `.ipk` из `dist/`.
@@ -181,7 +183,7 @@ vot-mod/
 ├── patch.cjs                 # Патчер (--patch-only, --restore)
 ├── package.json
 ├── tsconfig.json             # TS-конфиг для typecheck в изоляции
-├── assets/                   # Иконки/сплэш/фон — копируются поверх ../assets/
+├── assets/                   # Сплэш и фон VOT — копируются в ../assets/
 └── src/
     ├── config.d.ts           # Stub-тип для изолированной typecheck
     ├── abort-controller-polyfill.ts

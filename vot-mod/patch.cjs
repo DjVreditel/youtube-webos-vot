@@ -16,22 +16,16 @@ const PATCH_ONLY = process.argv.includes('--patch-only');
 
 const PATCH_MARKER = '// @vot-mod';
 
-const OLD_APP_ID = 'youtube.leanback.v4';
-const NEW_APP_ID = 'youtube.djvreditel.v4';
-const NEW_APP_TITLE = 'YouTube VOT';
+const APP_ID = 'youtube.leanback.v4';
+const APP_TITLE = 'YouTube VOT';
 const MOD_VERSION = require('./package.json').version;
+const APP_VERSION = MOD_VERSION.replace(/^\d+/, (major) => String(Number(major) + 100));
 const GITHUB_REPO = 'DjVreditel/youtube-webos-vot';
 
-const GENERATED_PATHS = 'src/ assets/ package.json tools/deploy.js';
+const GENERATED_PATHS = 'src/ assets/ package.json';
 
-const APP_ICONS = {
-  icon: 'icon.png',
-  largeIcon: 'largeIcon.png',
-  mediumLargeIcon: 'mediumLargeIcon.png',
-  extraLargeIcon: 'extraLargeIcon.png',
-  playIcon: 'playIcon.png',
+const APP_IMAGES = {
   splashBackground: 'splashBackground-v1.png',
-  imageForRecents: 'imageForRecents.png',
   bgImage: 'bgImage.png'
 };
 
@@ -328,69 +322,47 @@ function patchAssets() {
   }
 }
 
-function patchAppId() {
-  // appinfo.json — the id here is the real app ID on the TV; title is the visible name
+function patchAppInfo() {
   const appInfoPath = path.join(PROJECT_ASSETS, 'appinfo.json');
-  if (fs.existsSync(appInfoPath)) {
-    const info = JSON.parse(fs.readFileSync(appInfoPath, 'utf8'));
-    info.id = NEW_APP_ID;
-    info.title = NEW_APP_TITLE;
-    info.version = MOD_VERSION;
-    info.iconColor = '#f4afc3';
-    info.vendorExtension = { ...info.vendorExtension, allowCrossDomain: true };
-    for (const [field, file] of Object.entries(APP_ICONS)) {
-      if (fs.existsSync(path.join(PROJECT_ASSETS, file))) info[field] = file;
-    }
-    fs.writeFileSync(appInfoPath, JSON.stringify(info, null, 2) + '\n', 'utf8');
-    process.stdout.write('  assets/appinfo.json patched\n');
+  const info = JSON.parse(fs.readFileSync(appInfoPath, 'utf8'));
+  info.title = APP_TITLE;
+  info.version = APP_VERSION;
+  info.vendorExtension = { ...info.vendorExtension, allowCrossDomain: true };
+  for (const [field, file] of Object.entries(APP_IMAGES)) {
+    if (fs.existsSync(path.join(PROJECT_ASSETS, file))) info[field] = file;
   }
-
-  // package.json scripts + tools/deploy.js reference the app ID / ipk name literally
-  for (const rel of ['package.json', path.join('tools', 'deploy.js')]) {
-    const filePath = path.join(PROJECT_ROOT, rel);
-    if (!fs.existsSync(filePath)) continue;
-    const content = fs.readFileSync(filePath, 'utf8');
-    if (!content.includes(OLD_APP_ID)) {
-      process.stdout.write(`  ${rel} already patched — skip\n`);
-      continue;
-    }
-    fs.writeFileSync(
-      filePath,
-      content.split(OLD_APP_ID).join(NEW_APP_ID),
-      'utf8'
-    );
-    process.stdout.write(`  ${rel} patched\n`);
-  }
+  fs.writeFileSync(appInfoPath, JSON.stringify(info, null, 2) + '\n', 'utf8');
+  process.stdout.write(`  assets/appinfo.json patched (version ${APP_VERSION})\n`);
 
   const pkgPath = path.join(PROJECT_ROOT, 'package.json');
   const pkg = fs.readFileSync(pkgPath, 'utf8');
   fs.writeFileSync(
     pkgPath,
-    pkg.replace(/"version": "[^"]*"/, `"version": "${MOD_VERSION}"`),
+    pkg.replace(/"version": "[^"]*"/, `"version": "${APP_VERSION}"`),
     'utf8'
   );
-  process.stdout.write(`  package.json version set to ${MOD_VERSION}\n`);
+  process.stdout.write(`  package.json version set to ${APP_VERSION}\n`);
 }
 
 function writeRepoJson() {
-  const ipkName = `${NEW_APP_ID}_${MOD_VERSION}_all.ipk`;
+  const ipkName = `${APP_ID}_${APP_VERSION}_all.ipk`;
   const ipk = fs.readFileSync(path.join(PROJECT_ROOT, 'dist', ipkName));
   const sha256 = require('crypto').createHash('sha256').update(ipk).digest('hex');
-  const iconUri = `https://raw.githubusercontent.com/${GITHUB_REPO}/main/vot-mod/assets/icon.png`;
+  const iconUri = `https://raw.githubusercontent.com/${GITHUB_REPO}/main/assets/icon.png`;
   const description = 'YouTube без рекламы с закадровым переводом (VOT)';
   const repo = {
     paging: { page: 1, count: 1, maxPage: 1, itemsTotal: 1 },
     packages: [
       {
-        id: NEW_APP_ID,
-        title: NEW_APP_TITLE,
+        id: APP_ID,
+        title: APP_TITLE,
         description,
         iconUri,
         manifest: {
-          id: NEW_APP_ID,
-          version: MOD_VERSION,
+          id: APP_ID,
+          version: APP_VERSION,
           type: 'web',
-          title: NEW_APP_TITLE,
+          title: APP_TITLE,
           appDescription: description,
           iconUri,
           sourceUrl: `https://github.com/${GITHUB_REPO}`,
@@ -454,8 +426,8 @@ patchPerformance();
 step('Replacing assets (icons, splash, background)...');
 patchAssets();
 
-step('Patching app ID and title...');
-patchAppId();
+step('Patching app title and version...');
+patchAppInfo();
 
 step('Hiding generated files from git (skip-worktree + exclude)...');
 // Tracked files: skip-worktree so the IDE commit view ignores them
