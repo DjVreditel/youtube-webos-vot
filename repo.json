@@ -13,16 +13,16 @@
       "iconUri": "https://raw.githubusercontent.com/DjVreditel/youtube-webos-vot/main/assets/icon.png",
       "manifest": {
         "id": "youtube.leanback.v4",
-        "version": "101.3.0",
+        "version": "101.4.0",
         "type": "web",
         "title": "YouTube VOT",
         "appDescription": "YouTube без рекламы с закадровым переводом (VOT)",
         "iconUri": "https://raw.githubusercontent.com/DjVreditel/youtube-webos-vot/main/assets/icon.png",
         "sourceUrl": "https://github.com/DjVreditel/youtube-webos-vot",
         "rootRequired": false,
-        "ipkUrl": "https://github.com/DjVreditel/youtube-webos-vot/releases/download/v1.3.0/youtube.leanback.v4_101.3.0_all.ipk",
+        "ipkUrl": "https://github.com/DjVreditel/youtube-webos-vot/releases/download/v1.4.0/youtube.leanback.v4_101.4.0_all.ipk",
         "ipkHash": {
-          "sha256": "2bd1831e1d1a7d043ecc8f540c39a3e0525cf8fab241f7313a34516d6fcacdf8"
+          "sha256": "f841ae49d52c03f6f9396bdf035b66454f75306ec47bfb8d9aaaf3284f15de70"
         }
       }
     }
