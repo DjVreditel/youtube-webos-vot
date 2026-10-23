@@ -1,0 +1,26 @@
+#!/bin/sh
+
+luna-send -n 1 luna://com.webos.service.config/setConfigs '{"configs":{"com.webos.service.preloadmanager.supportAppList":[{"preloadMode":"partial","id":"com.webos.app.container","staticPriority":10,"preloadType":"periodic","requiredMemory":71,"isEnabled":false},{"preloadMode":"partial","id":"netflix","staticPriority":10,"preloadType":"periodic","requiredMemory":100,"isPinUp":true,"isEnabled":false},{"preloadMode":"partial","id":"airplay","staticPriority":10,"preloadType":"periodic","requiredMemory":50,"isPinUp":true,"isEnabled":false},{"preloadMode":"partial","id":"com.webos.app.browser","staticPriority":10,"preloadType":"oneshot","requiredMemory":72,"isEnabled":false},{"preloadMode":"semi-full","id":"youtube.leanback.v4","staticPriority":10,"preloadType":"oneshot","requiredMemory":135,"isEnabled":true},{"preloadMode":"partial","id":"com.webos.app.tips","staticPriority":10,"preloadType":"oneshot","requiredMemory":55,"isEnabled":false},{"preloadMode":"partial","id":"vudu","staticPriority":10,"preloadType":"oneshot","requiredMemory":73,"isEnabled":false},{"preloadMode":"partial","id":"amazon","staticPriority":10,"preloadType":"oneshot","requiredMemory":100,"isEnabled":false},{"preloadMode":"partial","id":"pooq","staticPriority":10,"preloadType":"oneshot","requiredMemory":100,"isEnabled":false}]}}' >/dev/null 2>&1
+initctl restart webos-preload-manager >/dev/null 2>&1
+
+for job in airplay-adaptor crashd crashreportd rdxd uploadd remotelogger; do
+  initctl stop "$job" >/dev/null 2>&1
+done
+for name in airplay homekit; do
+  for pid in $(pidof "$name"); do kill -9 "$pid"; done
+done
+
+for app in com.webos.app.browser com.webos.app.container com.webos.app.tips; do
+  luna-send -n 1 luna://com.webos.applicationManager/closeByAppId "{\"id\":\"$app\"}" >/dev/null 2>&1
+done
+
+if grep -q ' /etc/hosts ' /proc/mounts && ! grep -q 'tv-tweaks' /etc/hosts; then
+  cat >> /etc/hosts <<'EOF'
+# tv-tweaks: LG ads, ACR and telemetry
+0.0.0.0 info.lgsmartad.com us.info.lgsmartad.com eu.info.lgsmartad.com
+0.0.0.0 ad.lgsmartad.com us.ad.lgsmartad.com eu.ad.lgsmartad.com
+0.0.0.0 ngfts.lge.com aic-ngfts.lge.com liveplus.lge.com
+0.0.0.0 rdx2.nextlgsdp.com rdl.lgtvcommon.com
+0.0.0.0 alphonso.tv tkacr.alphonso.tv tkacr316.alphonso.tv
+EOF
+fi

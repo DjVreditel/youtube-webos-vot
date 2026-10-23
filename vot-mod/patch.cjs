@@ -541,8 +541,10 @@ if (!PATCH_ONLY) {
   step('Packaging...');
   run('npm run package');
 
-  step('Writing Homebrew Channel repo manifest...');
-  writeRepoJson();
+  if (process.env.GITHUB_ACTIONS) {
+    step('Writing Homebrew Channel repo manifest...');
+    writeRepoJson();
+  }
 
   process.stdout.write('\n✓ Done! IPK package is ready in dist/\n');
 }

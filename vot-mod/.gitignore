@@ -1,2 +1,5 @@
 account-token.txt
 auth-server-url.txt
+tools/*.json
+tools/*.png
+tools/*.cpuprofile

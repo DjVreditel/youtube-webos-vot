@@ -57,8 +57,8 @@ npm run package         # = node patch.cjs
    принадлежит проекту и не теряется при слиянии апстрима (при конфликте берите любую
    сторону и перезапустите патчер)
 9. `npm ci` → `npm run build` → `npm run package` в корне — собирает
-   `dist/youtube.leanback.v4_<версия+100>_all.ipk` (легаси-сборка, для webOS 3+) и пишет
-   `repo.json` и `vot-mod/repo.json` (манифест Homebrew Channel)
+   `dist/youtube.leanback.v4_<версия+100>_all.ipk` (легаси-сборка, для webOS 3+); в GitHub
+   Actions также пишет `repo.json` и `vot-mod/repo.json` (манифест Homebrew Channel)
 
 Все патчи идемпотентны (маркер `// @vot-mod`) — повторный запуск безопасен.
 
@@ -93,12 +93,17 @@ youtube.com, и удаление любого из них стирает вхо�
 
 ### Выпуск новой версии
 
+Релизы собирает GitHub Actions (`.github/workflows/release-vot.yml`):
+
 1. Поднять `version` в `vot-mod/package.json` (Homebrew Channel предлагает
-   обновление только при росте версии).
-2. `cd vot-mod && npm run package` — собирает `dist/youtube.leanback.v4_<версия+100>_all.ipk`
-   и пересчитывает `vot-mod/repo.json` (версия, ссылка на релиз, sha256).
-3. Закоммитить `vot-mod/` и запушить.
-4. Создать GitHub Release с тегом `v<версия>` и приложить `.ipk` из `dist/`.
+   обновление только при росте версии) и добавить раздел `## <версия>` в
+   `vot-mod/project/CHANGELOG.md` — он станет заметками к релизу.
+2. Закоммитить и запушить в `main`.
+
+Если релиза с такой версией ещё нет, workflow соберёт `.ipk` патчером, прогонит
+тесты и проверку типов `vot-mod`, опубликует GitHub Release `v<версия>` и
+закоммитит `repo.json` с хешем этой сборки. Push без смены версии релиз не
+создаёт. Локальная сборка `repo.json` не трогает.
 
 ## Деплой на ТВ
 
@@ -112,6 +117,44 @@ npm run deploy && npm run launch
 > прописано в webOS CLI (`ares-setup-device`).
 
 ---
+
+## Инструменты для ТВ (`vot-mod/tools/`)
+
+Для разработки и проверки на ТВ с root (Homebrew Channel). Доступ берётся из
+конфигурации webOS CLI (`ares-setup-device`, устройство `tv` или `TV_DEVICE`),
+пароли в скриптах не хранятся. В Git Bash перед командами с путями на ТВ
+ставьте `MSYS_NO_PATHCONV=1`.
+
+```bash
+node vot-mod/tools/tv.cjs exec "free -m"                 # команда на ТВ
+node vot-mod/tools/tv.cjs push <файл> <путь на ТВ>       # залить файл (SFTP на ТВ нет)
+node vot-mod/tools/tv.cjs forward 9998 9998              # отладчик страниц (держать запущенным)
+node vot-mod/tools/cdp.cjs list | eval <js> | console <сек> [js] | key <коды> | shot <png>
+node vot-mod/tools/cdp.cjs backup <файл>                 # вход и настройки YouTube (нужно открытое приложение)
+node vot-mod/tools/cdp.cjs restore <файл>                # вернуть их, затем перезапустить приложение
+node vot-mod/tools/cdp.cjs profile                       # профиль CPU во время прокрутки
+bash vot-mod/tools/bench.sh                              # FPS прокрутки и память, 2 холодных запуска
+bash vot-mod/tools/startup.sh                            # время до первой плитки
+```
+
+Файл резервной копии содержит токены аккаунта — храните его только у себя.
+Удаление любого приложения youtube.com на ТВ стирает общее хранилище сайта,
+поэтому перед удалением делайте `backup`.
+
+## Оптимизация ТВ (`vot-mod/tv/50-tv-tweaks`)
+
+Скрипт автозапуска Homebrew Channel: отключает предзагрузку лишних приложений
+(кроме YouTube), останавливает AirPlay/HomeKit и службы телеметрии LG, блокирует
+рекламные и ACR-домены LG в hosts. Установка:
+
+```bash
+MSYS_NO_PATHCONV=1 node vot-mod/tools/tv.cjs push vot-mod/tv/50-tv-tweaks /var/lib/webosbrew/init.d/50-tv-tweaks
+MSYS_NO_PATHCONV=1 node vot-mod/tools/tv.cjs exec "chmod 755 /var/lib/webosbrew/init.d/50-tv-tweaks && /var/lib/webosbrew/init.d/50-tv-tweaks"
+```
+
+Откат — удалить файл и перезагрузить ТВ. Список предзагрузки снят с LG
+55UK6450 (webOS 4.4); на другой модели сверьте его с
+`luna-send -n 1 luna://com.webos.service.config/getConfigs '{"configNames":["com.webos.service.preloadmanager.supportAppList"]}'`.
 
 ## Обновление апстрима
 
@@ -199,6 +242,9 @@ vot-mod/
 ├── package.json
 ├── tsconfig.json             # TS-конфиг для typecheck в изоляции
 ├── assets/                   # Сплэш и фон VOT — копируются в ../assets/
+├── project/                  # README, CHANGELOG и картинки репозитория (копируются в корень)
+├── tools/                    # Инструменты для ТВ: SSH, отладчик, замеры, резервная копия
+├── tv/                       # Скрипт оптимизации ТВ для Homebrew Channel
 └── src/
     ├── config.d.ts           # Stub-тип для изолированной typecheck
     ├── abort-controller-polyfill.ts
