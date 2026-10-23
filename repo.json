@@ -10,19 +10,19 @@
       "id": "youtube.leanback.v4",
       "title": "YouTube",
       "description": "YouTube",
-      "iconUri": "https://raw.githubusercontent.com/foxi69/youtube-webos/main/assets/icon.png",
+      "iconUri": "https://raw.githubusercontent.com/DjVreditel/youtube-webos-vot/main/assets/icon.png",
       "manifest": {
         "id": "youtube.leanback.v4",
-        "version": "0.8.8",
+        "version": "1.0.0",
         "type": "web",
         "title": "YouTube",
         "appDescription": "YouTube",
-        "iconUri": "https://raw.githubusercontent.com/foxi69/youtube-webos/main/assets/icon.png",
-        "sourceUrl": "https://github.com/foxi69/youtube-webos",
+        "iconUri": "https://raw.githubusercontent.com/DjVreditel/youtube-webos-vot/main/assets/icon.png",
+        "sourceUrl": "https://github.com/DjVreditel/youtube-webos-vot",
         "rootRequired": false,
-        "ipkUrl": "https://github.com/foxi69/youtube-webos/releases/download/v0.8.8/youtube.leanback.v4_0.8.8_all.ipk",
+        "ipkUrl": "https://github.com/DjVreditel/youtube-webos-vot/releases/download/v1.0.0/youtube.djvreditel.v4_1.0.0_all.ipk",
         "ipkHash": {
-          "sha256": "e2924d695683113e98e3a01060da293d27c46f1e7af710e5243b9b7614a154d3"
+          "sha256": "a79855b43f0c70353fba96124152c764132ef8dce75f07c87d0d76bf35089cfb"
         }
       }
     }
