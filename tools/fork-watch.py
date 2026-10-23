@@ -6,7 +6,9 @@ Run by .github/workflows/fork-watch.yml. For every fork of the watched root
 repositories that was pushed to since the last run, each branch is compared
 with this repository's main branch; commits that are not in main and are newer
 than the last run are listed. Pull requests opened or updated on the root
-repositories since the last run are listed too. When anything is new, one
+repositories since the last run are listed too, and so are issues opened on
+them since the last run that are still open (feature requests and bug
+reports worth a look). When anything is new, one
 issue (label "fork-watch") is opened with the findings, so it arrives as a
 GitHub notification. Nothing is merged or pushed - porting stays a decision.
 
@@ -73,9 +75,10 @@ def request(method, path, body=None, params=None):
             link = res.headers.get('Link', '')
             return (json.loads(text) if text else None), link
     except urllib.error.HTTPError as err:
-        # 404 (deleted fork/branch), 409 (empty repo) and 422 (unrelated
-        # histories) are normal in a fork network: skip, don't fail the run.
-        if err.code in (404, 409, 422):
+        # 404 (deleted fork/branch), 409 (empty repo), 410 (issues turned
+        # off) and 422 (unrelated histories) are normal in a fork network:
+        # skip, don't fail the run.
+        if err.code in (404, 409, 410, 422):
             return None, ''
         raise
 
@@ -222,11 +225,29 @@ def new_pull_requests(since):
     return out
 
 
+def new_issues(since):
+    """Issues opened on the roots after `since` that are still open."""
+    out = []
+    for root in ROOTS:
+        issues = get_all(f'/repos/{root}/issues', {'state': 'open', 'sort': 'created',
+                                                    'direction': 'desc'}, limit=100)
+        for issue in issues or []:
+            if parse_time(issue['created_at']) <= since:
+                break  # sorted by creation time
+            if 'pull_request' in issue:
+                continue  # the issues API lists pull requests too
+            out.append({'repo': root, 'number': issue['number'], 'title': issue['title'],
+                        'user': issue['user']['login'], 'url': issue['html_url'],
+                        'labels': ', '.join(l['name'] for l in issue.get('labels', [])),
+                        'created': issue['created_at'][:10]})
+    return out
+
+
 def esc(text):
     return text.replace('|', '\\|').replace('<', '&lt;')
 
 
-def build_report(since, forks, pulls, upstream_ahead):
+def build_report(since, forks, pulls, issues, upstream_ahead):
     lines = [f'New work in the youtube-webos fork network since {fmt_time(since)}.',
              '', 'These are suggestions only - nothing has been merged. '
              'Pick what is worth porting and ask for it (or cherry-pick it).', '']
@@ -239,6 +260,13 @@ def build_report(since, forks, pulls, upstream_ahead):
         for p in pulls:
             lines.append(f"| {p['repo']} | [#{p['number']} {esc(p['title'])}]({p['url']}) "
                          f"| {p['user']} | {p['state']} | {p['updated']} |")
+        lines.append('')
+    if issues:
+        lines += ['## New issues on the upstream repositories', '',
+                  '| Repo | Issue | Author | Labels | Opened |', '|---|---|---|---|---|']
+        for i in issues:
+            lines.append(f"| {i['repo']} | [#{i['number']} {esc(i['title'])}]({i['url']}) "
+                         f"| {i['user']} | {esc(i['labels'])} | {i['created']} |")
         lines.append('')
     if forks:
         lines += ['## New commits on forks', '']
@@ -308,14 +336,16 @@ def main():
             forks.append((fork, commits))
     pulls = new_pull_requests(since)
     print(f'{len(pulls)} pull request(s) updated')
+    issues = new_issues(since)
+    print(f'{len(issues)} new open issue(s)')
 
-    if not forks and not pulls:
+    if not forks and not pulls and not issues:
         print('Nothing new.')
         save_state(now, state, known)
         return
 
-    title = f"Fork watch {now.strftime('%Y-%m-%d')}: {sum(len(c) for _, c in forks)} commit(s) on {len(forks)} fork(s), {len(pulls)} PR(s)"
-    body = build_report(since, forks, pulls, upstream_ahead)
+    title = f"Fork watch {now.strftime('%Y-%m-%d')}: {sum(len(c) for _, c in forks)} commit(s) on {len(forks)} fork(s), {len(pulls)} PR(s), {len(issues)} issue(s)"
+    body = build_report(since, forks, pulls, issues, upstream_ahead)
     summary = os.environ.get('GITHUB_STEP_SUMMARY')
     if summary:
         with open(summary, 'a', encoding='utf-8') as f:
