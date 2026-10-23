@@ -19,6 +19,7 @@ import {
   qrImageUrl
 } from './auth';
 import type { VotTranslationStatus } from './types';
+import { SOURCE_LANGS, TARGET_LANGS } from './langs';
 
 
 const ARROW_KEY_CODE: Record<number, string> = {
@@ -28,41 +29,6 @@ const ARROW_KEY_CODE: Record<number, string> = {
   40: 'down'
 };
 
-const SUPPORTED_LANGS: [string, string][] = [
-  ['ar', 'Arabic'],
-  ['be', 'Belarusian'],
-  ['bg', 'Bulgarian'],
-  ['zh', 'Chinese'],
-  ['cs', 'Czech'],
-  ['da', 'Danish'],
-  ['nl', 'Dutch'],
-  ['en', 'English'],
-  ['fi', 'Finnish'],
-  ['fr', 'French'],
-  ['de', 'German'],
-  ['el', 'Greek'],
-  ['hu', 'Hungarian'],
-  ['id', 'Indonesian'],
-  ['it', 'Italian'],
-  ['ja', 'Japanese'],
-  ['kk', 'Kazakh'],
-  ['ko', 'Korean'],
-  ['nb', 'Norwegian'],
-  ['pl', 'Polish'],
-  ['pt', 'Portuguese'],
-  ['ro', 'Romanian'],
-  ['ru', 'Russian'],
-  ['sk', 'Slovak'],
-  ['es', 'Spanish'],
-  ['sv', 'Swedish'],
-  ['th', 'Thai'],
-  ['tr', 'Turkish'],
-  ['uk', 'Ukrainian'],
-  ['uz', 'Uzbek'],
-  ['vi', 'Vietnamese']
-];
-
-const SOURCE_LANGS: [string, string][] = [['auto', 'Auto'], ...SUPPORTED_LANGS];
 
 const STATUS_TEXT: Record<VotTranslationStatus, string> = {
   idle: 'Off',
@@ -345,7 +311,7 @@ function createPanel(): HTMLDivElement {
   container.appendChild(createRow('From:', fromPicker));
 
   const toPicker = createLangPicker(
-    SUPPORTED_LANGS,
+    TARGET_LANGS,
     configRead('votToLang'),
     (val) => {
       configWrite('votToLang', val);

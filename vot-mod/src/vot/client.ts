@@ -1,6 +1,8 @@
 import type { VotTranslationResult } from './types';
 
-const WORKER_HOST = 'https://vot-new.toil-dump.workers.dev';
+const WORKER_HOST = 'https://vot-worker.vtrans.eu.cc';
+const LEGACY_WORKER_HOST = 'https://vot-new.toil-dump.workers.dev';
+const REQUEST_TIMEOUT_MS = 10_000;
 
 const POLL_INTERVAL_MS = 20_000;
 const MAX_RETRIES = 30;
@@ -9,7 +11,7 @@ const MAX_RETRIES = 30;
 // back to the standard voice instead of burning the whole retry budget
 const LIVELY_MAX_ATTEMPTS = 4;
 const AUDIO_UPLOAD_TIMEOUT_MS = 120_000;
-const AUDIO_CHUNK_SIZE = 1_048_576; // 1MB per chunk
+const AUDIO_CHUNK_SIZE = 5_295_308;
 // Uploading tens of MB through the TV freezes the app (slow CPU + tight
 // memory); beyond this size ask the server to fetch the audio itself
 // The server requires the client to upload the source audio (status 6)
@@ -35,9 +37,9 @@ const YT_STREAM_HEADERS = {
   referer: `${YT_BASE}/`
 } as const;
 
-const COMPONENT_VERSION = '25.12.4.1198';
+const COMPONENT_VERSION = '26.10.0.1796';
 const USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36';
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 YaBrowser/26.8.0.0 Safari/537.36';
 const HMAC_KEY = 'bt8xH3VOlb4mqf0nqAibnDOoiPlXsisf';
 
 const PROTO_HEADERS: Record<string, string> = {
@@ -47,6 +49,11 @@ const PROTO_HEADERS: Record<string, string> = {
   'Content-Type': 'application/x-protobuf',
   Pragma: 'no-cache',
   'Cache-Control': 'no-cache'
+};
+
+const JSON_HEADERS: Record<string, string> = {
+  'Content-Type': 'application/json',
+  Accept: 'application/json'
 };
 
 // --- Minimal protobuf writer ---
@@ -174,7 +181,9 @@ function encodeTranslationRequest(
   fromLang: string,
   toLang: string,
   bypassCache = false,
-  useLivelyVoice = false
+  useLivelyVoice = false,
+  forceSourceLang = false,
+  videoTitle = ''
 ): Uint8Array {
   return new ProtoWriter()
     .string(3, url)
@@ -182,11 +191,13 @@ function encodeTranslationRequest(
     .double(6, duration)
     .int32(7, 1)
     .string(8, fromLang)
+    .bool(9, forceSourceLang)
     .string(14, toLang)
     .int32(15, 1)
     .int32(16, 2)
     .bool(17, bypassCache)
     .bool(18, useLivelyVoice)
+    .string(19, videoTitle)
     .finish();
 }
 
@@ -197,6 +208,8 @@ type TranslationResponse = {
   message: string;
   translationId: string;
   shouldRetry: number;
+  language: string;
+  isLivelyVoice: boolean;
 };
 
 function decodeTranslationResponse(data: ArrayBuffer): TranslationResponse {
@@ -207,7 +220,9 @@ function decodeTranslationResponse(data: ArrayBuffer): TranslationResponse {
     remainingTime: 0,
     message: '',
     translationId: '',
-    shouldRetry: 0
+    shouldRetry: 0,
+    language: '',
+    isLivelyVoice: false
   };
 
   while (reader.position < reader.length) {
@@ -224,6 +239,12 @@ function decodeTranslationResponse(data: ArrayBuffer): TranslationResponse {
         break;
       case 7:
         result.translationId = reader.readString();
+        break;
+      case 8:
+        result.language = reader.readString();
+        break;
+      case 10:
+        result.isLivelyVoice = reader.readInt32() === 1;
         break;
       case 9:
         result.message = reader.readString();
@@ -314,10 +335,62 @@ type WorkerResponse = {
   status: number;
 };
 
-function xhrPost(
-  path: string,
-  payload: string,
-  signal?: AbortSignal
+type WorkerBody = { proto: Uint8Array } | { json: string };
+
+type WorkerRequest = {
+  headers: Record<string, string>;
+  payload: string | ArrayBuffer;
+};
+
+let useLegacyWorker = false;
+
+function yandexHeaders(
+  body: WorkerBody,
+  extraHeaders: Record<string, string>
+): Record<string, string> {
+  return {
+    ...PROTO_HEADERS,
+    ...('json' in body ? JSON_HEADERS : {}),
+    ...extraHeaders
+  };
+}
+
+function nextWorkerRequest(
+  body: WorkerBody,
+  extraHeaders: Record<string, string>
+): WorkerRequest {
+  const headers = yandexHeaders(body, extraHeaders);
+  return {
+    headers: {
+      'Content-Type': headers['Content-Type'] ?? 'application/x-protobuf',
+      'X-VOT-Headers': btoa(JSON.stringify(headers))
+    },
+    payload: 'json' in body ? body.json : new Uint8Array(body.proto).buffer
+  };
+}
+
+function legacyWorkerRequest(
+  body: WorkerBody,
+  extraHeaders: Record<string, string>
+): WorkerRequest {
+  const headers = JSON.stringify(yandexHeaders(body, extraHeaders));
+  // body.join() instead of JSON.stringify(Array.from(body)): materializing
+  // a multi-megabyte number[] per audio chunk stalls the TV main thread
+  return {
+    headers: { 'Content-Type': 'application/json' },
+    payload:
+      'json' in body
+        ? `{"headers":${headers},"body":${JSON.stringify(body.json)}}`
+        : `{"headers":${headers},"body":[${body.proto.join(',')}]}`
+  };
+}
+
+function sendXhr(
+  method: 'POST' | 'PUT',
+  url: string,
+  request: WorkerRequest,
+  signal: AbortSignal | undefined,
+  timeoutMs: number
 ): Promise<WorkerResponse> {
   return new Promise((resolve) => {
     if (signal?.aborted) {
@@ -326,10 +399,12 @@ function xhrPost(
     }
 
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${WORKER_HOST}${path}`, true);
-    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.open(method, url, true);
+    for (const [name, value] of Object.entries(request.headers)) {
+      xhr.setRequestHeader(name, value);
+    }
     xhr.responseType = 'arraybuffer';
-    xhr.timeout = 10_000;
+    xhr.timeout = timeoutMs;
     xhr.onload = () => {
       if (xhr.status === 200) {
         resolve({
@@ -356,53 +431,40 @@ function xhrPost(
     signal?.addEventListener('abort', onAbort, { once: true });
     xhr.onloadend = () => signal?.removeEventListener('abort', onAbort);
 
-    xhr.send(payload);
+    xhr.send(request.payload);
   });
 }
 
-function xhrPut(
+async function workerRequest(
+  method: 'POST' | 'PUT',
   path: string,
-  payload: string,
+  body: WorkerBody,
+  extraHeaders: Record<string, string> = {},
   signal?: AbortSignal,
-  timeoutMs = 10_000
-): Promise<void> {
-  return new Promise((resolve) => {
-    if (signal?.aborted) {
-      resolve();
-      return;
-    }
-
-    const xhr = new XMLHttpRequest();
-    xhr.open('PUT', `${WORKER_HOST}${path}`, true);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.timeout = timeoutMs;
-    xhr.onload = () => resolve();
-    xhr.onerror = () => resolve();
-    xhr.ontimeout = () => resolve();
-
-    const onAbort = () => {
-      xhr.abort();
-      resolve();
-    };
-    signal?.addEventListener('abort', onAbort, { once: true });
-    xhr.onloadend = () => signal?.removeEventListener('abort', onAbort);
-
-    xhr.send(payload);
-  });
-}
-
-function buildWorkerPayload(
-  body: Uint8Array,
-  extraHeaders: Record<string, string>
-): string {
-  // body.join() instead of JSON.stringify(Array.from(body)): materializing
-  // a multi-megabyte number[] per audio chunk stalls the TV main thread
-  return (
-    '{"headers":' +
-    JSON.stringify({ ...PROTO_HEADERS, ...extraHeaders }) +
-    ',"body":[' +
-    body.join(',') +
-    ']}'
+  timeoutMs = REQUEST_TIMEOUT_MS
+): Promise<WorkerResponse> {
+  if (!useLegacyWorker) {
+    const res = await sendXhr(
+      method,
+      `${WORKER_HOST}${path}`,
+      nextWorkerRequest(body, extraHeaders),
+      signal,
+      timeoutMs
+    );
+    const unreachable =
+      (res.status === 0 && res.data === 'Network error') ||
+      res.status === 403 ||
+      res.status === 404;
+    if (!unreachable) return res;
+    console.warn('[VOT] worker unavailable, using the legacy worker:', res.data);
+    useLegacyWorker = true;
+  }
+  return sendXhr(
+    method,
+    `${LEGACY_WORKER_HOST}${path}`,
+    legacyWorkerRequest(body, extraHeaders),
+    signal,
+    timeoutMs
   );
 }
 
@@ -437,8 +499,12 @@ async function getSession(): Promise<Session> {
     .string(2, 'video-translation')
     .finish();
   const signature = await getSignature(body);
-  const payload = buildWorkerPayload(body, { 'Vtrans-Signature': signature });
-  const res = await xhrPost('/session/create', payload);
+  const res = await workerRequest(
+    'POST',
+    '/session/create',
+    { proto: body },
+    { 'Vtrans-Signature': signature }
+  );
 
   if (
     !res.success ||
@@ -465,9 +531,11 @@ async function sendTranslationRequest(
 ): Promise<WorkerResponse> {
   const path = '/video-translation/translate';
   const headers = await getVtransHeaders(session, body, path);
-  return xhrPost(
+  return workerRequest(
+    'POST',
     path,
-    buildWorkerPayload(body, { ...headers, ...extraHeaders }),
+    { proto: body },
+    { ...headers, ...extraHeaders },
     signal
   );
 }
@@ -476,17 +544,13 @@ async function sendFailAudioJs(
   url: string,
   signal: AbortSignal
 ): Promise<void> {
-  const path = '/video-translation/fail-audio-js';
-  const bodyStr = JSON.stringify({ video_url: url });
-  const payload = JSON.stringify({
-    headers: {
-      ...PROTO_HEADERS,
-      'Content-Type': 'application/json',
-      Accept: 'application/json'
-    },
-    body: bodyStr
-  });
-  await xhrPut(path, payload, signal);
+  await workerRequest(
+    'PUT',
+    '/video-translation/fail-audio-js',
+    { json: JSON.stringify({ video_url: url }) },
+    {},
+    signal
+  );
 }
 
 // --- Innertube API types ---
@@ -936,9 +1000,11 @@ async function downloadAndUploadYouTubeAudio(
       audioData
     );
     const headers = await getVtransHeaders(session, body, path);
-    await xhrPut(
+    await workerRequest(
+      'PUT',
       path,
-      buildWorkerPayload(body, headers),
+      { proto: body },
+      headers,
       signal,
       AUDIO_UPLOAD_TIMEOUT_MS
     );
@@ -969,9 +1035,11 @@ async function downloadAndUploadYouTubeAudio(
     // eslint-disable-next-line no-await-in-loop
     const headers = await getVtransHeaders(session, body, path);
     // eslint-disable-next-line no-await-in-loop
-    await xhrPut(
+    await workerRequest(
+      'PUT',
       path,
-      buildWorkerPayload(body, headers),
+      { proto: body },
+      headers,
       signal,
       AUDIO_UPLOAD_TIMEOUT_MS
     );
@@ -980,6 +1048,7 @@ async function downloadAndUploadYouTubeAudio(
 
 // Fallback: notify Yandex that audio download was attempted but failed
 async function sendFallbackAudioNotify(
+  videoId: string,
   url: string,
   translationId: string,
   session: Session,
@@ -987,7 +1056,7 @@ async function sendFallbackAudioNotify(
 ): Promise<void> {
   const path = '/video-translation/audio';
   const audioInfo = new ProtoWriter()
-    .string(1, 'web_api_get_all_generating_urls_data_from_iframe')
+    .string(1, `fallback-empty-audio:video-translation:${videoId}`)
     .bytes(2, new Uint8Array(0))
     .finish();
   const body = new ProtoWriter()
@@ -996,7 +1065,7 @@ async function sendFallbackAudioNotify(
     .bytes(6, audioInfo)
     .finish();
   const headers = await getVtransHeaders(session, body, path);
-  await xhrPut(path, buildWorkerPayload(body, headers), signal);
+  await workerRequest('PUT', path, { proto: body }, headers, signal);
 }
 
 function waitPoll(signal: AbortSignal, remainingTime = 0): Promise<void> {
@@ -1037,7 +1106,9 @@ export async function translateVideo(
     isRetry?: boolean
   ) => void,
   useLivelyVoice = false,
-  apiToken = ''
+  apiToken = '',
+  forceSourceLang = false,
+  videoTitle = ''
 ): Promise<VotTranslationResult> {
   const url = `https://youtu.be/${videoId}`;
   let audioHandled = false;
@@ -1071,7 +1142,9 @@ export async function translateVideo(
       fromLang,
       toLang,
       false,
-      lively
+      lively,
+      forceSourceLang,
+      videoTitle
     );
     const res = await sendTranslationRequest(
       body,
@@ -1124,7 +1197,9 @@ export async function translateVideo(
           fromLang,
           toLang,
           true,
-          lively
+          lively,
+          forceSourceLang,
+          videoTitle
         );
         const bypassSession = await getSession();
         const bypassRes = await sendTranslationRequest(
@@ -1173,7 +1248,12 @@ export async function translateVideo(
 
     if (data.status === STATUS_FINISHED) {
       if (!data.url) throw new Error('No audio URL in response');
-      return { translated: true, url: data.url, usedLivelyVoice: lively };
+      return {
+        translated: true,
+        url: data.url,
+        usedLivelyVoice: lively && data.isLivelyVoice,
+        detectedLang: data.language
+      };
     }
 
     if (data.status === STATUS_PART_CONTENT) {
@@ -1201,7 +1281,13 @@ export async function translateVideo(
           err
         );
         await sendFailAudioJs(url, signal);
-        await sendFallbackAudioNotify(url, data.translationId, session, signal);
+        await sendFallbackAudioNotify(
+          videoId,
+          url,
+          data.translationId,
+          session,
+          signal
+        );
       }
       continue;
     }

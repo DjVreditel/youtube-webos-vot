@@ -3,6 +3,7 @@ import { getPlayerManager, PlayerMode } from './player';
 import type { PlayerManager, VideoID } from './player';
 import { translateVideo } from './client';
 import type { VotTranslationStatus } from './types';
+import { isSourceLang, isTargetLang } from './langs';
 import {
   AUDIO_CHUNK_BYTES,
   RANGE_ALIGN_BYTES,
@@ -671,14 +672,24 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
   console.log('[VOT] status set to loading, calling translateVideo');
 
   try {
-    const toLang = configRead('votToLang');
-    const lively: boolean = configRead('votLivelyVoice');
-    // Lively voice is en->ru only and the server ignores it when the source
-    // language is 'auto', so force 'en' when lively is requested
+    const configuredToLang = String(configRead('votToLang'));
+    const toLang = isTargetLang(configuredToLang) ? configuredToLang : 'ru';
+    const configuredFromLang = String(configRead('votFromLang'));
+    const chosenFromLang = isSourceLang(configuredFromLang)
+      ? configuredFromLang
+      : 'auto';
+    const detectedFromLang = currentManager
+      ? videoAudioLanguage(currentManager)
+      : '';
     const fromLang =
-      lively && configRead('votFromLang') === 'auto'
-        ? 'en'
-        : configRead('votFromLang');
+      chosenFromLang !== 'auto'
+        ? chosenFromLang
+        : isSourceLang(detectedFromLang)
+          ? detectedFromLang
+          : 'auto';
+    const lively =
+      !!configRead('votLivelyVoice') && fromLang !== 'auto' && toLang === 'ru';
+    const videoTitle = currentManager?.player.getVideoData().title ?? '';
     console.log('[VOT] langs:', fromLang, '->', toLang, 'lively:', lively);
 
     const cacheKey = `${videoId}_${fromLang}_${toLang}_${lively}`;
@@ -713,7 +724,9 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
           startCountdown(remainingTime);
         },
         lively,
-        String(configRead('votAccountToken') ?? '')
+        String(configRead('votAccountToken') ?? ''),
+        chosenFromLang !== 'auto',
+        videoTitle
       );
 
       stopCountdown();
@@ -908,24 +921,20 @@ export async function stopTranslation() {
   setStatus('idle');
 }
 
+function videoAudioLanguage(manager: PlayerManager): string {
+  const videoData = manager.player.getVideoData();
+  const raw =
+    videoData.defaultAudioLanguage || videoData.audioTracks?.[0]?.language;
+  return raw?.split('-')[0]?.toLowerCase() ?? '';
+}
+
 function isSameLanguageVideo(manager: PlayerManager): boolean {
   const toLang = configRead('votToLang');
   const fromLang = configRead('votFromLang');
 
   if (fromLang !== 'auto' && fromLang === toLang) return true;
 
-  const videoData = manager.player.getVideoData();
-
-  const rawLang = videoData.defaultAudioLanguage;
-  if (rawLang) {
-    const videoLang = rawLang.split('-')[0]?.toLowerCase() ?? '';
-    if (videoLang === toLang) return true;
-  }
-
-  const firstTrackLang = videoData.audioTracks?.[0]?.language
-    ?.split('-')[0]
-    ?.toLowerCase();
-  return firstTrackLang === toLang;
+  return videoAudioLanguage(manager) === toLang;
 }
 
 export function setManuallyStopped(videoId: VideoID | null) {

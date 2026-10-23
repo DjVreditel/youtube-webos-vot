@@ -8,6 +8,7 @@ export enum PlayerMode {
 
 type VideoData = {
   video_id?: string;
+  title?: string;
   defaultAudioLanguage?: string;
   audioTracks?: Array<{ language?: string }>;
 };

@@ -40,6 +40,10 @@ async function pickTarget() {
       const m2 = msg.params.message;
       const params = (m2.parameters || []).slice(1).map((p) => (p.value !== undefined ? JSON.stringify(p.value) : p.preview ? JSON.stringify(p.preview.properties.map((x) => x.name + '=' + x.value)) : p.description || p.type));
       console.log(`[${m2.level}] ${m2.text} ${params.join(' ')}`.slice(0, 700));
+    } else if (msg.method === 'Network.requestWillBeSent' && new RegExp(process.env.CDP_NET).test(msg.params.request.url)) {
+      console.log(`[net] ${msg.params.request.method} ${msg.params.request.url}`);
+    } else if (msg.method === 'Network.responseReceived' && new RegExp(process.env.CDP_NET).test(msg.params.response.url)) {
+      console.log(`[net] ${msg.params.response.status} ${msg.params.response.url}`);
     } else if (msg.method === 'Log.entryAdded') {
       console.log(`[log.${msg.params.entry.level}] ${msg.params.entry.text}`.slice(0, 400));
     }
@@ -151,6 +155,7 @@ async function pickTarget() {
     await send('Runtime.enable');
     await send('Log.enable');
     await send('Console.enable');
+    if (process.env.CDP_NET) await send('Network.enable');
     if (args[1] === 'reload') await send('Page.reload', { ignoreCache: true });
     else if (args[1]) await send('Runtime.evaluate', { expression: args.slice(1).join(' ') });
     setTimeout(() => { ws.close(); process.exit(0); }, Number(args[0] || 20) * 1000);
