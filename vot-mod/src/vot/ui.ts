@@ -11,6 +11,7 @@ import {
   setManuallyStopped
 } from './translation';
 import { getPlayerManager } from './player';
+import { nearestInDirection } from '../ui';
 import {
   isAuthServerConfigured,
   startDeviceAuth,
@@ -19,7 +20,6 @@ import {
 } from './auth';
 import type { VotTranslationStatus } from './types';
 
-declare const navigate: (direction: string) => void;
 
 const ARROW_KEY_CODE: Record<number, string> = {
   37: 'left',
@@ -490,7 +490,13 @@ function createPanel(): HTMLDivElement {
       const code = evt.keyCode;
       const direction = ARROW_KEY_CODE[code];
       if (direction) {
-        navigate(direction);
+        const buttons = container.querySelectorAll('button:not([disabled])');
+        const from = document.activeElement;
+        const target =
+          from && container.contains(from) && from !== container
+            ? nearestInDirection(from, direction, buttons)
+            : buttons[0];
+        (target as HTMLElement | null)?.focus();
       } else if (code === 13) {
         (document.activeElement as HTMLElement).click?.();
       } else if (code === 27) {

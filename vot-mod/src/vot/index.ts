@@ -2,6 +2,10 @@ import { initVotTranslation } from './translation';
 import { initVotPanel } from './ui';
 
 export function initVot() {
-  void initVotTranslation();
-  initVotPanel();
+  const start = () => {
+    void initVotTranslation();
+    initVotPanel();
+  };
+  if (document.body) start();
+  else document.addEventListener('DOMContentLoaded', start, { once: true });
 }

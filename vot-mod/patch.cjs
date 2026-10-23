@@ -247,6 +247,12 @@ function patchUiJs() {
   let patched = `${PATCH_MARKER}\nimport { showVotPanel } from './vot/ui';\n${content}`;
   patched = replaceOnce(
     patched,
+    'function nearestInDirection(from, dir, candidates) {',
+    'export function nearestInDirection(from, dir, candidates) {',
+    'ui.js nearestInDirection'
+  );
+  patched = replaceOnce(
+    patched,
     "    config_menu: 'GLOBAL',\n",
     "    config_menu: 'GLOBAL',\n    vot_panel: 'GLOBAL',\n",
     'ui.js ACTION_SCOPES'
@@ -285,9 +291,12 @@ function patchSourceFile(rel, edits) {
 function patchPerformance() {
   patchSourceFile('launch.js', [
     [
+      "import './polyfills.js';",
+      "import './polyfills.js';\nimport { getWebOSVersion } from './webos-utils.js';"
+    ],
+    [
       "  ytURL.searchParams.set('env_forceFullAnimation', '1');",
-      "  const chromeVersion = Number((navigator.userAgent.match(/Chrome\\/(\\d+)/) || [])[1]);\n" +
-        "  if (!(chromeVersion < 79)) ytURL.searchParams.set('env_forceFullAnimation', '1');"
+      "  if (getWebOSVersion() > 5) ytURL.searchParams.set('env_forceFullAnimation', '1');"
     ]
   ]);
   patchSourceFile('math-letters.js', [
