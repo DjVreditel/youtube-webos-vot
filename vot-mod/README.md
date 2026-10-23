@@ -77,7 +77,7 @@ npm test                # юнит-тесты логики синхрониза�
 https://raw.githubusercontent.com/DjVreditel/youtube-webos-vot/main/vot-mod/repo.json
 ```
 
-(короткая ссылка — в описании репозитория). После этого YouTube VOT появится
+или короткая ссылка `https://tinyurl.com/ytvot-tv`. После этого YouTube VOT появится
 в каталоге Homebrew Channel, а новые версии будут предлагаться как обновление.
 Перед установкой удалите другие YouTube-приложения: все они делят хранилище
 youtube.com, и удаление любого из них стирает вход в аккаунт и настройки.
