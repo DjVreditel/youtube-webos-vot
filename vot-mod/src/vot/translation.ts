@@ -716,7 +716,7 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
             setStatus('waiting', 'lively N/A → standard voice');
             return;
           }
-          if (message && message.startsWith('upload')) {
+          if (message && /^(upload|download) /.test(message)) {
             stopCountdown();
             setStatus('waiting', message);
             return;

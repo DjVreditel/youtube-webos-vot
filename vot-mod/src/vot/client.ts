@@ -1,4 +1,5 @@
 import type { VotTranslationResult } from './types';
+import { downloadAudioViaSabr } from './sabr';
 
 const WORKER_HOST = 'https://vot-worker.vtrans.eu.cc';
 const LEGACY_WORKER_HOST = 'https://vot-new.toil-dump.workers.dev';
@@ -19,23 +20,6 @@ const AUDIO_CHUNK_SIZE = 5_295_308;
 // cannot cap it. We yield to the event loop between chunks to keep the TV
 // UI responsive during the upload.
 const UPLOAD_CHUNK_PAUSE_MS = 50;
-const AUDIO_DOWNLOAD_TYPE = 'web_api_steal_sig_and_n';
-const YT_BASE = 'https://www.youtube.com';
-const INNERTUBE_ANDROID_VR_VERSION = '1.60.19';
-const INNERTUBE_ANDROID_VERSION = '19.44.38';
-const INNERTUBE_IOS_VERSION = '19.45.4';
-const INNERTUBE_CLIENT_ORDER = [
-  'ANDROID_VR',
-  'ANDROID',
-  'IOS',
-  'WEB',
-  'MWEB'
-] as const;
-const YT_STREAM_HEADERS = {
-  accept: '*/*',
-  origin: YT_BASE,
-  referer: `${YT_BASE}/`
-} as const;
 
 const COMPONENT_VERSION = '26.10.0.1796';
 const USER_AGENT =
@@ -558,316 +542,6 @@ async function sendFailAudioJs(
   );
 }
 
-// --- Innertube API types ---
-
-type InnertubeContext = {
-  apiKey: string;
-  clientVersion: string;
-  signatureTimestamp?: number;
-  visitorData?: string;
-};
-
-type InnertubeAdaptiveFormat = {
-  itag?: number;
-  url?: string;
-  mimeType?: string;
-  bitrate?: number;
-  contentLength?: string;
-};
-
-type InnertubePlayerResponse = {
-  streamingData?: {
-    adaptiveFormats?: InnertubeAdaptiveFormat[];
-  };
-};
-
-type ResolvedAudioStream = {
-  format: InnertubeAdaptiveFormat;
-  streamUrl: string;
-};
-
-// --- Innertube helpers ---
-
-function extractFirstMatch(
-  html: string,
-  patterns: readonly RegExp[]
-): string | undefined {
-  for (const p of patterns) {
-    const m = p.exec(html)?.[1];
-    if (m) return m;
-  }
-  return undefined;
-}
-
-function makeCPN(length = 16): string {
-  const alphabet =
-    'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_';
-  const bytes = new Uint8Array(length);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => alphabet[b % alphabet.length] ?? 'a').join(
-    ''
-  );
-}
-
-async function fetchInnertubeContext(
-  videoId: string,
-  signal: AbortSignal
-): Promise<InnertubeContext> {
-  const url = `${YT_BASE}/watch?v=${encodeURIComponent(videoId)}&hl=en`;
-  const res = await fetch(url, { headers: YT_STREAM_HEADERS, signal });
-  if (!res.ok) throw new Error(`Watch page fetch failed: ${res.status}`);
-  const html = await res.text();
-
-  const apiKey = extractFirstMatch(html, [
-    /"INNERTUBE_API_KEY":"([^"]+)"/,
-    /['"]INNERTUBE_API_KEY['"]\s*:\s*"([^"]+)"/
-  ]);
-  const clientVersion = extractFirstMatch(html, [
-    /"INNERTUBE_CLIENT_VERSION":"([^"]+)"/,
-    /['"]INNERTUBE_CLIENT_VERSION['"]\s*:\s*"([^"]+)"/
-  ]);
-  if (!apiKey || !clientVersion)
-    throw new Error('Failed to extract Innertube context from watch page');
-
-  const stsRaw = extractFirstMatch(html, [
-    /"STS":(\d+)/,
-    /['"]STS['"]\s*:\s*(\d+)/
-  ]);
-  const visitorData = extractFirstMatch(html, [
-    /"VISITOR_DATA":"([^"]+)"/,
-    /"visitorData":"([^"]+)"/,
-    /['"](?:VISITOR_DATA|visitorData)['"]\s*:\s*"([^"]+)"/
-  ]);
-
-  const ctx: InnertubeContext = { apiKey, clientVersion };
-  if (stsRaw) {
-    const sts = Number.parseInt(stsRaw, 10);
-    if (Number.isFinite(sts)) ctx.signatureTimestamp = sts;
-  }
-  if (visitorData) {
-    ctx.visitorData = visitorData
-      .split('\\u0026')
-      .join('&')
-      .split('\\/')
-      .join('/');
-  }
-  return ctx;
-}
-
-type InnertubeClientName = (typeof INNERTUBE_CLIENT_ORDER)[number];
-
-function buildInnertubeClientContext(
-  clientName: InnertubeClientName,
-  ctx: InnertubeContext,
-  videoId: string
-): Record<string, unknown> {
-  switch (clientName) {
-    case 'ANDROID_VR':
-      return {
-        clientName: 'ANDROID_VR',
-        clientVersion: INNERTUBE_ANDROID_VR_VERSION,
-        hl: 'en',
-        gl: 'US',
-        androidSdkVersion: 31,
-        osName: 'Android',
-        osVersion: '12',
-        platform: 'MOBILE'
-      };
-    case 'ANDROID':
-      return {
-        clientName: 'ANDROID',
-        clientVersion: INNERTUBE_ANDROID_VERSION,
-        hl: 'en',
-        gl: 'US',
-        androidSdkVersion: 34,
-        osName: 'Android',
-        osVersion: '14',
-        platform: 'MOBILE'
-      };
-    case 'IOS':
-      return {
-        clientName: 'IOS',
-        clientVersion: INNERTUBE_IOS_VERSION,
-        hl: 'en',
-        gl: 'US',
-        platform: 'MOBILE',
-        osName: 'iPhone',
-        osVersion: '18.0.0.22A3354',
-        deviceMake: 'Apple',
-        deviceModel: 'iPhone16,2'
-      };
-    case 'MWEB':
-      return {
-        clientName: 'MWEB',
-        clientVersion: ctx.clientVersion,
-        hl: 'en',
-        gl: 'US',
-        originalUrl: `${YT_BASE}/watch?v=${videoId}`
-      };
-    default:
-      return {
-        clientName: 'WEB',
-        clientVersion: ctx.clientVersion,
-        hl: 'en',
-        gl: 'US',
-        utcOffsetMinutes: 0,
-        originalUrl: `${YT_BASE}/watch?v=${videoId}`
-      };
-  }
-}
-
-async function fetchInnertubePlayerResponse(
-  videoId: string,
-  ctx: InnertubeContext,
-  clientName: InnertubeClientName,
-  signal: AbortSignal
-): Promise<InnertubePlayerResponse> {
-  const client = buildInnertubeClientContext(clientName, ctx, videoId);
-  if (ctx.visitorData) client.visitorData = ctx.visitorData;
-
-  const body: Record<string, unknown> = {
-    context: { client },
-    videoId,
-    contentCheckOk: true,
-    racyCheckOk: true
-  };
-  if (ctx.signatureTimestamp) {
-    body.playbackContext = {
-      contentPlaybackContext: { signatureTimestamp: ctx.signatureTimestamp }
-    };
-  }
-
-  const endpoint = `${YT_BASE}/youtubei/v1/player?key=${encodeURIComponent(ctx.apiKey)}`;
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      ...YT_STREAM_HEADERS,
-      ...(ctx.visitorData ? { 'x-goog-visitor-id': ctx.visitorData } : {})
-    },
-    body: JSON.stringify(body),
-    signal
-  });
-  if (!res.ok) throw new Error(`Player API [${clientName}]: ${res.status}`);
-  return res.json() as Promise<InnertubePlayerResponse>;
-}
-
-function pickBestAudioFormat(
-  formats: InnertubeAdaptiveFormat[]
-): InnertubeAdaptiveFormat {
-  const audioOnly = formats.filter((f) => {
-    const mime = f.mimeType?.toLowerCase() ?? '';
-    return !!f.url && mime.includes('audio/') && !mime.includes('video/');
-  });
-  if (!audioOnly.length)
-    throw new Error('No audio-only adaptive formats found');
-
-  // Prefer m4a/aac for wider compatibility, fallback to any audio
-  const m4a = audioOnly.filter((f) =>
-    f.mimeType?.toLowerCase().includes('audio/mp4')
-  );
-  const pool = m4a.length ? m4a : audioOnly;
-
-  // Pick lowest bitrate (best efficiency)
-  return pool.reduce<InnertubeAdaptiveFormat>(
-    (best, f) => ((f.bitrate ?? 0) < (best.bitrate ?? Infinity) ? f : best),
-    pool[0] ?? {}
-  );
-}
-
-async function resolveAudioStream(
-  videoId: string,
-  ctx: InnertubeContext,
-  signal: AbortSignal
-): Promise<ResolvedAudioStream> {
-  const errors: string[] = [];
-
-  for (const clientName of INNERTUBE_CLIENT_ORDER) {
-    // eslint-disable-next-line no-await-in-loop
-    const response = await fetchInnertubePlayerResponse(
-      videoId,
-      ctx,
-      clientName,
-      signal
-    ).catch((err: unknown) => {
-      errors.push(
-        `${clientName}: ${err instanceof Error ? err.message : String(err)}`
-      );
-      return null;
-    });
-    if (!response) continue;
-
-    const formats = (response.streamingData?.adaptiveFormats ?? []).filter(
-      (f) => !!f.url
-    );
-    if (!formats.length) {
-      errors.push(`${clientName}: No direct stream URLs in response`);
-      continue;
-    }
-
-    const format = pickBestAudioFormat(formats);
-    if (!format.url) {
-      errors.push(`${clientName}: Selected format has no URL`);
-      continue;
-    }
-
-    const streamUrl = new URL(format.url);
-    streamUrl.searchParams.set('cpn', makeCPN());
-    return { format, streamUrl: streamUrl.toString() };
-  }
-
-  throw new Error(`Cannot resolve YouTube audio stream. ${errors.join(' | ')}`);
-}
-
-async function probeStreamContentLength(
-  streamUrl: string,
-  hint: string | undefined,
-  signal: AbortSignal
-): Promise<number> {
-  const parsePositiveInt = (s: string | null | undefined): number | null => {
-    if (!s) return null;
-    const n = Number.parseInt(s, 10);
-    return Number.isFinite(n) && n > 0 ? n : null;
-  };
-
-  const res = await fetch(streamUrl, {
-    headers: { ...YT_STREAM_HEADERS, range: 'bytes=0-0' },
-    signal
-  });
-  if (!res.ok) throw new Error(`Stream probe failed: ${res.status}`);
-
-  const contentRange = res.headers.get('content-range');
-  const xGoogLen = res.headers.get('x-goog-stored-content-length');
-
-  const fromRange = contentRange
-    ? parsePositiveInt(/\/(\d+)\s*$/.exec(contentRange)?.[1])
-    : null;
-  const len = fromRange ?? parsePositiveInt(xGoogLen) ?? parsePositiveInt(hint);
-  if (!len) throw new Error('Cannot determine audio stream content length');
-
-  // Drain the response body to free the connection
-  try {
-    await res.body?.cancel();
-  } catch {
-    /* ignore */
-  }
-  return len;
-}
-
-async function downloadAudioRange(
-  streamUrl: string,
-  start: number,
-  end: number,
-  signal: AbortSignal
-): Promise<Uint8Array> {
-  const res = await fetch(streamUrl, {
-    headers: { ...YT_STREAM_HEADERS, range: `bytes=${start}-${end}` },
-    signal
-  });
-  if (!res.ok) throw new Error(`Audio range download failed: ${res.status}`);
-  return new Uint8Array(await res.arrayBuffer());
-}
-
 // --- Efficient protobuf encoding for large audio payloads ---
 // Uses Uint8Array concatenation instead of byte-by-byte push() for performance
 
@@ -914,36 +588,6 @@ function protoInt32Field(fieldNum: number, value: number): Uint8Array {
   return protoConcat(encodeVarint(fieldNum << 3), encodeVarint(value >>> 0));
 }
 
-function makeAudioFileId(itag: number, fileSize: number): string {
-  return JSON.stringify({
-    downloadType: AUDIO_DOWNLOAD_TYPE,
-    itag,
-    minChunkSize: AUDIO_CHUNK_SIZE,
-    fileSize: String(fileSize)
-  });
-}
-
-// Encodes VideoTranslationAudioRequest for a single (full) audio chunk
-// protobuf schema: translationId(1), url(2), audioInfo(6){fileId(1), audioFile(2)}
-function encodeFullAudioRequest(
-  translationId: string,
-  url: string,
-  fileId: string,
-  audioData: Uint8Array
-): Uint8Array {
-  const audioInfo = protoConcat(
-    protoStringField(1, fileId),
-    protoBytesField(2, audioData)
-  );
-  return protoConcat(
-    protoStringField(1, translationId),
-    protoStringField(2, url),
-    protoBytesField(6, audioInfo)
-  );
-}
-
-// Encodes VideoTranslationAudioRequest for one chunk of a multi-chunk upload
-// protobuf schema: translationId(1), url(2), partialAudioInfo(4){audioBuffer(1){chunkId(1),audioFile(2)}, audioPartsLength(2), fileId(3), version(4)}
 function encodePartialAudioRequest(
   translationId: string,
   url: string,
@@ -974,67 +618,35 @@ function encodePartialAudioRequest(
 async function downloadAndUploadYouTubeAudio(
   videoId: string,
   translationId: string,
+  durationMs: number,
   session: Session,
   signal: AbortSignal,
-  onProgress?: (done: number, total: number) => void
+  onProgress?: (message: string) => void
 ): Promise<void> {
   const videoUrl = `https://youtu.be/${videoId}`;
   const path = '/video-translation/audio';
 
-  const ctx = await fetchInnertubeContext(videoId, signal);
-  const { format, streamUrl } = await resolveAudioStream(videoId, ctx, signal);
-  const fileSize = await probeStreamContentLength(
-    streamUrl,
-    format.contentLength,
-    signal
+  const audio = await downloadAudioViaSabr(videoId, durationMs, signal, (done, total) =>
+    onProgress?.(`download ${Math.min(99, Math.floor((done / total) * 100))}%`)
   );
-  const totalChunks = Math.max(1, Math.ceil(fileSize / AUDIO_CHUNK_SIZE));
-  const fileId = makeAudioFileId(format.itag ?? 0, fileSize);
-
-  if (totalChunks === 1) {
-    const audioData = await downloadAudioRange(
-      streamUrl,
-      0,
-      fileSize - 1,
-      signal
-    );
-    const body = encodeFullAudioRequest(
-      translationId,
-      videoUrl,
-      fileId,
-      audioData
-    );
-    const headers = await getVtransHeaders(session, body, path);
-    await workerRequest(
-      'PUT',
-      path,
-      { proto: body },
-      headers,
-      signal,
-      AUDIO_UPLOAD_TIMEOUT_MS
-    );
-    return;
-  }
+  const totalChunks = Math.max(1, Math.ceil(audio.length / AUDIO_CHUNK_SIZE));
+  const fileId = `random-web_sabr-${generateUUID().toLowerCase()}`;
 
   for (let i = 0; i < totalChunks; i++) {
     if (signal.aborted) break;
-    onProgress?.(i + 1, totalChunks);
-    // Yield between chunks so the TV can repaint / handle remote input
+    onProgress?.(`upload ${i + 1}/${totalChunks}`);
     if (i > 0) {
       // eslint-disable-next-line no-await-in-loop
       await new Promise((r) => setTimeout(r, UPLOAD_CHUNK_PAUSE_MS));
     }
-    const start = i * AUDIO_CHUNK_SIZE;
-    const end = Math.min(fileSize - 1, start + AUDIO_CHUNK_SIZE - 1);
-    // eslint-disable-next-line no-await-in-loop
-    const audioData = await downloadAudioRange(streamUrl, start, end, signal);
-    // eslint-disable-next-line no-await-in-loop
+    const chunk = audio.subarray(i * AUDIO_CHUNK_SIZE, (i + 1) * AUDIO_CHUNK_SIZE);
+    const isLast = i === totalChunks - 1;
     const body = encodePartialAudioRequest(
       translationId,
       videoUrl,
-      audioData,
+      chunk,
       i,
-      totalChunks,
+      isLast ? totalChunks : 0,
       fileId
     );
     // eslint-disable-next-line no-await-in-loop
@@ -1330,9 +942,10 @@ export async function translateVideo(
         await downloadAndUploadYouTubeAudio(
           videoId,
           data.translationId,
+          duration * 1000,
           session,
           signal,
-          (done, total) => onWaiting?.(0, `upload ${done}/${total}`)
+          (message) => onWaiting?.(0, message)
         );
       } catch (err) {
         console.warn(

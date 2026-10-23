@@ -254,6 +254,8 @@ vot-mod/
         ├── client.ts         # API Яндекс + Innertube
         ├── index.ts          # Точка входа
         ├── player.ts         # События плеера YouTube (newVideo / noVideo)
+        ├── sabr.ts           # Аудио для Яндекса по SABR: перехват запросов плеера, только аудио
+        ├── sabr-core.js      # Protobuf и UMP для SABR (тесты)
         ├── translation.ts    # Аудио движок
         ├── types.ts
         ├── langs.ts          # Поддерживаемые языки

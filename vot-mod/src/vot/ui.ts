@@ -121,6 +121,8 @@ function statusLabel(status: VotTranslationStatus, message: string): string {
     case 'waiting': {
       const upload = /^upload (\d+)\/(\d+)$/.exec(message);
       if (upload) return `Загрузка аудио ${upload[1]}/${upload[2]}`;
+      const download = /^download (\d+)%$/.exec(message);
+      if (download) return `Скачивание аудио ${download[1]}%`;
       const eta = /^~(\d+)s$/.exec(message);
       if (eta) {
         const seconds = Number(eta[1]);
