@@ -73,10 +73,12 @@ export function installSabrCapture() {
   if (nativeFetch) return;
   nativeFetch = window.fetch;
   const original = nativeFetch;
+  const isSabrUrl = (url: string | undefined | null): url is string =>
+    !!url && url.indexOf('videoplayback') !== -1 && url.indexOf('sabr=1') !== -1;
   window.fetch = function (input: RequestInfo, init?: RequestInit): Promise<Response> {
     try {
       const url = typeof input === 'string' ? input : input && input.url;
-      if (url && url.indexOf('videoplayback') !== -1 && url.indexOf('sabr=1') !== -1) {
+      if (isSabrUrl(url)) {
         const body =
           typeof input !== 'string' && input.clone
             ? input.clone().arrayBuffer()
@@ -95,6 +97,28 @@ export function installSabrCapture() {
     }
     return original.call(window, input, init);
   } as typeof fetch;
+
+  const xhrUrls = new WeakMap<XMLHttpRequest, string>();
+  const nativeOpen = XMLHttpRequest.prototype.open;
+  const nativeSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function (this: XMLHttpRequest, ...args: unknown[]) {
+    const url = String(args[1]);
+    if (isSabrUrl(url)) xhrUrls.set(this, url);
+    return (nativeOpen as (...a: unknown[]) => void).apply(this, args);
+  } as typeof XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.send = function (this: XMLHttpRequest, body?: Document | XMLHttpRequestBodyInit | null) {
+    const url = xhrUrls.get(this);
+    if (url && body) {
+      const bytes =
+        body instanceof ArrayBuffer
+          ? new Uint8Array(body.slice(0))
+          : ArrayBuffer.isView(body)
+            ? new Uint8Array(body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength))
+            : null;
+      if (bytes && bytes.byteLength) template = { url, body: bytes };
+    }
+    return nativeSend.call(this, body);
+  };
 }
 
 function buildRequest(

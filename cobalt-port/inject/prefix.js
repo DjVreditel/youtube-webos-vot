@@ -8,6 +8,91 @@
     }
   });
 
+  if (!HTMLElement.prototype.click) {
+    HTMLElement.prototype.click = function () {
+      this.dispatchEvent(new Event('click', { bubbles: true, cancelable: true }));
+    };
+  }
+
+  function cobaltSelector(selector) {
+    return String(selector)
+      .replace(/:not\(\[[^\]]*\]\)/g, '')
+      .replace(/\[type=['"]?([a-z]+)['"]?\]/g, '.ytaf-input-$1');
+  }
+  if (!Element.prototype.matches) {
+    Element.prototype.matches = function (selector) {
+      var root = this.parentNode || document;
+      var nodes = root.querySelectorAll(selector);
+      for (var i = 0; i < nodes.length; i++) if (nodes[i] === this) return true;
+      return false;
+    };
+  }
+  if (!Element.prototype.closest) {
+    Element.prototype.closest = function (selector) {
+      for (var node = this; node && node.nodeType === 1; node = node.parentNode) {
+        if (node.matches(selector)) return node;
+      }
+      return null;
+    };
+  }
+  [Document.prototype, Element.prototype].forEach(function (proto) {
+    ['querySelector', 'querySelectorAll', 'matches', 'closest'].forEach(function (name) {
+      var native = proto[name];
+      if (typeof native !== 'function') return;
+      proto[name] = function (selector) {
+        return native.call(this, cobaltSelector(selector));
+      };
+    });
+  });
+
+  var nativeCreateElement = Document.prototype.createElement;
+  function upgradeInput(input) {
+    var type = '';
+    var checked = false;
+    var nativeSetAttribute = input.setAttribute;
+    Object.defineProperty(input, 'type', {
+      configurable: true,
+      get: function () {
+        return type;
+      },
+      set: function (value) {
+        if (type) input.classList.remove('ytaf-input-' + type);
+        type = String(value).toLowerCase();
+        input.classList.add('ytaf-input-' + type);
+      }
+    });
+    Object.defineProperty(input, 'checked', {
+      configurable: true,
+      get: function () {
+        return checked;
+      },
+      set: function (value) {
+        checked = !!value;
+        input.classList.toggle('ytaf-checked', checked);
+      }
+    });
+    input.setAttribute = function (name, value) {
+      if (String(name).toLowerCase() === 'type') input.type = value;
+      return nativeSetAttribute.call(this, name, value);
+    };
+    input.click = function () {
+      var proceed = input.dispatchEvent(new Event('click', { bubbles: true, cancelable: true }));
+      if (proceed && type === 'checkbox') {
+        input.checked = !checked;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    };
+    input.type = 'text';
+    input.tabIndex = 0;
+  }
+  Document.prototype.createElement = function (tag) {
+    var element = nativeCreateElement.apply(this, arguments);
+    var name = String(tag).toLowerCase();
+    if (name === 'input') upgradeInput(element);
+    else if (name === 'button') element.tabIndex = 0;
+    return element;
+  };
+
   var textContent = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
   var nativeAppendChild = Node.prototype.appendChild;
   var nativeInsertBefore = Node.prototype.insertBefore;
@@ -17,10 +102,17 @@
     return node && node.nodeType === 1 && node.tagName === 'STYLE';
   }
 
+  function cobaltCss(css) {
+    return css
+      .replace(/\[type=['"]?([a-z]+)['"]?\]/g, '.ytaf-input-$1')
+      .replace(/:checked/g, '.ytaf-checked');
+  }
+
   function refreshStyleLink(style) {
     var link = style.__ytafLink;
     var previous = link.href;
-    link.href = URL.createObjectURL(new Blob([textContent.get.call(style) || ''], { type: 'text/css' }));
+    var css = cobaltCss(textContent.get.call(style) || '');
+    link.href = URL.createObjectURL(new Blob([css], { type: 'text/css' }));
     if (previous) URL.revokeObjectURL(previous);
   }
 
@@ -43,13 +135,31 @@
     return style.__ytafLink;
   }
 
+  if (!document.createDocumentFragment) {
+    Document.prototype.createDocumentFragment = function () {
+      var fragment = nativeCreateElement.call(this, 'div');
+      fragment.__ytafFragment = true;
+      return fragment;
+    };
+    if (Object.prototype.hasOwnProperty.call(document, 'createDocumentFragment')) {
+      document.createDocumentFragment = Document.prototype.createDocumentFragment;
+    }
+  }
+
+  function insertFragment(parent, fragment, reference) {
+    while (fragment.firstChild) nativeInsertBefore.call(parent, fragment.firstChild, reference || null);
+    return fragment;
+  }
+
   Node.prototype.appendChild = function (child) {
+    if (child && child.__ytafFragment) return insertFragment(this, child, null);
     var result = nativeAppendChild.call(this, child);
     if (isStyle(child)) nativeAppendChild.call(document.head || this, linkFor(child));
     else if (isStyle(this) && this.__ytafLink) refreshStyleLink(this);
     return result;
   };
   Node.prototype.insertBefore = function (child, reference) {
+    if (child && child.__ytafFragment) return insertFragment(this, child, reference);
     var result = nativeInsertBefore.call(this, child, reference);
     if (isStyle(child)) nativeAppendChild.call(document.head || this, linkFor(child));
     return result;
@@ -61,5 +171,19 @@
     return nativeRemoveChild.call(this, child);
   };
 
+  function addCobaltStyles() {
+    var config = {};
+    try {
+      config = JSON.parse(localStorage.getItem('ytaf-configuration') || '{}');
+    } catch (error) {
+      config = {};
+    }
+    if (config.enableAdBlock === false) return;
+    var style = document.createElement('style');
+    style.textContent = 'ytlr-ad-slot-renderer,ytlr-tv-masthead-renderer{display:none!important}';
+    document.head.appendChild(style);
+  }
+
   function runUserScript() {
+    addCobaltStyles();
     try {

@@ -26,11 +26,11 @@ userscript="$port_dir/../dist/webOSUserScripts/userScript.js"
 webapp_out="$work/webapp-out"
 rm -rf "$webapp_out"
 mkdir -p "$webapp_out"
-cat "$port_dir/inject/prefix.js" "$userscript" "$port_dir/inject/suffix.js" webapp/output/adblockPreload.js \
-  > "$webapp_out/adblockPreload.js"
+cat "$port_dir/inject/prefix.js" "$userscript" "$port_dir/inject/suffix.js" > "$webapp_out/adblockPreload.js"
 printf 'void 0;\n' > "$webapp_out/adblockMain.js"
 printf '\n' > "$webapp_out/adblockMain.css"
-sed -i "s/grep -Fq '__shorts'/grep -Fq ''/" scripts/package-starterless-cobalt.sh
+sed -i -e "s/grep -Fq '__shorts'/grep -Fq ''/" -e "s/grep -Fq '__ytafPreloadExecuted'/grep -Fq ''/" \
+  scripts/package-starterless-cobalt.sh
 
 [[ -x node_modules/.bin/ares-package ]] || npm install --no-audit --no-fund
 rm -f output/*.ipk
