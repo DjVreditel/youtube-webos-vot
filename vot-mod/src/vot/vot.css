@@ -24,33 +24,33 @@
 .ytaf-vot-seg {
   display: flex;
   align-items: center;
-  border: 0;
+  border: 0.3vh solid transparent;
   margin: 0;
   padding: 0 2.2vh;
   background: transparent;
   color: rgba(227, 227, 227, 0.87);
   font-family: inherit;
   font-size: 2.5vh;
-  line-height: 6.2vh;
+  line-height: 5.6vh;
   white-space: nowrap;
   outline: none;
 }
 
-.ytaf-vot-seg:first-child {
+.ytaf-vot-seg--main {
   border-radius: 1.45vh 0 0 1.45vh;
 }
 
-.ytaf-vot-seg:last-child {
+.ytaf-vot-seg--menu {
   border-radius: 0 1.45vh 1.45vh 0;
 }
 
 .ytaf-vot-seg + .ytaf-vot-seg {
-  border-left: 0.15vh solid rgba(227, 227, 227, 0.14);
+  box-shadow: -0.15vh 0 0 rgba(227, 227, 227, 0.14);
 }
 
 .ytaf-vot-seg:focus {
   background: rgba(139, 180, 245, 0.22);
-  box-shadow: inset 0 0 0 0.3vh rgb(139, 180, 245);
+  border-color: rgb(139, 180, 245);
 }
 
 .ytaf-vot-seg--main {
