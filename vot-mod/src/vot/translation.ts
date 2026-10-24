@@ -923,8 +923,15 @@ export async function stopTranslation() {
 
 export function videoAudioLanguage(manager: PlayerManager): string {
   const videoData = manager.player.getVideoData();
+  const asrTrack = manager.player
+    .getPlayerResponse?.()
+    ?.captions?.playerCaptionsTracklistRenderer?.captionTracks?.find(
+      (track) => track.kind === 'asr'
+    );
   const raw =
-    videoData.defaultAudioLanguage || videoData.audioTracks?.[0]?.language;
+    videoData.defaultAudioLanguage ||
+    videoData.audioTracks?.[0]?.language ||
+    asrTrack?.languageCode;
   return raw?.split('-')[0]?.toLowerCase() ?? '';
 }
 

@@ -17,6 +17,13 @@ type YTPlayer = HTMLElement & {
   getVideoData(): VideoData;
   getVideoStats(): { el?: string };
   isInline(): boolean;
+  getPlayerResponse?(): {
+    captions?: {
+      playerCaptionsTracklistRenderer?: {
+        captionTracks?: Array<{ languageCode?: string; kind?: string }>;
+      };
+    };
+  };
 };
 
 type EventMap = {

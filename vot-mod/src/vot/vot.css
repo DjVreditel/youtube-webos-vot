@@ -35,6 +35,14 @@
   outline: none;
 }
 
+.ytaf-vot-seg:first-child {
+  border-radius: 1.45vh 0 0 1.45vh;
+}
+
+.ytaf-vot-seg:last-child {
+  border-radius: 0 1.45vh 1.45vh 0;
+}
+
 .ytaf-vot-seg + .ytaf-vot-seg {
   border-left: 0.15vh solid rgba(227, 227, 227, 0.14);
 }
@@ -132,6 +140,10 @@
 }
 
 .ytaf-vot-row--focused {
+  border-radius: 1vh;
+  margin: 0 0.6vh;
+  padding-left: 2vh;
+  padding-right: 2vh;
   background: rgba(139, 180, 245, 0.22);
   box-shadow: inset 0.5vh 0 0 rgb(139, 180, 245);
 }

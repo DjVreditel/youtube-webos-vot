@@ -28,8 +28,6 @@ const KEY_DOWN = 40;
 const KEY_ENTER = 13;
 const BACK_KEYS = [27, 461, 8];
 
-const AUTO_HIDE_MS = 4000;
-const ERROR_HIDE_MS = 10000;
 
 const LANG_NAMES_RU: Record<string, string> = {
   auto: 'Авто',
@@ -67,7 +65,6 @@ let visible = false;
 let focused = false;
 let menuOpen = false;
 let menuIndex = 0;
-let hideTimer: ReturnType<typeof setTimeout> | null = null;
 let focusBeforeOpen: HTMLElement | null = null;
 let lastStatus: VotTranslationStatus = 'idle';
 let lastMessage = '';
@@ -151,29 +148,12 @@ function render() {
   for (const { row, valueEl } of menuRows) valueEl.textContent = row.value();
 }
 
-function clearHideTimer() {
-  if (hideTimer !== null) {
-    clearTimeout(hideTimer);
-    hideTimer = null;
-  }
-}
-
-function scheduleHide() {
-  clearHideTimer();
-  if (menuOpen) return;
-  hideTimer = setTimeout(
-    () => setVisible(false),
-    lastStatus === 'error' ? ERROR_HIDE_MS : AUTO_HIDE_MS
-  );
-}
-
 function setVisible(next: boolean, takeFocus = false) {
   if (!root) return;
   if (!document.body.contains(root)) document.body.appendChild(root);
   visible = next;
   root.style.display = next ? 'block' : 'none';
   if (!next) {
-    clearHideTimer();
     setMenuOpen(false);
     if (focused) {
       focused = false;
@@ -194,7 +174,6 @@ function setVisible(next: boolean, takeFocus = false) {
       if (focused && root && !root.contains(document.activeElement)) mainBtn?.focus();
     }, 100);
   }
-  scheduleHide();
 }
 
 function setMenuOpen(next: boolean) {
@@ -202,11 +181,10 @@ function setMenuOpen(next: boolean) {
   menuOpen = next;
   menu.style.display = next ? 'block' : 'none';
   if (next) {
-    clearHideTimer();
     menuIndex = 0;
     focusMenuRow();
   } else if (focused) {
-    mainBtn?.focus();
+    menuBtn?.focus();
   }
 }
 
@@ -322,13 +300,14 @@ function onKey(evt: KeyboardEvent) {
   const handled = [KEY_LEFT, KEY_UP, KEY_RIGHT, KEY_DOWN, KEY_ENTER, ...BACK_KEYS].includes(code);
   if (!handled) return;
   evt.preventDefault();
-  evt.stopPropagation();
-  clearHideTimer();
+  evt.stopImmediatePropagation();
 
   if (menuOpen) {
     const current = menuRows[menuIndex];
-    if (code === KEY_UP || code === KEY_DOWN) {
-      menuIndex = (menuIndex + (code === KEY_DOWN ? 1 : -1) + menuRows.length) % menuRows.length;
+    if (code === KEY_UP && menuIndex === 0) {
+      setMenuOpen(false);
+    } else if (code === KEY_UP || code === KEY_DOWN) {
+      menuIndex = Math.min(menuRows.length - 1, menuIndex + (code === KEY_DOWN ? 1 : -1));
       focusMenuRow();
     } else if (code === KEY_LEFT || code === KEY_RIGHT) {
       current?.row.change?.(code === KEY_RIGHT ? 1 : -1);
@@ -351,9 +330,7 @@ function onKey(evt: KeyboardEvent) {
     (document.activeElement as HTMLElement | null)?.click?.();
   } else if (code !== KEY_UP) {
     setVisible(false);
-    return;
   }
-  scheduleHide();
 }
 
 function onStatus(status: VotTranslationStatus, message?: string) {
@@ -422,7 +399,13 @@ function createUi(): HTMLDivElement {
   });
   container.appendChild(menu);
 
-  container.addEventListener('keydown', onKey, true);
+  window.addEventListener(
+    'keydown',
+    (evt) => {
+      if (focused && !qrOverlay) onKey(evt);
+    },
+    true
+  );
   container.addEventListener('focusout', (evt) => {
     if (!focused || qrOverlay) return;
     const to = evt.relatedTarget as Node | null;
