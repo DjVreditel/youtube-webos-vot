@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+port_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 work="${COBALT_PORT_WORK:-$HOME/cobalt-port-work}"
 rf="$work/rf"
 runtime="$work/runtime-libs"
@@ -16,6 +17,10 @@ docker run --rm -v ytaf-webos-linux-sdk:/sdk:ro -v "$runtime:/out" ubuntu:24.04 
 '
 
 cd "$rf"
+cp "$port_dir/../assets/icon.png" assets/icon.png
+cp "$port_dir/../assets/largeIcon.png" assets/largeIcon.png
+jq '.title = "YouTube" | .iconColor = "#FFFFFF"' starterless-cobalt/appinfo.json > starterless-cobalt/appinfo.json.tmp
+mv starterless-cobalt/appinfo.json.tmp starterless-cobalt/appinfo.json
 [[ -x node_modules/.bin/ares-package ]] || npm install --no-audit --no-fund
 rm -f output/*.ipk
 COBALT_BUILD_DIR="$build_dir" COBALT_RUNTIME_DIR="$runtime" COBALT_PACKAGE_OUTPUT_DIR="$rf/output" \
