@@ -85,11 +85,29 @@
     input.type = 'text';
     input.tabIndex = 0;
   }
+  function upgradeImage(image) {
+    var source = '';
+    Object.defineProperty(image, 'src', {
+      configurable: true,
+      get: function () {
+        return source;
+      },
+      set: function (value) {
+        source = String(value);
+        image.style.backgroundImage = source ? 'url("' + source.replace(/"/g, '%22') + '")' : '';
+      }
+    });
+    image.style.display = 'inline-block';
+    image.style.backgroundSize = 'contain';
+    image.style.backgroundRepeat = 'no-repeat';
+    image.style.backgroundPosition = 'center';
+  }
   Document.prototype.createElement = function (tag) {
     var element = nativeCreateElement.apply(this, arguments);
     var name = String(tag).toLowerCase();
     if (name === 'input') upgradeInput(element);
     else if (name === 'button') element.tabIndex = 0;
+    else if (name === 'img') upgradeImage(element);
     return element;
   };
 

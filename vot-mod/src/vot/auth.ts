@@ -34,7 +34,27 @@ export function qrImageUrl(data: string): string {
 }
 
 export async function startDeviceAuth(): Promise<DeviceStart> {
-  return post<DeviceStart>('/device/start');
+  let lastError: unknown = new Error('/device/start: timeout');
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      return await new Promise<DeviceStart>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('/device/start: timeout')), 15000);
+        post<DeviceStart>('/device/start').then(
+          (value) => {
+            clearTimeout(timer);
+            resolve(value);
+          },
+          (error) => {
+            clearTimeout(timer);
+            reject(error);
+          }
+        );
+      });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
 }
 
 export type PollResult =
