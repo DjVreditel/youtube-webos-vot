@@ -47,7 +47,7 @@ conn.on('ready', () => {
     const [localPort, remotePort] = args.map(Number);
     net
       .createServer((sock) => {
-        conn.forwardOut('127.0.0.1', localPort, '127.0.0.1', remotePort, (err, stream) => {
+        conn.forwardOut('127.0.0.1', localPort, process.env.TV_FORWARD_HOST || '127.0.0.1', remotePort, (err, stream) => {
           if (err) {
             sock.destroy();
             return;

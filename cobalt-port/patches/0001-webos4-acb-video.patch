@@ -55,7 +55,7 @@ index 0000000..387ec7f
 +     return false;
 +   }
 diff --git a/cobalt-platform/webos/arm/application_sdl.cc b/cobalt-platform/webos/arm/application_sdl.cc
-index c6c9bfd..d3380b6 100644
+index c6c9bfd..040e027 100644
 --- a/cobalt-platform/webos/arm/application_sdl.cc
 +++ b/cobalt-platform/webos/arm/application_sdl.cc
 @@ -2,11 +2,15 @@
@@ -221,7 +221,7 @@ index c6c9bfd..d3380b6 100644
    const bool inhibit_screen_saver = !paused;
    if (video_screen_saver_inhibited_ == inhibit_screen_saver) {
      return;
-@@ -361,11 +454,21 @@ void ApplicationSdl::AcceptFrame(SbPlayer,
+@@ -361,11 +454,32 @@ void ApplicationSdl::AcceptFrame(SbPlayer,
                                   int y,
                                   int width,
                                   int height) {
@@ -235,17 +235,28 @@ index c6c9bfd..d3380b6 100644
 +  if (acb_id_) {
 +    const int logical_width = std::min(window_->width, 1920);
 +    const int logical_height = std::min(window_->height, 1080);
-+    acb_window_ = {x * logical_width / window_->width,
-+                   y * logical_height / window_->height,
-+                   width * logical_width / window_->width,
-+                   height * logical_height / window_->height};
-+    ApplyAcbWindowLocked();
++    const SDL_Rect requested = {x * logical_width / window_->width,
++                                y * logical_height / window_->height,
++                                width * logical_width / window_->width,
++                                height * logical_height / window_->height};
++    const SbTimeMonotonic now = SbTimeGetMonotonicNow();
++    if (std::memcmp(&requested, &acb_window_, sizeof(requested)) != 0) {
++      acb_window_ = requested;
++      acb_window_changed_at_ = now;
++      if (acb_applied_window_.w > 0) {
++        return;
++      }
++    }
++    if (now - acb_window_changed_at_ >= 150 * kSbTimeMillisecond ||
++        acb_applied_window_.w <= 0) {
++      ApplyAcbWindowLocked();
++    }
 +    return;
 +  }
    const int video_width = video_width_.load() > 0 ? video_width_.load()
                                                     : window_->width;
    const int video_height = video_height_.load() > 0 ? video_height_.load()
-@@ -409,6 +512,110 @@ void ApplicationSdl::AcceptFrame(SbPlayer,
+@@ -409,6 +523,110 @@ void ApplicationSdl::AcceptFrame(SbPlayer,
    }
  }
  
@@ -357,10 +368,18 @@ index c6c9bfd..d3380b6 100644
    return sdl_initialized_;
  }
 diff --git a/cobalt-platform/webos/arm/application_sdl.h b/cobalt-platform/webos/arm/application_sdl.h
-index 070c809..47b8628 100644
+index 070c809..95e4fa7 100644
 --- a/cobalt-platform/webos/arm/application_sdl.h
 +++ b/cobalt-platform/webos/arm/application_sdl.h
-@@ -38,6 +38,9 @@ class ApplicationSdl : public starboard::QueueApplication {
+@@ -7,6 +7,7 @@
+ #include <string>
+ 
+ #include "starboard/common/mutex.h"
++#include "starboard/time.h"
+ #include "starboard/shared/starboard/queue_application.h"
+ 
+ namespace starboard {
+@@ -38,6 +39,9 @@ class ApplicationSdl : public starboard::QueueApplication {
    // fallback immediately; a later AcceptFrame() replaces it with the exact
    // HTML video bounds.
    void ConfigureFullscreenVideo();
@@ -370,7 +389,7 @@ index 070c809..47b8628 100644
  
   protected:
    void AcceptFrame(SbPlayer player,
-@@ -57,6 +60,10 @@ class ApplicationSdl : public starboard::QueueApplication {
+@@ -57,6 +61,10 @@ class ApplicationSdl : public starboard::QueueApplication {
  
   private:
    Event* TranslateEvent(const SDL_Event& event);
@@ -381,7 +400,7 @@ index 070c809..47b8628 100644
  
    bool sdl_initialized_;
    SbWindow window_;
-@@ -64,6 +71,13 @@ class ApplicationSdl : public starboard::QueueApplication {
+@@ -64,6 +72,14 @@ class ApplicationSdl : public starboard::QueueApplication {
    void* egl_surface_;
    int egl_config_id_;
    std::string exported_window_id_;
@@ -392,6 +411,7 @@ index 070c809..47b8628 100644
 +  int acb_play_state_ = -1;
 +  SDL_Rect acb_window_{0, 0, 0, 0};
 +  SDL_Rect acb_applied_window_{0, 0, 0, 0};
++  SbTimeMonotonic acb_window_changed_at_ = 0;
    std::atomic<int> video_width_{0};
    std::atomic<int> video_height_{0};
    SDL_Rect last_video_original_{0, 0, 0, 0};

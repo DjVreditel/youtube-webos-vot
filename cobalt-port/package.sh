@@ -21,10 +21,21 @@ cp "$port_dir/../assets/icon.png" assets/icon.png
 cp "$port_dir/../assets/largeIcon.png" assets/largeIcon.png
 jq '.title = "YouTube" | .iconColor = "#FFFFFF"' starterless-cobalt/appinfo.json > starterless-cobalt/appinfo.json.tmp
 mv starterless-cobalt/appinfo.json.tmp starterless-cobalt/appinfo.json
+userscript="$port_dir/../dist/webOSUserScripts/userScript.js"
+[[ -s "$userscript" ]] || { echo "Build the userscript first (npm run build in the repo root)." >&2; exit 2; }
+webapp_out="$work/webapp-out"
+rm -rf "$webapp_out"
+mkdir -p "$webapp_out"
+cat "$port_dir/inject/prefix.js" "$userscript" "$port_dir/inject/suffix.js" webapp/output/adblockPreload.js \
+  > "$webapp_out/adblockPreload.js"
+printf 'void 0;\n' > "$webapp_out/adblockMain.js"
+printf '\n' > "$webapp_out/adblockMain.css"
+sed -i "s/grep -Fq '__shorts'/grep -Fq ''/" scripts/package-starterless-cobalt.sh
+
 [[ -x node_modules/.bin/ares-package ]] || npm install --no-audit --no-fund
 rm -f output/*.ipk
 COBALT_BUILD_DIR="$build_dir" COBALT_RUNTIME_DIR="$runtime" COBALT_PACKAGE_OUTPUT_DIR="$rf/output" \
-  bash scripts/package-starterless-cobalt.sh
+  WEBAPP_OUTPUT_DIR="$webapp_out" bash scripts/package-starterless-cobalt.sh
 mkdir -p "$work/dist"
 cp output/*.ipk "$work/dist/"
 ls -l "$work/dist"

@@ -3,6 +3,7 @@ const [mode, ...args] = process.argv.slice(2);
 const PORT = 9998;
 
 async function pickTarget() {
+  if (process.env.CDP_WS) return process.env.CDP_WS;
   const list = await (await fetch(`http://127.0.0.1:${PORT}/json`)).json();
   if (mode === 'list') {
     for (const t of list) console.log(t.type, t.title, t.url.slice(0, 120));
@@ -138,6 +139,20 @@ async function pickTarget() {
     Object.entries(byUrl).sort((a, b) => b[1] - a[1]).slice(0, 12).forEach(([k, v]) => console.log((100 * v / all).toFixed(1).padStart(5) + '%  ' + k));
     console.log('--- top functions (self)');
     Object.entries(total).sort((a, b) => b[1] - a[1]).slice(0, 30).forEach(([k, v]) => console.log((100 * v / all).toFixed(1).padStart(5) + '%  ' + k));
+    ws.close();
+  } else if (mode === 'cshot') {
+    await send('Runtime.evaluate', {
+      expression: "window.__shot=null;window.screenshot().then(function(b){var u=new Uint8Array(b.buffer),s='';for(var i=0;i<u.length;i+=8192)s+=String.fromCharCode.apply(null,u.subarray(i,i+8192));window.__shot=btoa(s);},function(e){window.__shot='ERR '+e;})"
+    });
+    let data = null;
+    for (let i = 0; i < 60 && !data; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      const res = await send('Runtime.evaluate', { expression: 'window.__shot', returnByValue: true });
+      data = res.result.result.value;
+    }
+    if (!data || data.startsWith('ERR')) throw new Error(data || 'screenshot timed out');
+    require('fs').writeFileSync(args[0], Buffer.from(data, 'base64'));
+    console.log('saved', args[0]);
     ws.close();
   } else if (mode === 'shot') {
     const res = await send('Page.captureScreenshot', {});
