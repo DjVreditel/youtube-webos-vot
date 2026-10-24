@@ -1,0 +1,645 @@
+diff --git a/cobalt-platform/SDL-webOS-2.30.12-relaunch-sigcont.patch b/cobalt-platform/SDL-webOS-2.30.12-relaunch-sigcont.patch
+index 5421885..2cc8ed4 100644
+--- a/cobalt-platform/SDL-webOS-2.30.12-relaunch-sigcont.patch
++++ b/cobalt-platform/SDL-webOS-2.30.12-relaunch-sigcont.patch
+@@ -51,3 +51,18 @@ index 20b9038..af40d4c 100644
+  }
+  
+  static void WindowHintsCallback(void *userdata, const char *name, const char *oldValue, const char *newValue)
++diff --git a/src/video/wayland/SDL_waylandwebos_foreign.c b/src/video/wayland/SDL_waylandwebos_foreign.c
++index 6685f739c..10884a12f 100644
++--- a/src/video/wayland/SDL_waylandwebos_foreign.c
+++++ b/src/video/wayland/SDL_waylandwebos_foreign.c
++@@ -48,6 +48,10 @@ const char *WaylandWebOS_CreateExportedWindow(_THIS, SDL_webOSExportedWindowType
++         SDL_SetError("Failed creating exported window: No video driver data for video device");
++         return NULL;
++     }
+++    if (data->webos_foreign == NULL || data->webos_foreign_table == NULL) {
+++        SDL_SetError("Failed creating exported window: wl_webos_foreign is not available");
+++        return NULL;
+++    }
++     if ((window = SDL_GL_GetCurrentWindow()) == NULL) {
++         window = _this->windows;
++         while (window != NULL) {
+diff --git a/cobalt-platform/cobalt-23.lts.6-webos4-av1-gate.patch b/cobalt-platform/cobalt-23.lts.6-webos4-av1-gate.patch
+new file mode 100644
+index 0000000..387ec7f
+--- /dev/null
++++ b/cobalt-platform/cobalt-23.lts.6-webos4-av1-gate.patch
+@@ -0,0 +1,27 @@
++diff --git a/starboard/linux/shared/media_is_video_supported.cc b/starboard/linux/shared/media_is_video_supported.cc
++--- a/starboard/linux/shared/media_is_video_supported.cc	2026-10-24 13:13:32.523316552 +0300
+++++ b/starboard/linux/shared/media_is_video_supported.cc	2026-10-24 13:13:32.543587888 +0300
++@@ -21,6 +21,9 @@
++ #include "starboard/media.h"
++ #include "starboard/shared/libde265/de265_library_loader.h"
++ #include "starboard/shared/starboard/media/media_util.h"
+++#if defined(STARBOARD_WEBOS)
+++#include "starboard/webos/arm/webos_version.h"
+++#endif
++ 
++ using ::starboard::shared::de265::is_de265_supported;
++ using ::starboard::shared::starboard::media::IsSDRVideo;
++@@ -72,8 +75,11 @@
++   // conservative, while advertising the UHD codecs confirmed by hardware
++   // playback on webOS 6.5 devices. A zero dimension means "not constrained".
++   const bool is_avc = video_codec == kSbMediaVideoCodecH264;
++-  const bool is_uhd_codec = video_codec == kSbMediaVideoCodecVp9 ||
++-                            video_codec == kSbMediaVideoCodecAv1;
+++  const int webos_major = ::starboard::shared::webos::WebOsMajorVersion();
+++  const bool is_uhd_codec =
+++      video_codec == kSbMediaVideoCodecVp9 ||
+++      (video_codec == kSbMediaVideoCodecAv1 &&
+++       (webos_major == 0 || webos_major >= 5));
++   if (!is_avc && !is_uhd_codec) {
++     return false;
++   }
+diff --git a/cobalt-platform/webos/arm/application_sdl.cc b/cobalt-platform/webos/arm/application_sdl.cc
+index c6c9bfd..2eafd4b 100644
+--- a/cobalt-platform/webos/arm/application_sdl.cc
++++ b/cobalt-platform/webos/arm/application_sdl.cc
+@@ -2,11 +2,19 @@
+ 
+ #include <SDL2/SDL_syswm.h>
+ #include <SDL2/SDL_webOS.h>
++#include <appswitching-control-block/AcbAPI.h>
++#include <dlfcn.h>
++#include <fcntl.h>
++#include <signal.h>
++#include <ucontext.h>
++#include <unistd.h>
++#include <starfish-media-pipeline/StarfishMediaAPIs.h>
+ 
+ #include <EGL/egl.h>
+ 
+ #include <algorithm>
+ #include <cmath>
++#include <cstdlib>
+ #include <cstring>
+ #include <limits>
+ 
+@@ -114,6 +122,120 @@ unsigned int SdlModifiersToSbModifiers(SDL_Keymod modifiers) {
+   return result;
+ }
+ 
++struct AcbApi {
++  decltype(&AcbAPI_create) create;
++  decltype(&AcbAPI_initialize) initialize;
++  decltype(&AcbAPI_setMediaId) set_media_id;
++  int (*set_media_video_data)(long, const char*, long*);
++  decltype(&AcbAPI_setSinkType) set_sink_type;
++  decltype(&AcbAPI_setState) set_state;
++  decltype(&AcbAPI_setDisplayWindow) set_display_window;
++  decltype(&AcbAPI_finalize) finalize;
++  decltype(&AcbAPI_destroy) destroy;
++};
++
++template <typename T>
++bool LoadSymbol(void* library, const char* name, T* out) {
++  *out = reinterpret_cast<T>(dlsym(library, name));
++  if (!*out) {
++    SB_LOG(ERROR) << "libAcbAPI is missing " << name;
++  }
++  return *out != nullptr;
++}
++
++const AcbApi* GetAcbApi() {
++  static const AcbApi* api = []() -> const AcbApi* {
++    void* library = dlopen("libAcbAPI.so.1", RTLD_NOW | RTLD_LOCAL);
++    if (!library) {
++      SB_LOG(ERROR) << "Cannot load libAcbAPI.so.1: " << dlerror();
++      return nullptr;
++    }
++    static AcbApi loaded;
++    if (!LoadSymbol(library, "AcbAPI_create", &loaded.create) ||
++        !LoadSymbol(library, "AcbAPI_initialize", &loaded.initialize) ||
++        !LoadSymbol(library, "AcbAPI_setMediaId", &loaded.set_media_id) ||
++        !LoadSymbol(library, "AcbAPI_setMediaVideoData",
++                    &loaded.set_media_video_data) ||
++        !LoadSymbol(library, "AcbAPI_setSinkType", &loaded.set_sink_type) ||
++        !LoadSymbol(library, "AcbAPI_setState", &loaded.set_state) ||
++        !LoadSymbol(library, "AcbAPI_setDisplayWindow",
++                    &loaded.set_display_window) ||
++        !LoadSymbol(library, "AcbAPI_finalize", &loaded.finalize) ||
++        !LoadSymbol(library, "AcbAPI_destroy", &loaded.destroy)) {
++      return nullptr;
++    }
++    return &loaded;
++  }();
++  return api;
++}
++
++void AcbCallback(long acb_id,
++                 long task_id,
++                 long event_type,
++                 long app_state,
++                 long play_state,
++                 const char* reply) {
++  SB_LOG(INFO) << "ACB event acb=" << acb_id << " task=" << task_id
++               << " event=" << event_type << " app=" << app_state
++               << " play=" << play_state << " reply=" << (reply ? reply : "");
++}
++
++void WriteAll(const char* data, size_t size) {
++  while (size > 0) {
++    const ssize_t written = write(STDERR_FILENO, data, size);
++    if (written <= 0) {
++      return;
++    }
++    data += written;
++    size -= static_cast<size_t>(written);
++  }
++}
++
++void DumpCrash(int signal_number, siginfo_t* info, void* context) {
++  const ucontext_t* uc = static_cast<const ucontext_t*>(context);
++  char line[160];
++  int size = snprintf(line, sizeof(line),
++                      "\n[YTAF crash] sig=%d addr=%p pc=%08lx lr=%08lx sp=%08lx\n",
++                      signal_number, info->si_addr, uc->uc_mcontext.arm_pc,
++                      uc->uc_mcontext.arm_lr, uc->uc_mcontext.arm_sp);
++  WriteAll(line, static_cast<size_t>(size));
++  const unsigned long* stack =
++      reinterpret_cast<const unsigned long*>(uc->uc_mcontext.arm_sp);
++  for (int i = 0; i < 256; i += 8) {
++    size = snprintf(line, sizeof(line),
++                    "[YTAF stack] %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx\n",
++                    stack[i], stack[i + 1], stack[i + 2], stack[i + 3],
++                    stack[i + 4], stack[i + 5], stack[i + 6], stack[i + 7]);
++    WriteAll(line, static_cast<size_t>(size));
++  }
++  const int maps = open("/proc/self/maps", O_RDONLY);
++  if (maps >= 0) {
++    char buffer[4096];
++    ssize_t count;
++    while ((count = read(maps, buffer, sizeof(buffer))) > 0) {
++      WriteAll(buffer, static_cast<size_t>(count));
++    }
++    close(maps);
++  }
++  signal(signal_number, SIG_DFL);
++  raise(signal_number);
++}
++
++void InstallCrashDump() {
++  struct sigaction action = {};
++  action.sa_sigaction = &DumpCrash;
++  action.sa_flags = SA_SIGINFO | SA_ONSTACK;
++  sigemptyset(&action.sa_mask);
++  sigaction(SIGSEGV, &action, nullptr);
++  sigaction(SIGBUS, &action, nullptr);
++  sigaction(SIGILL, &action, nullptr);
++}
++
++const char* AppId() {
++  const char* app_id = std::getenv("APPID");
++  return app_id && *app_id ? app_id : "youtube.leanback.v4";
++}
++
+ }  // namespace
+ 
+ ApplicationSdl::ApplicationSdl()
+@@ -131,6 +253,7 @@ ApplicationSdl* ApplicationSdl::Get() {
+ }
+ 
+ void ApplicationSdl::Initialize() {
++  InstallCrashDump();
+   SbAudioSinkPrivate::Initialize();
+   SDL_SetMainReady();
+   SDL_SetHint(SDL_HINT_WEBOS_REGISTER_APP, "1");
+@@ -272,6 +395,10 @@ bool ApplicationSdl::DestroyWindow(SbWindow window) {
+     SDL_webOSDestroyExportedWindow(exported_window_id_.c_str());
+     exported_window_id_.clear();
+   }
++  {
++    ScopedLock lock(exported_geometry_mutex_);
++    DestroyAcbLocked();
++  }
+   SDL_EnableScreenSaver();
+   exported_video_clients_ = 0;
+   video_screen_saver_inhibited_ = false;
+@@ -289,17 +416,28 @@ bool ApplicationSdl::AcquireExportedVideoWindow() {
+   if (!SbWindowIsValid(window_)) {
+     return false;
+   }
+-  if (!exported_window_id_.empty()) {
++  if (!exported_window_id_.empty() || acb_id_) {
+     ++exported_video_clients_;
+     return true;
+   }
+ 
+-  const char* exported_window = SDL_webOSCreateExportedWindow(
+-      SDL_WEBOS_EXPORED_WINDOW_TYPE_VIDEO);
++  const char* exported_window =
++      acb_video_ ? nullptr
++                 : SDL_webOSCreateExportedWindow(
++                       SDL_WEBOS_EXPORED_WINDOW_TYPE_VIDEO);
+   if (!exported_window) {
+-    SB_LOG(ERROR) << "SDL_webOSCreateExportedWindow failed: "
+-                  << SDL_GetError();
+-    return false;
++    if (!acb_video_) {
++      SB_LOG(WARNING) << "SDL_webOSCreateExportedWindow failed: "
++                      << SDL_GetError() << "; using the webOS 4 ACB path.";
++      acb_video_ = true;
++    }
++    if (!CreateAcbLocked()) {
++      return false;
++    }
++    exported_video_clients_ = 1;
++    SDL_DisableScreenSaver();
++    video_screen_saver_inhibited_ = true;
++    return true;
+   }
+   exported_window_id_ = exported_window;
+   exported_video_clients_ = 1;
+@@ -316,7 +454,16 @@ void ApplicationSdl::ReleaseExportedVideoWindow() {
+     return;
+   }
+   --exported_video_clients_;
+-  if (exported_video_clients_ != 0 || exported_window_id_.empty()) {
++  if (exported_video_clients_ != 0) {
++    return;
++  }
++  if (acb_id_) {
++    DestroyAcbLocked();
++    SDL_EnableScreenSaver();
++    video_screen_saver_inhibited_ = false;
++    return;
++  }
++  if (exported_window_id_.empty()) {
+     return;
+   }
+   SDL_webOSDestroyExportedWindow(exported_window_id_.c_str());
+@@ -329,9 +476,11 @@ void ApplicationSdl::ReleaseExportedVideoWindow() {
+ 
+ void ApplicationSdl::SetVideoPaused(bool paused) {
+   ScopedLock lock(exported_geometry_mutex_);
+-  if (!sdl_initialized_ || exported_window_id_.empty()) {
++  if (!sdl_initialized_ || (exported_window_id_.empty() && !acb_id_)) {
+     return;
+   }
++  acb_paused_ = paused;
++  ApplyAcbPlayStateLocked();
+   const bool inhibit_screen_saver = !paused;
+   if (video_screen_saver_inhibited_ == inhibit_screen_saver) {
+     return;
+@@ -361,11 +510,21 @@ void ApplicationSdl::AcceptFrame(SbPlayer,
+                                  int y,
+                                  int width,
+                                  int height) {
+-  if (exported_window_id_.empty() || !SbWindowIsValid(window_) || width <= 0 ||
+-      height <= 0) {
++  if ((exported_window_id_.empty() && !acb_id_) || !SbWindowIsValid(window_) ||
++      width <= 0 || height <= 0) {
+     return;
+   }
+   ScopedLock lock(exported_geometry_mutex_);
++  if (acb_id_) {
++    const int logical_width = std::min(window_->width, 1920);
++    const int logical_height = std::min(window_->height, 1080);
++    acb_window_ = {x * logical_width / window_->width,
++                   y * logical_height / window_->height,
++                   width * logical_width / window_->width,
++                   height * logical_height / window_->height};
++    ApplyAcbWindowLocked();
++    return;
++  }
+   const int video_width = video_width_.load() > 0 ? video_width_.load()
+                                                    : window_->width;
+   const int video_height = video_height_.load() > 0 ? video_height_.load()
+@@ -409,6 +568,110 @@ void ApplicationSdl::AcceptFrame(SbPlayer,
+   }
+ }
+ 
++bool ApplicationSdl::CreateAcbLocked() {
++  const AcbApi* acb = GetAcbApi();
++  if (!acb) {
++    return false;
++  }
++  acb_id_ = acb->create();
++  if (!acb_id_) {
++    SB_LOG(ERROR) << "AcbAPI_create failed.";
++    return false;
++  }
++  if (!acb->initialize(acb_id_, PLAYER_TYPE_MSE, AppId(), &AcbCallback)) {
++    SB_LOG(ERROR) << "AcbAPI_initialize failed.";
++    acb->destroy(acb_id_);
++    acb_id_ = 0;
++    return false;
++  }
++  acb_loaded_ = false;
++  acb_applied_window_ = {0, 0, 0, 0};
++  SB_LOG(INFO) << "Created ACB video client " << acb_id_;
++  return true;
++}
++
++void ApplicationSdl::DestroyAcbLocked() {
++  if (!acb_id_) {
++    return;
++  }
++  const AcbApi* acb = GetAcbApi();
++  long task_id = 0;
++  acb->set_state(acb_id_, APPSTATE_FOREGROUND, PLAYSTATE_UNLOADED, &task_id);
++  acb->finalize(acb_id_);
++  acb->destroy(acb_id_);
++  SB_LOG(INFO) << "Destroyed ACB video client " << acb_id_;
++  acb_id_ = 0;
++  acb_loaded_ = false;
++}
++
++void ApplicationSdl::ApplyAcbWindowLocked() {
++  if (!acb_id_ || !acb_loaded_ || acb_window_.w <= 0 || acb_window_.h <= 0 ||
++      std::memcmp(&acb_window_, &acb_applied_window_, sizeof(acb_window_)) ==
++          0) {
++    return;
++  }
++  const bool full_screen = acb_window_.x == 0 && acb_window_.y == 0 &&
++                           acb_window_.w >= 1920 && acb_window_.h >= 1080;
++  long task_id = 0;
++  GetAcbApi()->set_display_window(acb_id_, acb_window_.x, acb_window_.y,
++                                  acb_window_.w, acb_window_.h, full_screen,
++                                  &task_id);
++  acb_applied_window_ = acb_window_;
++  SB_LOG(INFO) << "ACB display window " << acb_window_.x << ","
++               << acb_window_.y << " " << acb_window_.w << "x"
++               << acb_window_.h << (full_screen ? " fullscreen" : "");
++}
++
++void ApplicationSdl::SetStarfishMediaId(const char* media_id) {
++  ScopedLock lock(exported_geometry_mutex_);
++  if (!acb_id_ || !media_id || !*media_id) {
++    return;
++  }
++  acb_loaded_ = false;
++  acb_play_state_ = -1;
++  acb_applied_window_ = {0, 0, 0, 0};
++  GetAcbApi()->set_media_id(acb_id_, media_id);
++  SB_LOG(INFO) << "ACB media id " << media_id;
++}
++
++void ApplicationSdl::OnStarfishEvent(int type, const char* str_value) {
++  ScopedLock lock(exported_geometry_mutex_);
++  if (!acb_id_) {
++    return;
++  }
++  const AcbApi* acb = GetAcbApi();
++  long task_id = 0;
++  if (type == PF_EVENT_TYPE_STR_VIDEO_INFO && str_value) {
++    acb->set_media_video_data(acb_id_, str_value, &task_id);
++  } else if (type == PF_EVENT_TYPE_STR_STATE_UPDATE__LOADCOMPLETED) {
++    acb->set_sink_type(acb_id_, SINK_TYPE_MAIN);
++    acb->set_state(acb_id_, APPSTATE_FOREGROUND, PLAYSTATE_LOADED, &task_id);
++    acb_loaded_ = true;
++    acb_play_state_ = PLAYSTATE_LOADED;
++    ApplyAcbWindowLocked();
++    ApplyAcbPlayStateLocked();
++  } else if (type == PF_EVENT_TYPE_STR_STATE_UPDATE__UNLOADCOMPLETED) {
++    acb->set_state(acb_id_, APPSTATE_FOREGROUND, PLAYSTATE_UNLOADED,
++                   &task_id);
++    acb_loaded_ = false;
++    acb_applied_window_ = {0, 0, 0, 0};
++  }
++}
++
++void ApplicationSdl::ApplyAcbPlayStateLocked() {
++  if (!acb_id_ || !acb_loaded_) {
++    return;
++  }
++  const int state = acb_paused_ ? PLAYSTATE_PAUSED : PLAYSTATE_PLAYING;
++  if (state == acb_play_state_) {
++    return;
++  }
++  long task_id = 0;
++  GetAcbApi()->set_state(acb_id_, APPSTATE_FOREGROUND,
++                         static_cast<AcbAPI_PlayState>(state), &task_id);
++  acb_play_state_ = state;
++}
++
+ bool ApplicationSdl::MayHaveSystemEvents() {
+   return sdl_initialized_;
+ }
+diff --git a/cobalt-platform/webos/arm/application_sdl.h b/cobalt-platform/webos/arm/application_sdl.h
+index 070c809..47b8628 100644
+--- a/cobalt-platform/webos/arm/application_sdl.h
++++ b/cobalt-platform/webos/arm/application_sdl.h
+@@ -38,6 +38,9 @@ class ApplicationSdl : public starboard::QueueApplication {
+   // fallback immediately; a later AcceptFrame() replaces it with the exact
+   // HTML video bounds.
+   void ConfigureFullscreenVideo();
++  bool UsesAcbVideo() const { return acb_video_; }
++  void SetStarfishMediaId(const char* media_id);
++  void OnStarfishEvent(int type, const char* str_value);
+ 
+  protected:
+   void AcceptFrame(SbPlayer player,
+@@ -57,6 +60,10 @@ class ApplicationSdl : public starboard::QueueApplication {
+ 
+  private:
+   Event* TranslateEvent(const SDL_Event& event);
++  bool CreateAcbLocked();
++  void DestroyAcbLocked();
++  void ApplyAcbWindowLocked();
++  void ApplyAcbPlayStateLocked();
+ 
+   bool sdl_initialized_;
+   SbWindow window_;
+@@ -64,6 +71,13 @@ class ApplicationSdl : public starboard::QueueApplication {
+   void* egl_surface_;
+   int egl_config_id_;
+   std::string exported_window_id_;
++  bool acb_video_ = false;
++  long acb_id_ = 0;
++  bool acb_loaded_ = false;
++  bool acb_paused_ = true;
++  int acb_play_state_ = -1;
++  SDL_Rect acb_window_{0, 0, 0, 0};
++  SDL_Rect acb_applied_window_{0, 0, 0, 0};
+   std::atomic<int> video_width_{0};
+   std::atomic<int> video_height_{0};
+   SDL_Rect last_video_original_{0, 0, 0, 0};
+diff --git a/cobalt-platform/webos/arm/starfish_av_components.cc b/cobalt-platform/webos/arm/starfish_av_components.cc
+index b8cd804..3c80a01 100644
+--- a/cobalt-platform/webos/arm/starfish_av_components.cc
++++ b/cobalt-platform/webos/arm/starfish_av_components.cc
+@@ -237,8 +237,11 @@ struct NativeSession {
+   std::string applied_hdr_payload;
+   bool hdr_auto_logged = false;
+ 
+-  static void Callback(int type, int64_t value, const char*, void* context) {
++  static void Callback(int type, int64_t value, const char* text, void* context) {
+     auto* self = static_cast<NativeSession*>(context);
++    if (type != PF_EVENT_TYPE_FRAMEREADY) {
++      ApplicationSdl::Get()->OnStarfishEvent(type, text);
++    }
+     switch (type) {
+       case PF_EVENT_TYPE_FRAMEREADY: self->frame_ns.store(value); break;
+       case PF_EVENT_TYPE_STR_STATE_UPDATE__LOADCOMPLETED: self->loaded.store(true); break;
+@@ -552,13 +555,15 @@ class Owner : public player::JobQueue::JobOwner {
+     ApplicationSdl::Get()->SetVideoResolution(width, height);
+     ApplicationSdl::Get()->ConfigureFullscreenVideo();
+     const std::string window = ApplicationSdl::Get()->GetExportedWindowId();
++    const std::string window_field =
++        window.empty() ? std::string() : "\"windowId\":\"" + window + "\",";
+     const char* codec_name = CodecName(video_codec_);
+     const int max_width = video_codec_ == kSbMediaVideoCodecH264 ? 1920 : 3840;
+     const int max_height = video_codec_ == kSbMediaVideoCodecH264 ? 1080 : 2160;
+     // Window ID is generated by SDL; app ID stays fixed, not unescaped input.
+     const std::string payload = FormatString(
+         "{\"args\":[{\"mediaTransportType\":\"BUFFERSTREAM\",\"option\":{"
+-        "\"appId\":\"youtube.leanback.v4\",\"windowId\":\"%s\",\"queryPosition\":false,"
++        "\"appId\":\"youtube.leanback.v4\",%s\"queryPosition\":false,"
+         "\"externalStreamingInfo\":{\"contents\":{\"format\":\"RAW\",\"provider\":\"Chrome\","
+         "\"codec\":{\"video\":\"%s\",\"audio\":\"OPUS\"},"
+         "\"esInfo\":{\"pauseAtDecodeTime\":false,\"seperatedPTS\":true,\"ptsToDecode\":%lld,"
+@@ -569,7 +574,7 @@ class Owner : public player::JobQueue::JobOwner {
+         "\"srcBufferLevelVideo\":{\"minimum\":1024,\"maximum\":8388608}}},"
+         "\"adaptiveStreaming\":{\"audioOnly\":false,\"adaptiveResolution\":true,"
+         "\"maxWidth\":%d,\"maxHeight\":%d,\"maxFrameRate\":60}}}]}",
+-        window.c_str(), codec_name,
++        window_field.c_str(), codec_name,
+         static_cast<long long>(plan.target_native_us * 1000), width, height,
+         unsigned(config_.header[9]), Base64(plan.config.header).c_str(),
+         max_width, max_height);
+@@ -579,6 +584,7 @@ class Owner : public player::JobQueue::JobOwner {
+           static_cast<long long>(first_audio), static_cast<long long>(first_video),
+           static_cast<long long>(plan.epoch_us), plan.discard_samples);
+     session->api->notifyForeground();
++    ApplicationSdl::Get()->SetStarfishMediaId(session->api->getMediaID());
+     if (!session->api->Load(payload.c_str(), NativeSession::Callback, session.get()))
+       FailSession(*session, "shared Starfish Load rejected");
+     // Even rejected Load may have installed callbacks: caller always unloads.
+diff --git a/cobalt-platform/webos/arm/starfish_video_decoder.cc b/cobalt-platform/webos/arm/starfish_video_decoder.cc
+index 2a52317..c3024c2 100644
+--- a/cobalt-platform/webos/arm/starfish_video_decoder.cc
++++ b/cobalt-platform/webos/arm/starfish_video_decoder.cc
+@@ -279,17 +279,20 @@ void StarfishVideoDecoder::InitializePipeline(
+     app_id = "youtube.leanback.v4";
+   }
+   const std::string& window_id = ApplicationSdl::Get()->GetExportedWindowId();
+-  if (window_id.empty()) {
++  if (window_id.empty() && !ApplicationSdl::Get()->UsesAcbVideo()) {
+     ReportError("SDL did not create a webOS exported video window.");
+     return;
+   }
++  const std::string window_field =
++      window_id.empty() ? std::string()
++                        : "\"windowId\":\"" + window_id + "\",";
+ 
+   const int64_t target_pts_ns = seek_to_time_.load() * 1000;
+   const AdaptiveVideoCapabilities capabilities =
+       GetAdaptiveVideoCapabilities(codec_, sample_info);
+   std::string payload = FormatString(
+       "{\"args\":[{\"mediaTransportType\":\"BUFFERSTREAM\","
+-      "\"option\":{\"windowId\":\"%s\",\"appId\":\"%s\","
++      "\"option\":{%s\"appId\":\"%s\","
+       "\"queryPosition\":false,"
+       "\"externalStreamingInfo\":{\"contents\":{\"codec\":{"
+       "\"video\":\"%s\"},\"esInfo\":{\"pauseAtDecodeTime\":true,"
+@@ -309,7 +312,7 @@ void StarfishVideoDecoder::InitializePipeline(
+       "\"adaptiveResolution\":true,\"maxWidth\":%d,"
+       "\"maxHeight\":%d,\"maxFrameRate\":%d},"
+       "\"forcedPrerollOnPause\":true,\"seekMode\":\"keep-rate\"}}]}",
+-      window_id.c_str(), app_id, codec_name, target_pts_ns, width, height,
++      window_field.c_str(), app_id, codec_name, target_pts_ns, width, height,
+       capabilities.width, capabilities.height, capabilities.frame_rate);
+ 
+   SB_LOG(INFO) << "Loading Starfish hardware decoder for " << codec_name
+@@ -318,6 +321,7 @@ void StarfishVideoDecoder::InitializePipeline(
+                << capabilities.height << "@" << capabilities.frame_rate
+                << " using window " << window_id;
+   media_api_->notifyForeground();
++  ApplicationSdl::Get()->SetStarfishMediaId(media_api_->getMediaID());
+   if (!media_api_->Load(payload.c_str(), &StarfishVideoDecoder::PlayerCallback,
+                         this)) {
+     ReportError("StarfishMediaAPIs::Load() failed.");
+@@ -593,6 +597,9 @@ void StarfishVideoDecoder::HandlePlayerEvent(int type,
+   if (shutting_down_.load()) {
+     return;
+   }
++  if (type != PF_EVENT_TYPE_FRAMEREADY) {
++    ApplicationSdl::Get()->OnStarfishEvent(type, str_value);
++  }
+   if (type == PF_EVENT_TYPE_STR_STATE_UPDATE__UNLOADCOMPLETED) {
+     SignalUnloadCompleted();
+     return;
+diff --git a/cobalt-platform/webos/arm/webos_version.h b/cobalt-platform/webos/arm/webos_version.h
+new file mode 100644
+index 0000000..a61edae
+--- /dev/null
++++ b/cobalt-platform/webos/arm/webos_version.h
+@@ -0,0 +1,38 @@
++#ifndef STARBOARD_WEBOS_ARM_WEBOS_VERSION_H_
++#define STARBOARD_WEBOS_ARM_WEBOS_VERSION_H_
++
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++
++namespace starboard {
++namespace shared {
++namespace webos {
++
++inline int ReadWebOsMajorVersion() {
++  FILE* file = std::fopen("/var/run/nyx/os_info.json", "r");
++  if (!file) {
++    return 0;
++  }
++  char buffer[2048];
++  const size_t size = std::fread(buffer, 1, sizeof(buffer) - 1, file);
++  std::fclose(file);
++  buffer[size] = '\0';
++  const char* key = std::strstr(buffer, "\"webos_release\"");
++  if (!key) {
++    return 0;
++  }
++  const char* value = std::strchr(key + std::strlen("\"webos_release\""), '"');
++  return value ? std::atoi(value + 1) : 0;
++}
++
++inline int WebOsMajorVersion() {
++  static const int version = ReadWebOsMajorVersion();
++  return version;
++}
++
++}
++}
++}
++
++#endif
+diff --git a/scripts/install-webos-starboard-platform.sh b/scripts/install-webos-starboard-platform.sh
+index fe48983..04772b8 100755
+--- a/scripts/install-webos-starboard-platform.sh
++++ b/scripts/install-webos-starboard-platform.sh
+@@ -175,4 +175,10 @@ if ! grep -q 'Ignore that stale callback before dereferencing its stream' \
+   git -C "$cobalt_root" apply "$demuxer_stop_race_patch"
+ fi
+ 
++webos4_av1_gate_patch="$repo_root/cobalt-platform/cobalt-23.lts.6-webos4-av1-gate.patch"
++if ! grep -q 'WebOsMajorVersion' "$cobalt_root/starboard/linux/shared/media_is_video_supported.cc"; then
++  git -C "$cobalt_root" apply --check "$webos4_av1_gate_patch"
++  git -C "$cobalt_root" apply "$webos4_av1_gate_patch"
++fi
++
+ echo "Installed webos-arm Starboard platform into: $platform_target"
+diff --git a/scripts/package-starterless-cobalt.sh b/scripts/package-starterless-cobalt.sh
+index d313d89..8b3c2ff 100755
+--- a/scripts/package-starterless-cobalt.sh
++++ b/scripts/package-starterless-cobalt.sh
+@@ -21,7 +21,7 @@ if [[ ! -x "$build_dir/cobalt" || ! -d "$build_dir/content" ]]; then
+   echo "Missing completed starterless Cobalt build in: $build_dir" >&2
+   exit 3
+ fi
+-if [[ ! -f "$runtime_dir/libstdc++.so.6" || ! -f "$runtime_dir/libgcc_s.so.1" ]]; then
++if [[ ! -f "$runtime_dir/libstdc++.so.6" || ! -f "$runtime_dir/libgcc_s.so.1" || ! -f "$runtime_dir/libatomic.so.1" ]]; then
+   echo "Missing ARM C++ runtime libraries in: $runtime_dir" >&2
+   exit 4
+ fi
+@@ -96,6 +96,7 @@ fi
+ mkdir -p "$package_root/lib"
+ cp "$runtime_dir/libstdc++.so.6" "$package_root/lib/libstdc++.so.6"
+ cp "$runtime_dir/libgcc_s.so.1" "$package_root/lib/libgcc_s.so.1"
++cp "$runtime_dir/libatomic.so.1" "$package_root/lib/libatomic.so.1"
+ cp "$repo_root/assets/icon.png" "$package_root/icon.png"
+ cp "$repo_root/assets/largeIcon.png" "$package_root/largeIcon.png"
+ chmod +x "$package_root/cobalt"
