@@ -55,19 +55,15 @@ index 0000000..387ec7f
 +     return false;
 +   }
 diff --git a/cobalt-platform/webos/arm/application_sdl.cc b/cobalt-platform/webos/arm/application_sdl.cc
-index c6c9bfd..2eafd4b 100644
+index c6c9bfd..d3380b6 100644
 --- a/cobalt-platform/webos/arm/application_sdl.cc
 +++ b/cobalt-platform/webos/arm/application_sdl.cc
-@@ -2,11 +2,19 @@
+@@ -2,11 +2,15 @@
  
  #include <SDL2/SDL_syswm.h>
  #include <SDL2/SDL_webOS.h>
 +#include <appswitching-control-block/AcbAPI.h>
 +#include <dlfcn.h>
-+#include <fcntl.h>
-+#include <signal.h>
-+#include <ucontext.h>
-+#include <unistd.h>
 +#include <starfish-media-pipeline/StarfishMediaAPIs.h>
  
  #include <EGL/egl.h>
@@ -78,7 +74,7 @@ index c6c9bfd..2eafd4b 100644
  #include <cstring>
  #include <limits>
  
-@@ -114,6 +122,120 @@ unsigned int SdlModifiersToSbModifiers(SDL_Keymod modifiers) {
+@@ -114,6 +118,69 @@ unsigned int SdlModifiersToSbModifiers(SDL_Keymod modifiers) {
    return result;
  }
  
@@ -140,57 +136,6 @@ index c6c9bfd..2eafd4b 100644
 +               << " play=" << play_state << " reply=" << (reply ? reply : "");
 +}
 +
-+void WriteAll(const char* data, size_t size) {
-+  while (size > 0) {
-+    const ssize_t written = write(STDERR_FILENO, data, size);
-+    if (written <= 0) {
-+      return;
-+    }
-+    data += written;
-+    size -= static_cast<size_t>(written);
-+  }
-+}
-+
-+void DumpCrash(int signal_number, siginfo_t* info, void* context) {
-+  const ucontext_t* uc = static_cast<const ucontext_t*>(context);
-+  char line[160];
-+  int size = snprintf(line, sizeof(line),
-+                      "\n[YTAF crash] sig=%d addr=%p pc=%08lx lr=%08lx sp=%08lx\n",
-+                      signal_number, info->si_addr, uc->uc_mcontext.arm_pc,
-+                      uc->uc_mcontext.arm_lr, uc->uc_mcontext.arm_sp);
-+  WriteAll(line, static_cast<size_t>(size));
-+  const unsigned long* stack =
-+      reinterpret_cast<const unsigned long*>(uc->uc_mcontext.arm_sp);
-+  for (int i = 0; i < 256; i += 8) {
-+    size = snprintf(line, sizeof(line),
-+                    "[YTAF stack] %08lx %08lx %08lx %08lx %08lx %08lx %08lx %08lx\n",
-+                    stack[i], stack[i + 1], stack[i + 2], stack[i + 3],
-+                    stack[i + 4], stack[i + 5], stack[i + 6], stack[i + 7]);
-+    WriteAll(line, static_cast<size_t>(size));
-+  }
-+  const int maps = open("/proc/self/maps", O_RDONLY);
-+  if (maps >= 0) {
-+    char buffer[4096];
-+    ssize_t count;
-+    while ((count = read(maps, buffer, sizeof(buffer))) > 0) {
-+      WriteAll(buffer, static_cast<size_t>(count));
-+    }
-+    close(maps);
-+  }
-+  signal(signal_number, SIG_DFL);
-+  raise(signal_number);
-+}
-+
-+void InstallCrashDump() {
-+  struct sigaction action = {};
-+  action.sa_sigaction = &DumpCrash;
-+  action.sa_flags = SA_SIGINFO | SA_ONSTACK;
-+  sigemptyset(&action.sa_mask);
-+  sigaction(SIGSEGV, &action, nullptr);
-+  sigaction(SIGBUS, &action, nullptr);
-+  sigaction(SIGILL, &action, nullptr);
-+}
-+
 +const char* AppId() {
 +  const char* app_id = std::getenv("APPID");
 +  return app_id && *app_id ? app_id : "youtube.leanback.v4";
@@ -199,15 +144,7 @@ index c6c9bfd..2eafd4b 100644
  }  // namespace
  
  ApplicationSdl::ApplicationSdl()
-@@ -131,6 +253,7 @@ ApplicationSdl* ApplicationSdl::Get() {
- }
- 
- void ApplicationSdl::Initialize() {
-+  InstallCrashDump();
-   SbAudioSinkPrivate::Initialize();
-   SDL_SetMainReady();
-   SDL_SetHint(SDL_HINT_WEBOS_REGISTER_APP, "1");
-@@ -272,6 +395,10 @@ bool ApplicationSdl::DestroyWindow(SbWindow window) {
+@@ -272,6 +339,10 @@ bool ApplicationSdl::DestroyWindow(SbWindow window) {
      SDL_webOSDestroyExportedWindow(exported_window_id_.c_str());
      exported_window_id_.clear();
    }
@@ -218,7 +155,7 @@ index c6c9bfd..2eafd4b 100644
    SDL_EnableScreenSaver();
    exported_video_clients_ = 0;
    video_screen_saver_inhibited_ = false;
-@@ -289,17 +416,28 @@ bool ApplicationSdl::AcquireExportedVideoWindow() {
+@@ -289,17 +360,28 @@ bool ApplicationSdl::AcquireExportedVideoWindow() {
    if (!SbWindowIsValid(window_)) {
      return false;
    }
@@ -253,7 +190,7 @@ index c6c9bfd..2eafd4b 100644
    }
    exported_window_id_ = exported_window;
    exported_video_clients_ = 1;
-@@ -316,7 +454,16 @@ void ApplicationSdl::ReleaseExportedVideoWindow() {
+@@ -316,7 +398,16 @@ void ApplicationSdl::ReleaseExportedVideoWindow() {
      return;
    }
    --exported_video_clients_;
@@ -271,7 +208,7 @@ index c6c9bfd..2eafd4b 100644
      return;
    }
    SDL_webOSDestroyExportedWindow(exported_window_id_.c_str());
-@@ -329,9 +476,11 @@ void ApplicationSdl::ReleaseExportedVideoWindow() {
+@@ -329,9 +420,11 @@ void ApplicationSdl::ReleaseExportedVideoWindow() {
  
  void ApplicationSdl::SetVideoPaused(bool paused) {
    ScopedLock lock(exported_geometry_mutex_);
@@ -284,7 +221,7 @@ index c6c9bfd..2eafd4b 100644
    const bool inhibit_screen_saver = !paused;
    if (video_screen_saver_inhibited_ == inhibit_screen_saver) {
      return;
-@@ -361,11 +510,21 @@ void ApplicationSdl::AcceptFrame(SbPlayer,
+@@ -361,11 +454,21 @@ void ApplicationSdl::AcceptFrame(SbPlayer,
                                   int y,
                                   int width,
                                   int height) {
@@ -308,7 +245,7 @@ index c6c9bfd..2eafd4b 100644
    const int video_width = video_width_.load() > 0 ? video_width_.load()
                                                     : window_->width;
    const int video_height = video_height_.load() > 0 ? video_height_.load()
-@@ -409,6 +568,110 @@ void ApplicationSdl::AcceptFrame(SbPlayer,
+@@ -409,6 +512,110 @@ void ApplicationSdl::AcceptFrame(SbPlayer,
    }
  }
  
