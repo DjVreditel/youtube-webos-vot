@@ -73,7 +73,7 @@ async function pickTarget() {
     console.log(`restored ${res.result.result.value} keys; relaunch the app to apply`);
     ws.close();
   } else if (mode === 'eval') {
-    const res = await send('Runtime.evaluate', { expression: args.join(' '), awaitPromise: true, returnByValue: true });
+    const res = await send('Runtime.evaluate', { expression: args[0] && args[0][0] === '@' ? require('fs').readFileSync(args[0].slice(1), 'utf8') : args.join(' '), awaitPromise: true, returnByValue: true });
     const r = res.result;
     console.log(r.exceptionDetails ? 'ERROR: ' + (r.exceptionDetails.exception?.description || r.exceptionDetails.text) : JSON.stringify(r.result.value, null, 1));
     ws.close();

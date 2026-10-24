@@ -4,6 +4,7 @@ import type { PlayerManager, VideoID } from './player';
 import { translateVideo } from './client';
 import type { VotTranslationStatus } from './types';
 import { isSourceLang, isTargetLang } from './langs';
+import { needsAudioShim, wrapAudioContext } from './cobalt-audio';
 import {
   AUDIO_CHUNK_BYTES,
   RANGE_ALIGN_BYTES,
@@ -31,6 +32,8 @@ let videoListenerCleanup: VideoListenerCleanup | null = null;
 let currentManager: PlayerManager | null = null;
 
 let audioCtx: AudioContext | null = null;
+let wholeFileAudio = false;
+let wholeFile: { url: string; data: Promise<ArrayBuffer> } | null = null;
 let gainNode: GainNode | null = null;
 let audioSource: AudioBufferSourceNode | null = null;
 let audioBuffer: AudioBuffer | null = null;
@@ -101,7 +104,9 @@ function createAudioContext(): AudioContext {
   const win = window as Window & { webkitAudioContext?: typeof AudioContext };
   const Ctor = window.AudioContext ?? win.webkitAudioContext;
   if (!Ctor) throw new Error('Web Audio API not supported on this device');
-  return new Ctor();
+  const context = new Ctor();
+  wholeFileAudio = needsAudioShim(context);
+  return wholeFileAudio ? (wrapAudioContext(context) as unknown as AudioContext) : context;
 }
 
 function getAudioCurrentTime(): number {
@@ -194,25 +199,11 @@ function fetchRangedChunk(
       return;
     }
 
-    const xhr = new XMLHttpRequest();
-    xhr.open('GET', url, true);
-    xhr.responseType = 'arraybuffer';
-    xhr.timeout = 90_000;
-    if (fileSize > AUDIO_CHUNK_BYTES) {
-      xhr.setRequestHeader('Range', `bytes=${startByte}-${endByte}`);
-    }
-
-    xhr.onload = () => {
-      if (xhr.status !== 200 && xhr.status !== 206) {
-        reject(new Error(`Audio fetch failed: HTTP ${xhr.status}`));
-        return;
-      }
-      if (!audioCtx) {
+    const decodeChunk = (raw: ArrayBuffer) => {
+      if (signal.aborted || !audioCtx) {
         reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
         return;
       }
-
-      const raw = xhr.response as ArrayBuffer;
       const safe =
         raw.byteLength > AUDIO_CHUNK_BYTES
           ? raw.slice(0, AUDIO_CHUNK_BYTES)
@@ -245,6 +236,30 @@ function fetchRangedChunk(
         },
         () => reject(new Error('Audio decode failed'))
       );
+    };
+
+    if (wholeFileAudio) {
+      fetchWholeFile(url).then(
+        (data) => decodeChunk(data.slice(startByte, endByte + 1)),
+        reject
+      );
+      return;
+    }
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.responseType = 'arraybuffer';
+    xhr.timeout = 90_000;
+    if (fileSize > AUDIO_CHUNK_BYTES) {
+      xhr.setRequestHeader('Range', `bytes=${startByte}-${endByte}`);
+    }
+
+    xhr.onload = () => {
+      if (xhr.status !== 200 && xhr.status !== 206) {
+        reject(new Error(`Audio fetch failed: HTTP ${xhr.status}`));
+        return;
+      }
+      decodeChunk(xhr.response as ArrayBuffer);
     };
     xhr.onerror = () => reject(new Error('Audio fetch: network error'));
     xhr.ontimeout = () => reject(new Error('Audio fetch: timeout'));
@@ -335,6 +350,12 @@ async function continuePlayback() {
 }
 
 function getFileSize(url: string, signal: AbortSignal): Promise<number> {
+  if (wholeFileAudio) {
+    return fetchWholeFile(url).then(
+      (data) => (signal.aborted ? 0 : data.byteLength),
+      () => 0
+    );
+  }
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
     xhr.open('HEAD', url, true);
@@ -353,6 +374,29 @@ function getFileSize(url: string, signal: AbortSignal): Promise<number> {
     xhr.onloadend = () => signal.removeEventListener('abort', onAbort);
     xhr.send();
   });
+}
+
+function fetchWholeFile(url: string): Promise<ArrayBuffer> {
+  if (wholeFile?.url !== url) {
+    const data = new Promise<ArrayBuffer>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', url, true);
+      xhr.responseType = 'arraybuffer';
+      xhr.timeout = 180_000;
+      xhr.onload = () =>
+        xhr.status === 200
+          ? resolve(xhr.response as ArrayBuffer)
+          : reject(new Error(`Audio fetch failed: HTTP ${xhr.status}`));
+      xhr.onerror = () => reject(new Error('Audio fetch: network error'));
+      xhr.ontimeout = () => reject(new Error('Audio fetch: timeout'));
+      xhr.send();
+    });
+    wholeFile = { url, data };
+    data.catch(() => {
+      if (wholeFile?.data === data) wholeFile = null;
+    });
+  }
+  return wholeFile!.data;
 }
 
 async function prefetchNextChunk() {
@@ -898,6 +942,7 @@ export async function stopTranslation() {
     audioSource = null;
   }
 
+  wholeFile = null;
   if (audioCtx) {
     audioCtx.close().catch(() => {});
     audioCtx = null;
