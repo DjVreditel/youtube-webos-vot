@@ -779,11 +779,12 @@ export async function translateVideo(
   useLivelyVoice = false,
   apiToken = '',
   forceSourceLang = false,
-  videoTitle = ''
+  videoTitle = '',
+  bypassCache = false
 ): Promise<VotTranslationResult> {
   const url = `https://youtu.be/${videoId}`;
   let audioHandled = false;
-  let bypassCacheUsed = false;
+  let bypassCacheUsed = bypassCache;
   let shouldRetryCount = 0;
   // Lively voice needs a Yandex account: with a token the request is sent
   // authorized (Authorization: OAuth ...), anonymously we try briefly and
@@ -812,7 +813,7 @@ export async function translateVideo(
       duration,
       fromLang,
       toLang,
-      false,
+      bypassCache,
       lively,
       forceSourceLang,
       videoTitle

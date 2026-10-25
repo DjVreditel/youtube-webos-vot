@@ -753,7 +753,9 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
 
     const cacheKey = `${videoId}_${fromLang}_${toLang}_${lively}`;
 
-    const requestTranslationUrl = async (): Promise<string | null> => {
+    const requestTranslationUrl = async (
+      bypassCache = false
+    ): Promise<string | null> => {
       const rawDuration = getVideoElement()?.duration;
       const result = await translateVideo(
         videoId,
@@ -785,7 +787,8 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
         lively,
         String(configRead('votAccountToken') ?? ''),
         chosenFromLang !== 'auto',
-        videoTitle
+        videoTitle,
+        bypassCache
       );
 
       stopCountdown();
@@ -850,6 +853,14 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
       console.warn('[VOT] cached translation URL is stale, re-requesting');
       dropCachedTranslationUrl(cacheKey);
       audioUrl = await requestTranslationUrl();
+      if (!audioUrl) return;
+      fileSize = await getFileSize(audioUrl, signal);
+      if (signal.aborted) return;
+    }
+
+    if (fileSize === 0) {
+      console.warn('[VOT] server returned an expired URL, bypassing its cache');
+      audioUrl = await requestTranslationUrl(true);
       if (!audioUrl) return;
       fileSize = await getFileSize(audioUrl, signal);
       if (signal.aborted) return;
