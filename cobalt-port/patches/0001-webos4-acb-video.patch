@@ -468,10 +468,19 @@ index 0e01b74..3ff65dd 100644
    starboard::shared::signal::InstallCrashSignalHandlers();
    starboard::shared::signal::InstallDebugSignalHandlers();
 diff --git a/cobalt-platform/webos/arm/starfish_av_components.cc b/cobalt-platform/webos/arm/starfish_av_components.cc
-index b8cd804..3c80a01 100644
+index b8cd804..cec6287 100644
 --- a/cobalt-platform/webos/arm/starfish_av_components.cc
 +++ b/cobalt-platform/webos/arm/starfish_av_components.cc
-@@ -237,8 +237,11 @@ struct NativeSession {
+@@ -2,6 +2,8 @@
+ 
+ #include <starfish-media-pipeline/StarfishMediaAPIs.h>
+ 
++#include "starboard/webos/arm/webos_version.h"
++
+ #include <algorithm>
+ #include <atomic>
+ #include <chrono>
+@@ -237,8 +239,11 @@ struct NativeSession {
    std::string applied_hdr_payload;
    bool hdr_auto_logged = false;
  
@@ -484,7 +493,7 @@ index b8cd804..3c80a01 100644
      switch (type) {
        case PF_EVENT_TYPE_FRAMEREADY: self->frame_ns.store(value); break;
        case PF_EVENT_TYPE_STR_STATE_UPDATE__LOADCOMPLETED: self->loaded.store(true); break;
-@@ -552,13 +555,15 @@ class Owner : public player::JobQueue::JobOwner {
+@@ -552,13 +557,15 @@ class Owner : public player::JobQueue::JobOwner {
      ApplicationSdl::Get()->SetVideoResolution(width, height);
      ApplicationSdl::Get()->ConfigureFullscreenVideo();
      const std::string window = ApplicationSdl::Get()->GetExportedWindowId();
@@ -501,7 +510,7 @@ index b8cd804..3c80a01 100644
          "\"externalStreamingInfo\":{\"contents\":{\"format\":\"RAW\",\"provider\":\"Chrome\","
          "\"codec\":{\"video\":\"%s\",\"audio\":\"OPUS\"},"
          "\"esInfo\":{\"pauseAtDecodeTime\":false,\"seperatedPTS\":true,\"ptsToDecode\":%lld,"
-@@ -569,7 +574,7 @@ class Owner : public player::JobQueue::JobOwner {
+@@ -569,7 +576,7 @@ class Owner : public player::JobQueue::JobOwner {
          "\"srcBufferLevelVideo\":{\"minimum\":1024,\"maximum\":8388608}}},"
          "\"adaptiveStreaming\":{\"audioOnly\":false,\"adaptiveResolution\":true,"
          "\"maxWidth\":%d,\"maxHeight\":%d,\"maxFrameRate\":60}}}]}",
@@ -510,7 +519,7 @@ index b8cd804..3c80a01 100644
          static_cast<long long>(plan.target_native_us * 1000), width, height,
          unsigned(config_.header[9]), Base64(plan.config.header).c_str(),
          max_width, max_height);
-@@ -579,6 +584,7 @@ class Owner : public player::JobQueue::JobOwner {
+@@ -579,6 +586,7 @@ class Owner : public player::JobQueue::JobOwner {
            static_cast<long long>(first_audio), static_cast<long long>(first_video),
            static_cast<long long>(plan.epoch_us), plan.discard_samples);
      session->api->notifyForeground();
@@ -518,11 +527,28 @@ index b8cd804..3c80a01 100644
      if (!session->api->Load(payload.c_str(), NativeSession::Callback, session.get()))
        FailSession(*session, "shared Starfish Load rejected");
      // Even rejected Load may have installed callbacks: caller always unloads.
+@@ -723,7 +731,7 @@ class Owner : public player::JobQueue::JobOwner {
+       Trace("HDR metadata unavailable generation=%llu; using elementary-stream detection",
+             static_cast<unsigned long long>(session.generation));
+     } else if (loaded && !hdr_payload.empty() &&
+-               hdr_payload != session.applied_hdr_payload) {
++               hdr_payload != session.applied_hdr_payload && StarfishHasHdrInfo()) {
+       const bool accepted = session.api->setHdrInfo(hdr_payload.c_str());
+       session.applied_hdr_payload = hdr_payload;
+       Trace("HDR metadata generation=%llu accepted=%d",
 diff --git a/cobalt-platform/webos/arm/starfish_video_decoder.cc b/cobalt-platform/webos/arm/starfish_video_decoder.cc
-index 2a52317..c3024c2 100644
+index 2a52317..2d655fc 100644
 --- a/cobalt-platform/webos/arm/starfish_video_decoder.cc
 +++ b/cobalt-platform/webos/arm/starfish_video_decoder.cc
-@@ -279,17 +279,20 @@ void StarfishVideoDecoder::InitializePipeline(
+@@ -12,6 +12,7 @@
+ #include "starboard/common/string.h"
+ #include "starboard/shared/starboard/media/mime_type.h"
+ #include "starboard/webos/arm/application_sdl.h"
++#include "starboard/webos/arm/webos_version.h"
+ 
+ namespace starboard {
+ namespace shared {
+@@ -279,17 +280,20 @@ void StarfishVideoDecoder::InitializePipeline(
      app_id = "youtube.leanback.v4";
    }
    const std::string& window_id = ApplicationSdl::Get()->GetExportedWindowId();
@@ -545,7 +571,7 @@ index 2a52317..c3024c2 100644
        "\"queryPosition\":false,"
        "\"externalStreamingInfo\":{\"contents\":{\"codec\":{"
        "\"video\":\"%s\"},\"esInfo\":{\"pauseAtDecodeTime\":true,"
-@@ -309,7 +312,7 @@ void StarfishVideoDecoder::InitializePipeline(
+@@ -309,7 +313,7 @@ void StarfishVideoDecoder::InitializePipeline(
        "\"adaptiveResolution\":true,\"maxWidth\":%d,"
        "\"maxHeight\":%d,\"maxFrameRate\":%d},"
        "\"forcedPrerollOnPause\":true,\"seekMode\":\"keep-rate\"}}]}",
@@ -554,7 +580,7 @@ index 2a52317..c3024c2 100644
        capabilities.width, capabilities.height, capabilities.frame_rate);
  
    SB_LOG(INFO) << "Loading Starfish hardware decoder for " << codec_name
-@@ -318,6 +321,7 @@ void StarfishVideoDecoder::InitializePipeline(
+@@ -318,6 +322,7 @@ void StarfishVideoDecoder::InitializePipeline(
                 << capabilities.height << "@" << capabilities.frame_rate
                 << " using window " << window_id;
    media_api_->notifyForeground();
@@ -562,7 +588,16 @@ index 2a52317..c3024c2 100644
    if (!media_api_->Load(payload.c_str(), &StarfishVideoDecoder::PlayerCallback,
                          this)) {
      ReportError("StarfishMediaAPIs::Load() failed.");
-@@ -593,6 +597,9 @@ void StarfishVideoDecoder::HandlePlayerEvent(int type,
+@@ -335,7 +340,7 @@ void StarfishVideoDecoder::ApplyHdrInfo(
+     const SbMediaColorMetadata& color_metadata) {
+   SB_DCHECK(decoder_thread_->BelongsToCurrentThread());
+   const std::string payload = BuildHdrInfoPayload(color_metadata);
+-  if (payload.empty() || payload == last_hdr_payload_) {
++  if (payload.empty() || payload == last_hdr_payload_ || !StarfishHasHdrInfo()) {
+     return;
+   }
+   if (media_api_->setHdrInfo(payload.c_str())) {
+@@ -593,6 +598,9 @@ void StarfishVideoDecoder::HandlePlayerEvent(int type,
    if (shutting_down_.load()) {
      return;
    }
@@ -574,12 +609,14 @@ index 2a52317..c3024c2 100644
      return;
 diff --git a/cobalt-platform/webos/arm/webos_version.h b/cobalt-platform/webos/arm/webos_version.h
 new file mode 100644
-index 0000000..a61edae
+index 0000000..c04a769
 --- /dev/null
 +++ b/cobalt-platform/webos/arm/webos_version.h
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,46 @@
 +#ifndef STARBOARD_WEBOS_ARM_WEBOS_VERSION_H_
 +#define STARBOARD_WEBOS_ARM_WEBOS_VERSION_H_
++
++#include <dlfcn.h>
 +
 +#include <cstdio>
 +#include <cstdlib>
@@ -604,6 +641,12 @@ index 0000000..a61edae
 +  }
 +  const char* value = std::strchr(key + std::strlen("\"webos_release\""), '"');
 +  return value ? std::atoi(value + 1) : 0;
++}
++
++inline bool StarfishHasHdrInfo() {
++  static const bool available =
++      dlsym(RTLD_DEFAULT, "_ZN17StarfishMediaAPIs10setHdrInfoEPKc") != nullptr;
++  return available;
 +}
 +
 +inline int WebOsMajorVersion() {

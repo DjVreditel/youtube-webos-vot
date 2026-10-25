@@ -69,6 +69,9 @@
       set: function (value) {
         checked = !!value;
         input.classList.toggle('ytaf-checked', checked);
+        input.style.display = 'none';
+        void input.offsetWidth;
+        input.style.display = '';
       }
     });
     input.setAttribute = function (name, value) {
@@ -190,6 +193,9 @@
   };
 
   function addCobaltStyles() {
+    var visuals = document.createElement('style');
+    visuals.textContent = '.ytaf-vot-bar,.ytaf-vot-menu{box-shadow:none!important}';
+    document.head.appendChild(visuals);
     var config = {};
     try {
       config = JSON.parse(localStorage.getItem('ytaf-configuration') || '{}');
