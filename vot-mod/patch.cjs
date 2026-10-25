@@ -424,7 +424,8 @@ function writeRepoJson() {
   const ipk = fs.readFileSync(path.join(PROJECT_ROOT, 'dist', ipkName));
   const sha256 = require('crypto').createHash('sha256').update(ipk).digest('hex');
   const iconUri = `https://raw.githubusercontent.com/${GITHUB_REPO}/main/assets/icon.png`;
-  const description = 'YouTube без рекламы с закадровым переводом (VOT)';
+  const description =
+    'Стандартная версия: закадровый перевод и субтитры Яндекса, YouTube без рекламы, SponsorBlock, настройка кнопок пульта.';
   const repo = {
     paging: { page: 1, count: 1, maxPage: 1, itemsTotal: 1 },
     packages: [
