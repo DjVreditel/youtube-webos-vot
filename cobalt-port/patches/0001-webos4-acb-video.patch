@@ -476,7 +476,7 @@ index 0e01b74..3ff65dd 100644
    starboard::shared::signal::InstallCrashSignalHandlers();
    starboard::shared::signal::InstallDebugSignalHandlers();
 diff --git a/cobalt-platform/webos/arm/starfish_av_components.cc b/cobalt-platform/webos/arm/starfish_av_components.cc
-index b8cd804..cec6287 100644
+index b8cd804..7f9d122 100644
 --- a/cobalt-platform/webos/arm/starfish_av_components.cc
 +++ b/cobalt-platform/webos/arm/starfish_av_components.cc
 @@ -2,6 +2,8 @@
@@ -501,7 +501,7 @@ index b8cd804..cec6287 100644
      switch (type) {
        case PF_EVENT_TYPE_FRAMEREADY: self->frame_ns.store(value); break;
        case PF_EVENT_TYPE_STR_STATE_UPDATE__LOADCOMPLETED: self->loaded.store(true); break;
-@@ -552,13 +557,15 @@ class Owner : public player::JobQueue::JobOwner {
+@@ -552,24 +557,26 @@ class Owner : public player::JobQueue::JobOwner {
      ApplicationSdl::Get()->SetVideoResolution(width, height);
      ApplicationSdl::Get()->ConfigureFullscreenVideo();
      const std::string window = ApplicationSdl::Get()->GetExportedWindowId();
@@ -518,7 +518,11 @@ index b8cd804..cec6287 100644
          "\"externalStreamingInfo\":{\"contents\":{\"format\":\"RAW\",\"provider\":\"Chrome\","
          "\"codec\":{\"video\":\"%s\",\"audio\":\"OPUS\"},"
          "\"esInfo\":{\"pauseAtDecodeTime\":false,\"seperatedPTS\":true,\"ptsToDecode\":%lld,"
-@@ -569,7 +576,7 @@ class Owner : public player::JobQueue::JobOwner {
+-        "\"videoWidth\":%d,\"videoHeight\":%d,\"videoFpsValue\":60,\"videoFpsScale\":1},"
++        "\"videoWidth\":%d,\"videoHeight\":%d},"
+         "\"opusInfo\":{\"channels\":%u,\"sampleRate\":48,\"streamHeader\":\"%s\"}},"
+         "\"restartStreaming\":false,\"totalStreamSize\":256,\"bufferingCtrInfo\":{"
+         "\"srcBufferLevelAudio\":{\"minimum\":1024,\"maximum\":1048576},"
          "\"srcBufferLevelVideo\":{\"minimum\":1024,\"maximum\":8388608}}},"
          "\"adaptiveStreaming\":{\"audioOnly\":false,\"adaptiveResolution\":true,"
          "\"maxWidth\":%d,\"maxHeight\":%d,\"maxFrameRate\":60}}}]}",
