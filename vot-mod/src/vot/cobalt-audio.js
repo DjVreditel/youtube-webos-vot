@@ -1,6 +1,9 @@
 import createMinimp3 from './minimp3.js';
 
-const FRAMES_PER_SLICE = 100;
+const FRAMES_PER_SLICE = 25;
+const COPY_LEAD_S = 0.35;
+const LATE_START_S = 0.03;
+const MAX_START_CORRECTIONS = 2;
 let minimp3 = null;
 
 export function resample(input, fromRate, toRate) {
@@ -77,26 +80,40 @@ export function needsAudioShim(context) {
   return typeof context.suspend !== 'function' || typeof context.createGain !== 'function';
 }
 
-export function wrapAudioContext(native, clock = () => performance.now() / 1000) {
+export function wrapAudioContext(native, clock = () => performance.now() / 1000, lead = COPY_LEAD_S) {
   let state = 'running';
   let pausedAt = 0;
   let pausedTotal = 0;
   const playing = new Set();
   let volume = 1;
+  let pendingStarts = 0;
+  let deferredStops = [];
 
   const now = () => (state === 'suspended' ? pausedAt : clock()) - pausedTotal;
 
-  function stopNative(proxy) {
-    const source = proxy._native;
-    if (!source) return;
-    proxy._native = null;
-    source.onended = null;
+  function halt(source) {
     try {
       source.stop();
     } catch (error) {
       void error;
     }
     source.disconnect();
+  }
+
+  function settleStart() {
+    pendingStarts--;
+    if (pendingStarts > 0) return;
+    deferredStops.forEach(halt);
+    deferredStops = [];
+  }
+
+  function stopNative(proxy, afterPendingStarts = false) {
+    const source = proxy._native;
+    if (!source) return;
+    proxy._native = null;
+    source.onended = null;
+    if (afterPendingStarts && pendingStarts > 0) deferredStops.push(source);
+    else halt(source);
   }
 
   function pausePlaying() {
@@ -124,6 +141,11 @@ export function wrapAudioContext(native, clock = () => performance.now() / 1000)
   }
 
   function startNative(proxy) {
+    const copies = !!(proxy.buffer && proxy.buffer.__ytafChannels) && (proxy._offset > 0 || volume !== 1);
+    const ahead = copies ? lead : 0;
+    const requestedAt = now();
+    proxy._offset += ahead;
+    proxy._startedAt = requestedAt + ahead;
     const source = native.createBufferSource();
     source.buffer = bufferFrom(proxy.buffer, proxy._offset);
     source.connect(native.destination);
@@ -134,8 +156,26 @@ export function wrapAudioContext(native, clock = () => performance.now() / 1000)
       if (proxy.onended) proxy.onended();
     };
     proxy._native = source;
-    proxy._startedAt = now();
-    source.start(0);
+    pendingStarts++;
+    const begin = () => {
+      if (proxy._native === source) {
+        source.start(0);
+        const late = now() - proxy._startedAt;
+        if (late > LATE_START_S && proxy._corrections < MAX_START_CORRECTIONS) {
+          proxy._corrections++;
+          console.debug('[VOT] audio started late, ms:', Math.round(late * 1000));
+          proxy._offset += late;
+          stopNative(proxy, true);
+          startNative(proxy);
+        } else {
+          proxy._corrections = 0;
+        }
+      }
+      settleStart();
+    };
+    const wait = proxy._startedAt - now();
+    if (wait > 0.005) setTimeout(begin, wait * 1000);
+    else begin();
   }
 
   function createBufferSource() {
@@ -146,6 +186,7 @@ export function wrapAudioContext(native, clock = () => performance.now() / 1000)
       _native: null,
       _offset: 0,
       _startedAt: 0,
+      _corrections: 0,
       connect() {},
       disconnect() {},
       start(when, offset) {
@@ -156,7 +197,7 @@ export function wrapAudioContext(native, clock = () => performance.now() / 1000)
       },
       stop() {
         playing.delete(proxy);
-        stopNative(proxy);
+        stopNative(proxy, true);
       }
     };
     return proxy;

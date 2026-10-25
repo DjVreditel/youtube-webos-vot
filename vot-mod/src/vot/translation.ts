@@ -125,6 +125,7 @@ function getAudioCurrentTime(): number {
   return audioPlayVideoStart + elapsed;
 }
 
+const PREFETCH_DELAY_MS = 1000;
 let chunkSwitchTimer: ReturnType<typeof setTimeout> | null = null;
 
 function stopAudioSource() {
@@ -176,6 +177,8 @@ function startAudioFrom(videoTime: number) {
     outOfChunkRetries = 0;
   }
 
+  const previous = audioSource;
+  audioSource = null;
   stopAudioSource();
 
   const source = audioCtx.createBufferSource();
@@ -190,6 +193,13 @@ function startAudioFrom(videoTime: number) {
   audioPlayVideoStart = videoTime;
   source.start(0, offset);
   audioSource = source;
+  if (previous) {
+    previous.onended = null;
+    try {
+      previous.stop();
+    } catch {}
+    previous.disconnect();
+  }
 
   if (wholeFileAudio) {
     const rate = source.playbackRate.value || 1;
@@ -376,7 +386,7 @@ async function continuePlayback() {
       if (videoElement.paused) audioCtx.suspend().catch(() => {});
     }
 
-    void prefetchNextChunk();
+    setTimeout(() => void prefetchNextChunk(), PREFETCH_DELAY_MS);
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') return;
     console.error('[VOT] next chunk error:', err);
@@ -522,7 +532,7 @@ async function loadChunkAt(seekTime: number) {
     currentChunkEndByte = chunk.endByte;
     startAudioFrom(videoElement.currentTime);
     if (videoElement.paused) audioCtx.suspend().catch(() => {});
-    void prefetchNextChunk();
+    setTimeout(() => void prefetchNextChunk(), PREFETCH_DELAY_MS);
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') return;
     console.error('[VOT] seek chunk error:', err);
@@ -598,7 +608,7 @@ function attachVideoListeners() {
       seekVersion++;
       startAudioFrom(seekTime);
       if (videoElement.paused) audioCtx.suspend().catch(() => {});
-      void prefetchNextChunk();
+      setTimeout(() => void prefetchNextChunk(), PREFETCH_DELAY_MS);
       return;
     }
 
@@ -933,7 +943,7 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
       audioCtx.suspend().catch(() => {});
     }
 
-    void prefetchNextChunk();
+    setTimeout(() => void prefetchNextChunk(), PREFETCH_DELAY_MS);
 
     serverRestartCount = 0;
     setStatus('playing');

@@ -55,7 +55,7 @@ test('only contexts without suspend or gain need the shim', () => {
 
 test('offsets become trimmed buffers, pause freezes the clock and resume continues', async () => {
   const native = fakeNative();
-  const context = wrapAudioContext(native, () => native.currentTime);
+  const context = wrapAudioContext(native, () => native.currentTime, 0);
   const source = context.createBufferSource();
   source.buffer = decodedBuffer(20);
   source.start(0, 10);
@@ -72,7 +72,7 @@ test('offsets become trimmed buffers, pause freezes the clock and resume continu
 
 test('a source started while suspended begins on resume', async () => {
   const native = fakeNative();
-  const context = wrapAudioContext(native, () => native.currentTime);
+  const context = wrapAudioContext(native, () => native.currentTime, 0);
   await context.suspend();
   const source = context.createBufferSource();
   source.buffer = decodedBuffer(20);
@@ -84,7 +84,7 @@ test('a source started while suspended begins on resume', async () => {
 
 test('natural end calls onended once, a manual stop does not', () => {
   const native = fakeNative();
-  const context = wrapAudioContext(native, () => native.currentTime);
+  const context = wrapAudioContext(native, () => native.currentTime, 0);
   let ended = 0;
   const source = context.createBufferSource();
   source.buffer = decodedBuffer(5);
@@ -104,7 +104,7 @@ test('gain scales the samples and a change restarts at the current position', ()
   const native = fakeNative();
   const copied = [];
   native.createBuffer = (channels, length) => ({ length, copyToChannel: (samples) => copied.push(samples) });
-  const context = wrapAudioContext(native, () => native.currentTime);
+  const context = wrapAudioContext(native, () => native.currentTime, 0);
   const gain = context.createGain();
   gain.gain.value = 0.5;
   const source = context.createBufferSource();
@@ -116,4 +116,57 @@ test('gain scales the samples and a change restarts at the current position', ()
   assert.equal(copied.at(-1)[0], 0.25);
   assert.equal(copied.at(-1).length, 3 * RATE);
   assert.equal(gain.gain.value, 0.25);
+});
+
+test('a trimmed start is prepared ahead and the old source stops only once it begins', async () => {
+  const native = fakeNative();
+  const sources = [];
+  const create = native.createBufferSource;
+  native.createBufferSource = () => {
+    const source = create();
+    sources.push(source);
+    return source;
+  };
+  let time = 0;
+  const context = wrapAudioContext(native, () => time, 0.03);
+  const first = context.createBufferSource();
+  first.buffer = decodedBuffer(20);
+  first.start(0, 0);
+  assert.deepEqual(native.starts, [20]);
+  const second = context.createBufferSource();
+  second.buffer = decodedBuffer(20);
+  second.start(0, 2);
+  first.stop();
+  assert.equal(sources[0].stopped, false);
+  assert.deepEqual(native.starts, [20]);
+  time = 0.03;
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  assert.equal(native.starts[1].toFixed(2), '17.97');
+  assert.equal(sources[0].stopped, true);
+  assert.equal(context.currentTime, 0.03);
+});
+
+test('a late start is replaced by one at the right position without a gap', async () => {
+  const native = fakeNative();
+  const sources = [];
+  const create = native.createBufferSource;
+  native.createBufferSource = () => {
+    const source = create();
+    sources.push(source);
+    return source;
+  };
+  let time = 0;
+  const context = wrapAudioContext(native, () => time, 0.03);
+  const source = context.createBufferSource();
+  source.buffer = decodedBuffer(20);
+  source.start(0, 2);
+  time = 0.1;
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  assert.equal(native.starts.length, 1);
+  assert.equal(sources[0].stopped, false);
+  time = 0.13;
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  assert.equal(native.starts[1].toFixed(2), '17.87');
+  assert.equal(sources[0].stopped, true);
+  assert.equal(sources[1].stopped, false);
 });
