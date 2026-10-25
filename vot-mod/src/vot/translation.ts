@@ -605,6 +605,14 @@ function attachVideoListeners() {
     void loadChunkAt(seekTime);
   };
 
+  const onVolumeChange = () => {
+    if (originalVolume === null) return;
+    const expected = originalVolume * originalVolumeReduction;
+    if (Math.abs(el.volume - expected) < 0.01) return;
+    originalVolume = el.volume;
+    el.volume = originalVolume * originalVolumeReduction;
+  };
+
   const onRateChange = () => {
     if (audioSource && videoElement) {
       audioSource.playbackRate.value = videoElement.playbackRate;
@@ -620,6 +628,7 @@ function attachVideoListeners() {
   el.addEventListener('emptied', onStop);
   el.addEventListener('seeked', onSeeked);
   el.addEventListener('ratechange', onRateChange);
+  el.addEventListener('volumechange', onVolumeChange);
 
   videoListenerCleanup = () => {
     el.removeEventListener('play', onPlay);
@@ -628,6 +637,7 @@ function attachVideoListeners() {
     el.removeEventListener('emptied', onStop);
     el.removeEventListener('seeked', onSeeked);
     el.removeEventListener('ratechange', onRateChange);
+    el.removeEventListener('volumechange', onVolumeChange);
     clearInterval(syncId);
     syncIntervalId = null;
   };
@@ -912,11 +922,12 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
     currentVideoDuration = videoDuration;
     currentChunkEndByte = chunk.endByte;
 
-    reduceOriginalVolume();
     attachVideoListeners();
 
     await audioCtx.resume();
+    if (signal.aborted) return;
     startAudioFrom(videoElement.currentTime);
+    reduceOriginalVolume();
 
     if (videoElement.paused) {
       audioCtx.suspend().catch(() => {});
