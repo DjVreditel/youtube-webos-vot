@@ -1019,9 +1019,11 @@ export async function stopTranslation() {
 export function videoAudioLanguage(manager: PlayerManager): string {
   const videoData = manager.player.getVideoData();
   const response = manager.player.getPlayerResponse?.();
-  const originalTrack = response?.streamingData?.adaptiveFormats?.find(
-    (format) => format.audioTrack?.audioIsDefault
-  )?.audioTrack?.id;
+  const formats = response?.streamingData?.adaptiveFormats ?? [];
+  const originalTrack = formats.find((format) => format.audioTrack?.id?.endsWith('.4'))
+    ?.audioTrack?.id;
+  const defaultTrack = formats.find((format) => format.audioTrack?.audioIsDefault)
+    ?.audioTrack?.id;
   const asrTrack = response?.captions?.playerCaptionsTracklistRenderer?.captionTracks?.find(
     (track) => track.kind === 'asr'
   );
@@ -1029,7 +1031,8 @@ export function videoAudioLanguage(manager: PlayerManager): string {
     videoData.defaultAudioLanguage ||
     videoData.audioTracks?.[0]?.language ||
     originalTrack ||
-    asrTrack?.languageCode;
+    asrTrack?.languageCode ||
+    defaultTrack;
   return raw?.split(/[-.]/)[0]?.toLowerCase() ?? '';
 }
 
