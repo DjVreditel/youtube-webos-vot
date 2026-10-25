@@ -1,9 +1,9 @@
 {
   "paging": {
     "page": 1,
-    "count": 1,
+    "count": 3,
     "maxPage": 1,
-    "itemsTotal": 1
+    "itemsTotal": 3
   },
   "packages": [
     {
@@ -13,17 +13,59 @@
       "iconUri": "https://raw.githubusercontent.com/DjVreditel/youtube-webos-vot/main/assets/icon.png",
       "manifest": {
         "id": "youtube.leanback.v4",
-        "version": "101.5.1",
+        "version": "101.5.2",
         "type": "web",
         "title": "YouTube VOT",
         "appDescription": "YouTube без рекламы с закадровым переводом (VOT)",
         "iconUri": "https://raw.githubusercontent.com/DjVreditel/youtube-webos-vot/main/assets/icon.png",
         "sourceUrl": "https://github.com/DjVreditel/youtube-webos-vot",
         "rootRequired": false,
-        "ipkUrl": "https://github.com/DjVreditel/youtube-webos-vot/releases/download/v1.5.1/youtube.leanback.v4_101.5.1_all.ipk",
+        "ipkUrl": "https://github.com/DjVreditel/youtube-webos-vot/releases/download/v1.5.2/youtube.leanback.v4_101.5.2_all.ipk",
         "ipkHash": {
-          "sha256": "87658807a7cf993cc25d8688d3368c209148b29820a85bdffa20ac1abbe29ce0"
+          "sha256": "828b0e89cc7136041f6c6dc8d117e0c7ed3f1e6e70a4900c9f01f8b9abaa27b6"
         }
+      }
+    },
+    {
+      "id": "youtube.leanback.v4.cobalt",
+      "title": "YouTube VOT Cobalt",
+      "description": "Экспериментальная версия на движке Cobalt: быстрый интерфейс, но звук на некоторых видео может подёргиваться. Ставится вместо обычной YouTube VOT.",
+      "iconUri": "https://raw.githubusercontent.com/DjVreditel/youtube-webos-vot/main/assets/icon.png",
+      "manifest": {
+        "id": "youtube.leanback.v4.cobalt",
+        "version": "101.5.2",
+        "type": "native",
+        "title": "YouTube VOT Cobalt",
+        "appDescription": "Экспериментальная версия на движке Cobalt: быстрый интерфейс, но звук на некоторых видео может подёргиваться. Ставится вместо обычной YouTube VOT.",
+        "iconUri": "https://raw.githubusercontent.com/DjVreditel/youtube-webos-vot/main/assets/icon.png",
+        "sourceUrl": "https://github.com/DjVreditel/youtube-webos-vot",
+        "rootRequired": false,
+        "ipkUrl": "https://github.com/DjVreditel/youtube-webos-vot/releases/download/v1.5.2/youtube.leanback.v4_101.5.2_arm.ipk",
+        "ipkHash": {
+          "sha256": "4d5828cd6786c9db3f0fef669234e997611adf45850bd7221c1515bffc3e8582"
+        },
+        "ipkSize": 14280118
+      }
+    },
+    {
+      "id": "youtube.vot.cobalt",
+      "title": "YouTube VOT Cobalt (отдельно)",
+      "description": "Та же Cobalt-версия, но отдельным приложением рядом с обычной YouTube VOT. Вход в аккаунты в ней свой.",
+      "iconUri": "https://raw.githubusercontent.com/DjVreditel/youtube-webos-vot/main/assets/icon.png",
+      "manifest": {
+        "id": "youtube.vot.cobalt",
+        "version": "101.5.2",
+        "type": "native",
+        "title": "YouTube VOT Cobalt (отдельно)",
+        "appDescription": "Та же Cobalt-версия, но отдельным приложением рядом с обычной YouTube VOT. Вход в аккаунты в ней свой.",
+        "iconUri": "https://raw.githubusercontent.com/DjVreditel/youtube-webos-vot/main/assets/icon.png",
+        "sourceUrl": "https://github.com/DjVreditel/youtube-webos-vot",
+        "rootRequired": false,
+        "ipkUrl": "https://github.com/DjVreditel/youtube-webos-vot/releases/download/v1.5.2/youtube.vot.cobalt_101.5.2_arm.ipk",
+        "ipkHash": {
+          "sha256": "aa28620a6da7ed1f88e56dda54e8d491f4f2301388aaec2daf5259990804ae35"
+        },
+        "ipkSize": 14280112
       }
     }
   ]
