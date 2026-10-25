@@ -125,7 +125,13 @@ function getAudioCurrentTime(): number {
   return audioPlayVideoStart + elapsed;
 }
 
+let chunkSwitchTimer: ReturnType<typeof setTimeout> | null = null;
+
 function stopAudioSource() {
+  if (chunkSwitchTimer) {
+    clearTimeout(chunkSwitchTimer);
+    chunkSwitchTimer = null;
+  }
   if (!audioSource) return;
   audioSource.onended = null;
   try {
@@ -184,6 +190,24 @@ function startAudioFrom(videoTime: number) {
   audioPlayVideoStart = videoTime;
   source.start(0, offset);
   audioSource = source;
+
+  if (wholeFileAudio) {
+    const rate = source.playbackRate.value || 1;
+    chunkSwitchTimer = setTimeout(
+      () => {
+        chunkSwitchTimer = null;
+        if (
+          source === audioSource &&
+          prefetchedChunk &&
+          videoElement &&
+          !videoElement.paused &&
+          prefetchedChunk.bufferStartTime <= videoElement.currentTime
+        )
+          void continuePlayback();
+      },
+      (Math.max(0, audioBuffer.duration - offset - 0.5) / rate) * 1000
+    );
+  }
 }
 
 type AudioChunk = {

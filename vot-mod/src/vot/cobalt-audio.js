@@ -77,13 +77,14 @@ export function needsAudioShim(context) {
   return typeof context.suspend !== 'function' || typeof context.createGain !== 'function';
 }
 
-export function wrapAudioContext(native) {
+export function wrapAudioContext(native, clock = () => performance.now() / 1000) {
   let state = 'running';
   let pausedAt = 0;
   let pausedTotal = 0;
   const playing = new Set();
+  let volume = 1;
 
-  const now = () => (state === 'suspended' ? pausedAt : native.currentTime) - pausedTotal;
+  const now = () => (state === 'suspended' ? pausedAt : clock()) - pausedTotal;
 
   function stopNative(proxy) {
     const source = proxy._native;
@@ -98,15 +99,26 @@ export function wrapAudioContext(native) {
     source.disconnect();
   }
 
+  function pausePlaying() {
+    const position = now();
+    playing.forEach((proxy) => {
+      if (!proxy._native) return;
+      proxy._offset += position - proxy._startedAt;
+      stopNative(proxy);
+    });
+  }
+
   function bufferFrom(buffer, offset) {
     const channels = buffer && buffer.__ytafChannels;
-    if (!channels || offset <= 0) return buffer;
-    const from = Math.min(channels[0].length, Math.round(offset * native.sampleRate));
+    if (!channels || (offset <= 0 && volume === 1)) return buffer;
+    const from = Math.min(channels[0].length, Math.round(Math.max(0, offset) * native.sampleRate));
     const length = Math.max(1, channels[0].length - from);
     const trimmed = native.createBuffer(channels.length, length, native.sampleRate);
     channels.forEach((samples, channel) => {
       const part = samples.subarray(from, from + length);
-      trimmed.copyToChannel(part.length ? part : new Float32Array(1), channel);
+      const scaled = new Float32Array(Math.max(1, part.length));
+      for (let i = 0; i < part.length; i++) scaled[i] = part[i] * volume;
+      trimmed.copyToChannel(scaled, channel);
     });
     return trimmed;
   }
@@ -182,24 +194,33 @@ export function wrapAudioContext(native) {
     },
     createBufferSource,
     createGain() {
-      return { gain: { value: 1 }, connect() {}, disconnect() {} };
+      return {
+        gain: {
+          get value() {
+            return volume;
+          },
+          set value(next) {
+            volume = next;
+            if (state !== 'running') return;
+            pausePlaying();
+            playing.forEach((proxy) => startNative(proxy));
+          }
+        },
+        connect() {},
+        disconnect() {}
+      };
     },
     suspend() {
       if (state === 'running') {
-        const position = now();
-        playing.forEach((proxy) => {
-          if (!proxy._native) return;
-          proxy._offset += position - proxy._startedAt;
-          stopNative(proxy);
-        });
-        pausedAt = native.currentTime;
+        pausePlaying();
+        pausedAt = clock();
         state = 'suspended';
       }
       return Promise.resolve();
     },
     resume() {
       if (state === 'suspended') {
-        pausedTotal += native.currentTime - pausedAt;
+        pausedTotal += clock() - pausedAt;
         state = 'running';
         playing.forEach((proxy) => startNative(proxy));
       }

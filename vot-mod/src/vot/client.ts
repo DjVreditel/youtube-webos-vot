@@ -923,7 +923,7 @@ export async function translateVideo(
       return {
         translated: true,
         url: data.url,
-        usedLivelyVoice: lively && data.isLivelyVoice,
+        usedLivelyVoice: data.isLivelyVoice,
         detectedLang: data.language
       };
     }

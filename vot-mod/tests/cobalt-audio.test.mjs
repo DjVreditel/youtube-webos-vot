@@ -55,7 +55,7 @@ test('only contexts without suspend or gain need the shim', () => {
 
 test('offsets become trimmed buffers, pause freezes the clock and resume continues', async () => {
   const native = fakeNative();
-  const context = wrapAudioContext(native);
+  const context = wrapAudioContext(native, () => native.currentTime);
   const source = context.createBufferSource();
   source.buffer = decodedBuffer(20);
   source.start(0, 10);
@@ -72,7 +72,7 @@ test('offsets become trimmed buffers, pause freezes the clock and resume continu
 
 test('a source started while suspended begins on resume', async () => {
   const native = fakeNative();
-  const context = wrapAudioContext(native);
+  const context = wrapAudioContext(native, () => native.currentTime);
   await context.suspend();
   const source = context.createBufferSource();
   source.buffer = decodedBuffer(20);
@@ -84,7 +84,7 @@ test('a source started while suspended begins on resume', async () => {
 
 test('natural end calls onended once, a manual stop does not', () => {
   const native = fakeNative();
-  const context = wrapAudioContext(native);
+  const context = wrapAudioContext(native, () => native.currentTime);
   let ended = 0;
   const source = context.createBufferSource();
   source.buffer = decodedBuffer(5);
@@ -98,4 +98,22 @@ test('natural end calls onended once, a manual stop does not', () => {
   other.start(0, 0);
   other.stop();
   assert.equal(ended, 1);
+});
+
+test('gain scales the samples and a change restarts at the current position', () => {
+  const native = fakeNative();
+  const copied = [];
+  native.createBuffer = (channels, length) => ({ length, copyToChannel: (samples) => copied.push(samples) });
+  const context = wrapAudioContext(native, () => native.currentTime);
+  const gain = context.createGain();
+  gain.gain.value = 0.5;
+  const source = context.createBufferSource();
+  source.buffer = { length: 4 * RATE, __ytafChannels: [new Float32Array(4 * RATE).fill(1)] };
+  source.start(0, 0);
+  assert.equal(copied.at(-1)[0], 0.5);
+  native.currentTime = 1;
+  gain.gain.value = 0.25;
+  assert.equal(copied.at(-1)[0], 0.25);
+  assert.equal(copied.at(-1).length, 3 * RATE);
+  assert.equal(gain.gain.value, 0.25);
 });
