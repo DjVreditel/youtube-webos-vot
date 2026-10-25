@@ -448,6 +448,32 @@ function writeRepoJson() {
       }
     ]
   };
+  const cobaltPath = path.join(__dirname, 'cobalt-packages.json');
+  const cobalt = fs.existsSync(cobaltPath) ? JSON.parse(fs.readFileSync(cobaltPath, 'utf8')) : null;
+  if (cobalt && cobalt.version === MOD_VERSION) {
+    for (const entry of cobalt.packages) {
+      repo.packages.push({
+        id: entry.id,
+        title: entry.title,
+        description: entry.description,
+        iconUri,
+        manifest: {
+          id: entry.id,
+          version: APP_VERSION,
+          type: 'native',
+          title: entry.title,
+          appDescription: entry.description,
+          iconUri,
+          sourceUrl: `https://github.com/${GITHUB_REPO}`,
+          rootRequired: false,
+          ipkUrl: `https://github.com/${GITHUB_REPO}/releases/download/v${MOD_VERSION}/${entry.file}`,
+          ipkHash: { sha256: entry.sha256 },
+          ipkSize: entry.size
+        }
+      });
+    }
+    repo.paging.count = repo.paging.itemsTotal = repo.packages.length;
+  }
   for (const dir of [__dirname, PROJECT_ROOT]) {
     fs.writeFileSync(
       path.join(dir, 'repo.json'),

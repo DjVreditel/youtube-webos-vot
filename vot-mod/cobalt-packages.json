@@ -1,0 +1,21 @@
+{
+  "version": "1.5.2",
+  "packages": [
+    {
+      "id": "youtube.leanback.v4.cobalt",
+      "title": "YouTube VOT Cobalt",
+      "description": "Экспериментальная версия на движке Cobalt: быстрый интерфейс, но звук на некоторых видео может подёргиваться. Ставится вместо обычной YouTube VOT.",
+      "file": "youtube.leanback.v4_101.5.2_arm.ipk",
+      "sha256": "4d5828cd6786c9db3f0fef669234e997611adf45850bd7221c1515bffc3e8582",
+      "size": 14280118
+    },
+    {
+      "id": "youtube.vot.cobalt",
+      "title": "YouTube VOT Cobalt (отдельно)",
+      "description": "Та же Cobalt-версия, но отдельным приложением рядом с обычной YouTube VOT. Вход в аккаунты в ней свой.",
+      "file": "youtube.vot.cobalt_101.5.2_arm.ipk",
+      "sha256": "aa28620a6da7ed1f88e56dda54e8d491f4f2301388aaec2daf5259990804ae35",
+      "size": 14280112
+    }
+  ]
+}
