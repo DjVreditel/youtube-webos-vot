@@ -55,7 +55,7 @@ index 0000000..387ec7f
 +     return false;
 +   }
 diff --git a/cobalt-platform/webos/arm/application_sdl.cc b/cobalt-platform/webos/arm/application_sdl.cc
-index c6c9bfd..040e027 100644
+index c6c9bfd..5fdf73e 100644
 --- a/cobalt-platform/webos/arm/application_sdl.cc
 +++ b/cobalt-platform/webos/arm/application_sdl.cc
 @@ -2,11 +2,15 @@
@@ -256,7 +256,7 @@ index c6c9bfd..040e027 100644
    const int video_width = video_width_.load() > 0 ? video_width_.load()
                                                     : window_->width;
    const int video_height = video_height_.load() > 0 ? video_height_.load()
-@@ -409,6 +523,110 @@ void ApplicationSdl::AcceptFrame(SbPlayer,
+@@ -409,6 +523,111 @@ void ApplicationSdl::AcceptFrame(SbPlayer,
    }
  }
  
@@ -302,8 +302,9 @@ index c6c9bfd..040e027 100644
 +          0) {
 +    return;
 +  }
-+  const bool full_screen = acb_window_.x == 0 && acb_window_.y == 0 &&
-+                           acb_window_.w >= 1920 && acb_window_.h >= 1080;
++  const bool full_screen = acb_applied_window_.w <= 0 && acb_window_.x == 0 &&
++                           acb_window_.y == 0 && acb_window_.w >= 1920 &&
++                           acb_window_.h >= 1080;
 +  long task_id = 0;
 +  GetAcbApi()->set_display_window(acb_id_, acb_window_.x, acb_window_.y,
 +                                  acb_window_.w, acb_window_.h, full_screen,
