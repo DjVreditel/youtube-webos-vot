@@ -475,6 +475,28 @@ index 0e01b74..3ff65dd 100644
    tzset();
    starboard::shared::signal::InstallCrashSignalHandlers();
    starboard::shared::signal::InstallDebugSignalHandlers();
+diff --git a/cobalt-platform/webos/arm/shared_av_experiment.h b/cobalt-platform/webos/arm/shared_av_experiment.h
+index e6126b9..3b27cc2 100644
+--- a/cobalt-platform/webos/arm/shared_av_experiment.h
++++ b/cobalt-platform/webos/arm/shared_av_experiment.h
+@@ -5,6 +5,8 @@
+ #include <cstdlib>
+ #include <cstring>
+ 
++#include "starboard/webos/arm/webos_version.h"
++
+ namespace starboard {
+ namespace shared {
+ namespace webos {
+@@ -32,7 +34,7 @@ inline int ReadConfiguredSharedAvBackendMode() {
+ 
+   FILE* marker = std::fopen("/tmp/ytaf-shared-av.enable", "r");
+   if (!marker) {
+-    return 3;
++    return WebOsMajorVersion() >= 5 ? 3 : 0;
+   }
+   const int marker_value = std::fgetc(marker);
+   std::fclose(marker);
 diff --git a/cobalt-platform/webos/arm/starfish_av_components.cc b/cobalt-platform/webos/arm/starfish_av_components.cc
 index b8cd804..cec6287 100644
 --- a/cobalt-platform/webos/arm/starfish_av_components.cc
