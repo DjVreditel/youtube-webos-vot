@@ -476,7 +476,7 @@ index 0e01b74..3ff65dd 100644
    starboard::shared::signal::InstallCrashSignalHandlers();
    starboard::shared::signal::InstallDebugSignalHandlers();
 diff --git a/cobalt-platform/webos/arm/starfish_av_components.cc b/cobalt-platform/webos/arm/starfish_av_components.cc
-index b8cd804..9660604 100644
+index b8cd804..6fcd3f2 100644
 --- a/cobalt-platform/webos/arm/starfish_av_components.cc
 +++ b/cobalt-platform/webos/arm/starfish_av_components.cc
 @@ -2,6 +2,8 @@
@@ -543,7 +543,7 @@ index b8cd804..9660604 100644
        if (!PlanStarfishOpusSession(config_, first_audio, first_video, target,
                                    audio_origin_, &plan)) {
          FailLocked("cannot plan shared Opus restart: timestamp/pre-roll outside supported range");
-@@ -552,33 +571,40 @@ class Owner : public player::JobQueue::JobOwner {
+@@ -552,33 +571,42 @@ class Owner : public player::JobQueue::JobOwner {
      ApplicationSdl::Get()->SetVideoResolution(width, height);
      ApplicationSdl::Get()->ConfigureFullscreenVideo();
      const std::string window = ApplicationSdl::Get()->GetExportedWindowId();
@@ -557,10 +557,12 @@ index b8cd804..9660604 100644
 +        ? FormatString(",\"videoFpsValue\":%lld,\"videoFpsScale\":1000",
 +                       static_cast<long long>((1000000000LL + frame_us / 2) / frame_us))
 +        : std::string();
++    const char* app_id = std::getenv("APPID");
++    if (!app_id || !*app_id) app_id = "youtube.leanback.v4";
      const std::string payload = FormatString(
          "{\"args\":[{\"mediaTransportType\":\"BUFFERSTREAM\",\"option\":{"
 -        "\"appId\":\"youtube.leanback.v4\",\"windowId\":\"%s\",\"queryPosition\":false,"
-+        "\"appId\":\"youtube.leanback.v4\",%s\"queryPosition\":false,"
++        "\"appId\":\"%s\",%s\"queryPosition\":false,"
          "\"externalStreamingInfo\":{\"contents\":{\"format\":\"RAW\",\"provider\":\"Chrome\","
          "\"codec\":{\"video\":\"%s\",\"audio\":\"OPUS\"},"
          "\"esInfo\":{\"pauseAtDecodeTime\":false,\"seperatedPTS\":true,\"ptsToDecode\":%lld,"
@@ -574,7 +576,7 @@ index b8cd804..9660604 100644
          "\"maxWidth\":%d,\"maxHeight\":%d,\"maxFrameRate\":60}}}]}",
 -        window.c_str(), codec_name,
 -        static_cast<long long>(plan.target_native_us * 1000), width, height,
-+        window_field.c_str(), codec_name,
++        app_id, window_field.c_str(), codec_name,
 +        static_cast<long long>(plan.target_native_us * 1000), width, height, fps_field.c_str(),
          unsigned(config_.header[9]), Base64(plan.config.header).c_str(),
          max_width, max_height);
@@ -590,7 +592,7 @@ index b8cd804..9660604 100644
      if (!session->api->Load(payload.c_str(), NativeSession::Callback, session.get()))
        FailSession(*session, "shared Starfish Load rejected");
      // Even rejected Load may have installed callbacks: caller always unloads.
-@@ -723,7 +749,7 @@ class Owner : public player::JobQueue::JobOwner {
+@@ -723,7 +751,7 @@ class Owner : public player::JobQueue::JobOwner {
        Trace("HDR metadata unavailable generation=%llu; using elementary-stream detection",
              static_cast<unsigned long long>(session.generation));
      } else if (loaded && !hdr_payload.empty() &&
@@ -599,7 +601,7 @@ index b8cd804..9660604 100644
        const bool accepted = session.api->setHdrInfo(hdr_payload.c_str());
        session.applied_hdr_payload = hdr_payload;
        Trace("HDR metadata generation=%llu accepted=%d",
-@@ -851,6 +877,8 @@ class Owner : public player::JobQueue::JobOwner {
+@@ -851,6 +879,8 @@ class Owner : public player::JobQueue::JobOwner {
    bool error_sent_ = false, have_frame_ = false, bounds_dirty_ = true;
    bool video_hdr_ = false;
    SbTime target_ = 0, current_ = 0, first_audio_pts_ = 0, first_video_pts_ = 0, frame_time_ = 0;

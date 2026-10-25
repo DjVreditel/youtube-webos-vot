@@ -19,7 +19,12 @@ docker run --rm -v ytaf-webos-linux-sdk:/sdk:ro -v "$runtime:/out" ubuntu:24.04 
 cd "$rf"
 cp "$port_dir/../assets/icon.png" assets/icon.png
 cp "$port_dir/../assets/largeIcon.png" assets/largeIcon.png
-jq '.title = "YouTube" | .iconColor = "#FFFFFF"' starterless-cobalt/appinfo.json > starterless-cobalt/appinfo.json.tmp
+git checkout -q -- starterless-cobalt/appinfo.json
+jq --arg id "${COBALT_APP_ID:-youtube.leanback.v4}" --arg title "${COBALT_TITLE:-YouTube}" \
+  --arg version "${COBALT_VERSION:-}" \
+  '.id = $id | .title = $title | .iconColor = "#FFFFFF" | .vendor = "DjVreditel"
+   | if $version == "" then . else .version = $version end' \
+  starterless-cobalt/appinfo.json > starterless-cobalt/appinfo.json.tmp
 mv starterless-cobalt/appinfo.json.tmp starterless-cobalt/appinfo.json
 userscript="$port_dir/../dist/webOSUserScripts/userScript.js"
 [[ -s "$userscript" ]] || { echo "Build the userscript first (npm run build in the repo root)." >&2; exit 2; }
