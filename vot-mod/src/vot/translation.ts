@@ -11,7 +11,9 @@ import {
   SYNC_DRIFT_THRESHOLD_S,
   resolveSyncAction,
   shouldRunDriftCheck,
-  calcChunkRange
+  calcChunkRange,
+  mp3FrameIndex,
+  mp3TimeAt
 } from './sync-core';
 
 let originalVolumeReduction: number = configRead('votOriginalVolume');
@@ -33,7 +35,11 @@ let currentManager: PlayerManager | null = null;
 
 let audioCtx: AudioContext | null = null;
 let wholeFileAudio = false;
-let wholeFile: { url: string; data: Promise<ArrayBuffer> } | null = null;
+let wholeFile: {
+  url: string;
+  data: Promise<ArrayBuffer>;
+  index?: ReturnType<typeof mp3FrameIndex>;
+} | null = null;
 let gainNode: GainNode | null = null;
 let audioSource: AudioBufferSourceNode | null = null;
 let audioBuffer: AudioBuffer | null = null;
@@ -199,7 +205,7 @@ function fetchRangedChunk(
       return;
     }
 
-    const decodeChunk = (raw: ArrayBuffer) => {
+    const decodeChunk = (raw: ArrayBuffer, knownStartTime?: number) => {
       if (signal.aborted || !audioCtx) {
         reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
         return;
@@ -216,8 +222,8 @@ function fetchRangedChunk(
             reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
             return;
           }
-          let chunkStartTime = 0;
-          if (startByte > 0 && decoded.duration > 0) {
+          let chunkStartTime = knownStartTime ?? 0;
+          if (knownStartTime === undefined && startByte > 0 && decoded.duration > 0) {
             const bytesPerSec = safe.byteLength / decoded.duration;
             chunkStartTime = startByte / bytesPerSec;
           }
@@ -226,7 +232,10 @@ function fetchRangedChunk(
             '[VOT] chunk decoded, duration:',
             decoded.duration.toFixed(1),
             'start:',
-            chunkStartTime.toFixed(1)
+            chunkStartTime.toFixed(1),
+            'bytes:',
+            startByte,
+            safe.byteLength
           );
           resolve({
             buffer: decoded,
@@ -239,10 +248,12 @@ function fetchRangedChunk(
     };
 
     if (wholeFileAudio) {
-      fetchWholeFile(url).then(
-        (data) => decodeChunk(data.slice(startByte, endByte + 1)),
-        reject
-      );
+      fetchWholeFile(url).then((data) => {
+        const file = wholeFile;
+        const index = file?.index ?? mp3FrameIndex(new Uint8Array(data));
+        if (file) file.index = index;
+        decodeChunk(data.slice(startByte, endByte + 1), mp3TimeAt(index, startByte));
+      }, reject);
       return;
     }
 
@@ -299,7 +310,9 @@ async function continuePlayback() {
 
   const localSeekVersion = seekVersion;
   const { signal } = abortController;
-  const startByte = currentChunkEndByte;
+  const startByte = wholeFileAudio
+    ? Math.max(0, currentChunkEndByte - RANGE_ALIGN_BYTES)
+    : currentChunkEndByte;
   const endByte = Math.min(
     currentFileSize - 1,
     startByte + AUDIO_CHUNK_BYTES - 1
@@ -406,7 +419,9 @@ async function prefetchNextChunk() {
 
   const myGeneration = ++prefetchGeneration;
   const { signal } = abortController;
-  const startByte = currentChunkEndByte;
+  const startByte = wholeFileAudio
+    ? Math.max(0, currentChunkEndByte - RANGE_ALIGN_BYTES)
+    : currentChunkEndByte;
   const endByte = Math.min(
     currentFileSize - 1,
     startByte + AUDIO_CHUNK_BYTES - 1
@@ -968,16 +983,19 @@ export async function stopTranslation() {
 
 export function videoAudioLanguage(manager: PlayerManager): string {
   const videoData = manager.player.getVideoData();
-  const asrTrack = manager.player
-    .getPlayerResponse?.()
-    ?.captions?.playerCaptionsTracklistRenderer?.captionTracks?.find(
-      (track) => track.kind === 'asr'
-    );
+  const response = manager.player.getPlayerResponse?.();
+  const originalTrack = response?.streamingData?.adaptiveFormats?.find(
+    (format) => format.audioTrack?.audioIsDefault
+  )?.audioTrack?.id;
+  const asrTrack = response?.captions?.playerCaptionsTracklistRenderer?.captionTracks?.find(
+    (track) => track.kind === 'asr'
+  );
   const raw =
     videoData.defaultAudioLanguage ||
     videoData.audioTracks?.[0]?.language ||
+    originalTrack ||
     asrTrack?.languageCode;
-  return raw?.split('-')[0]?.toLowerCase() ?? '';
+  return raw?.split(/[-.]/)[0]?.toLowerCase() ?? '';
 }
 
 function isSameLanguageVideo(manager: PlayerManager): boolean {

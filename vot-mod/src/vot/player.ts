@@ -23,6 +23,9 @@ type YTPlayer = HTMLElement & {
         captionTracks?: Array<{ languageCode?: string; kind?: string }>;
       };
     };
+    streamingData?: {
+      adaptiveFormats?: Array<{ audioTrack?: { id?: string; audioIsDefault?: boolean } }>;
+    };
   };
 };
 

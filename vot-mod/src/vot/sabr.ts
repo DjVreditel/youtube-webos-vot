@@ -99,26 +99,38 @@ export function installSabrCapture() {
   } as typeof fetch;
 
   const xhrUrls = new WeakMap<XMLHttpRequest, string>();
-  const nativeOpen = XMLHttpRequest.prototype.open;
-  const nativeSend = XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.open = function (this: XMLHttpRequest, ...args: unknown[]) {
+  const captureXhrBody = (xhr: XMLHttpRequest, body: unknown) => {
+    const url = xhrUrls.get(xhr);
+    if (!url || !body) return;
+    const bytes =
+      body instanceof ArrayBuffer
+        ? new Uint8Array(body.slice(0))
+        : ArrayBuffer.isView(body)
+          ? new Uint8Array(body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength))
+          : null;
+    if (bytes && bytes.byteLength) template = { url, body: bytes };
+  };
+  const proto = XMLHttpRequest.prototype as XMLHttpRequest & {
+    fetch?: (...args: unknown[]) => unknown;
+  };
+  const nativeOpen = proto.open;
+  const nativeSend = proto.send;
+  const nativeXhrFetch = proto.fetch;
+  proto.open = function (this: XMLHttpRequest, ...args: unknown[]) {
     const url = String(args[1]);
     if (isSabrUrl(url)) xhrUrls.set(this, url);
     return (nativeOpen as (...a: unknown[]) => void).apply(this, args);
   } as typeof XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.send = function (this: XMLHttpRequest, body?: Document | XMLHttpRequestBodyInit | null) {
-    const url = xhrUrls.get(this);
-    if (url && body) {
-      const bytes =
-        body instanceof ArrayBuffer
-          ? new Uint8Array(body.slice(0))
-          : ArrayBuffer.isView(body)
-            ? new Uint8Array(body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength))
-            : null;
-      if (bytes && bytes.byteLength) template = { url, body: bytes };
-    }
+  proto.send = function (this: XMLHttpRequest, body?: Document | XMLHttpRequestBodyInit | null) {
+    captureXhrBody(this, body);
     return nativeSend.call(this, body);
   };
+  if (typeof nativeXhrFetch === 'function') {
+    proto.fetch = function (this: XMLHttpRequest, onChunk: unknown, onDone: unknown, body: unknown) {
+      captureXhrBody(this, body);
+      return nativeXhrFetch.call(this, onChunk, onDone, body);
+    };
+  }
 }
 
 function buildRequest(
@@ -227,8 +239,7 @@ export async function downloadAudioViaSabr(
     const requestUrl = url.replace(/([?&])rn=\d+/, `$1rn=${requestNumber++}`);
     const res = await nativeFetch(requestUrl, {
       method: 'POST',
-      body: body.buffer as ArrayBuffer,
-      headers: { 'content-type': 'application/x-protobuf', accept: 'application/vnd.yt-ump' }
+      body: body.buffer as ArrayBuffer
     });
     if (!res.ok) throw new Error(`SABR: HTTP ${res.status}`);
     const parts = parseUmp(new Uint8Array(await res.arrayBuffer()));

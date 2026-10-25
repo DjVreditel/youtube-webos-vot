@@ -75,3 +75,51 @@ export function calcChunkRange(videoTime, videoDuration, fileSize) {
       : startByte + AUDIO_CHUNK_BYTES - 1;
   return { startByte, endByte };
 }
+
+const MP3_BITRATES = {
+  3: [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320],
+  2: [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160]
+};
+const MP3_SAMPLE_RATES = {
+  3: [44100, 48000, 32000],
+  2: [22050, 24000, 16000],
+  0: [11025, 12000, 8000]
+};
+
+export function mp3FrameIndex(bytes) {
+  const offsets = [];
+  const times = [];
+  let position = 0;
+  if (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
+    position = 10 + ((bytes[6] << 21) | (bytes[7] << 14) | (bytes[8] << 7) | bytes[9]);
+  }
+  let time = 0;
+  while (position + 4 <= bytes.length) {
+    const b1 = bytes[position + 1];
+    const b2 = bytes[position + 2];
+    const version = (b1 >> 3) & 3;
+    const bitrate = (MP3_BITRATES[version === 3 ? 3 : 2] || [])[(b2 >> 4) & 15];
+    const rate = (MP3_SAMPLE_RATES[version] || [])[(b2 >> 2) & 3];
+    if (bytes[position] !== 0xff || (b1 & 0xe0) !== 0xe0 || ((b1 >> 1) & 3) !== 1 || !bitrate || !rate) {
+      position++;
+      continue;
+    }
+    const mpeg1 = version === 3;
+    offsets.push(position);
+    times.push(time);
+    time += (mpeg1 ? 1152 : 576) / rate;
+    position += Math.floor(((mpeg1 ? 144000 : 72000) * bitrate) / rate) + ((b2 >> 1) & 1);
+  }
+  return { offsets, times, duration: time };
+}
+
+export function mp3TimeAt(index, byteOffset) {
+  let low = 0;
+  let high = index.offsets.length;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (index.offsets[middle] < byteOffset) low = middle + 1;
+    else high = middle;
+  }
+  return low < index.times.length ? index.times[low] : index.duration;
+}

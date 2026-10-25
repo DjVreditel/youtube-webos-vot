@@ -129,3 +129,19 @@ test('calcChunkRange: unknown duration falls back to file start', () => {
   const { startByte } = calcChunkRange(300, 0, 10 * AUDIO_CHUNK_BYTES);
   assert.equal(startByte, 0);
 });
+
+test('mp3 frame index gives exact times for MPEG-2 Layer III', async () => {
+  const { mp3FrameIndex, mp3TimeAt } = await import('../src/vot/sync-core.js');
+  const frame = new Uint8Array(208);
+  frame.set([0xff, 0xf3, 0x80, 0xc4]);
+  const id3 = new Uint8Array([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 2, 0, 0]);
+  const file = new Uint8Array(id3.length + frame.length * 3 + 5);
+  file.set(id3, 0);
+  for (let i = 0; i < 3; i++) file.set(frame, id3.length + i * frame.length);
+  const index = mp3FrameIndex(file);
+  assert.equal(index.offsets.length, 3);
+  assert.equal(index.offsets[1], id3.length + 208);
+  assert.ok(Math.abs(index.times[2] - (2 * 576) / 22050) < 1e-9);
+  assert.equal(mp3TimeAt(index, id3.length + 1), index.times[1]);
+  assert.equal(mp3TimeAt(index, file.length), index.duration);
+});
