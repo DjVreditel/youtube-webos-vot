@@ -6,6 +6,7 @@ import type { VotTranslationStatus } from './types';
 import { isSourceLang, isTargetLang } from './langs';
 import { needsAudioShim, wrapAudioContext } from './cobalt-audio';
 import { OriginalVolume } from './original-volume';
+import { createTranslationTrace } from './diagnostics';
 import {
   AUDIO_CHUNK_BYTES,
   RANGE_ALIGN_BYTES,
@@ -401,7 +402,13 @@ function getFileSize(url: string, signal: AbortSignal): Promise<number> {
   if (wholeFileAudio) {
     return fetchWholeFile(url).then(
       (data) => (signal.aborted ? 0 : data.byteLength),
-      () => 0
+      (error: unknown) => {
+        // A timeout/503 does not mean the saved translation URL has expired.
+        // Keep that cache entry instead of forcing another server translation.
+        const status = (error as { httpStatus?: number })?.httpStatus;
+        if (status && [401, 403, 404, 410].includes(status)) return 0;
+        throw error;
+      }
     );
   }
   return new Promise((resolve) => {
@@ -434,7 +441,7 @@ function fetchWholeFile(url: string): Promise<ArrayBuffer> {
       xhr.onload = () =>
         xhr.status === 200
           ? resolve(xhr.response as ArrayBuffer)
-          : reject(new Error(`Audio fetch failed: HTTP ${xhr.status}`));
+          : reject(Object.assign(new Error(`Audio fetch failed: HTTP ${xhr.status}`), { httpStatus: xhr.status }));
       xhr.onerror = () => reject(new Error('Audio fetch: network error'));
       xhr.ontimeout = () => reject(new Error('Audio fetch: timeout'));
       xhr.send();
@@ -757,6 +764,7 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
 
   setStatus('loading');
   console.log('[VOT] status set to loading, calling translateVideo');
+  const trace = createTranslationTrace(videoId);
 
   try {
     const configuredToLang = String(configRead('votToLang'));
@@ -816,7 +824,8 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
         String(configRead('votAccountToken') ?? ''),
         chosenFromLang !== 'auto',
         videoTitle,
-        bypassCache
+        bypassCache,
+        trace.event
       );
 
       stopCountdown();
@@ -847,6 +856,7 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
     let audioUrl = getCachedTranslationUrl(cacheKey);
     if (audioUrl) {
       fromCache = true;
+      trace.event({ stage: 'local-cache' });
       console.log('[VOT] using cached translation URL');
     } else {
       audioUrl = await requestTranslationUrl();
@@ -873,6 +883,7 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
     const videoTime = videoElement.currentTime;
 
     console.log('[VOT] fetching file size...');
+    trace.event({ stage: 'audio-download' });
     let fileSize = await getFileSize(audioUrl, signal);
     console.log('[VOT] file size:', fileSize);
 
@@ -882,6 +893,7 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
       // Cached URL expired server-side — request a fresh one
       console.warn('[VOT] cached translation URL is stale, re-requesting');
       dropCachedTranslationUrl(cacheKey);
+      trace.event({ stage: 'url-refresh', bypass: false });
       audioUrl = await requestTranslationUrl();
       if (!audioUrl) return;
       fileSize = await getFileSize(audioUrl, signal);
@@ -890,6 +902,7 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
 
     if (fileSize === 0) {
       console.warn('[VOT] server returned an expired URL, bypassing its cache');
+      trace.event({ stage: 'url-refresh', bypass: true });
       audioUrl = await requestTranslationUrl(true);
       if (!audioUrl) return;
       fileSize = await getFileSize(audioUrl, signal);
@@ -932,6 +945,7 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
     setTimeout(() => void prefetchNextChunk(), PREFETCH_DELAY_MS);
 
     serverRestartCount = 0;
+    trace.event({ stage: 'ready' });
     setStatus('playing');
   } catch (err) {
     // Superseded by a newer start/stop: shared state (currentVideoId,
@@ -939,6 +953,7 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
     // stop it or restart on our stale error
     if (signal.aborted) return;
     if (err instanceof Error && err.name === 'AbortError') return;
+    trace.fail(err);
 
     const failedId = currentVideoId;
     const needsRestart =

@@ -1,5 +1,6 @@
 import type { VotTranslationResult } from './types';
 import { downloadAudioViaSabr } from './sabr';
+import type { TranslationDiagnosticEvent } from './diagnostics';
 
 const WORKER_HOST = 'https://vot-worker.vtrans.eu.cc';
 const LEGACY_WORKER_HOST = 'https://vot-new.toil-dump.workers.dev';
@@ -623,10 +624,12 @@ async function downloadAndUploadYouTubeAudio(
   durationMs: number,
   session: Session,
   signal: AbortSignal,
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  onDiagnostic?: (event: TranslationDiagnosticEvent) => void
 ): Promise<void> {
   const videoUrl = `https://youtu.be/${videoId}`;
   const path = '/video-translation/audio';
+  if (signal.aborted) throw Object.assign(new Error('Translation aborted'), { name: 'AbortError' });
 
   const audio = await downloadAudioViaSabr(videoId, durationMs, signal, (done, total) =>
     onProgress?.(`download ${Math.min(99, Math.floor((done / total) * 100))}%`)
@@ -635,7 +638,7 @@ async function downloadAndUploadYouTubeAudio(
   const fileId = `random-web_sabr-${generateUUID().toLowerCase()}`;
 
   for (let i = 0; i < totalChunks; i++) {
-    if (signal.aborted) break;
+    if (signal.aborted) throw Object.assign(new Error('Translation aborted'), { name: 'AbortError' });
     onProgress?.(`upload ${i + 1}/${totalChunks}`);
     if (i > 0) {
       // eslint-disable-next-line no-await-in-loop
@@ -653,15 +656,19 @@ async function downloadAndUploadYouTubeAudio(
     );
     // eslint-disable-next-line no-await-in-loop
     const headers = await getVtransHeaders(session, body, path);
-    // eslint-disable-next-line no-await-in-loop
-    await workerRequest(
-      'PUT',
-      path,
-      { proto: body },
-      headers,
-      signal,
-      AUDIO_UPLOAD_TIMEOUT_MS
-    );
+    // Retry the SAME chunk/file id, never advance past a rejected upload.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (signal.aborted) throw Object.assign(new Error('Translation aborted'), { name: 'AbortError' });
+      const response = await workerRequest('PUT', path, { proto: body }, headers, signal, AUDIO_UPLOAD_TIMEOUT_MS);
+      onDiagnostic?.({ stage: 'upload', chunk: i + 1, attempt: attempt + 1, httpStatus: response.status });
+      if (signal.aborted) throw Object.assign(new Error('Translation aborted'), { name: 'AbortError' });
+      if (response.success) break;
+      const transient = response.status === 0 || response.status === 429 || response.status >= 500;
+      if (!transient || attempt === 2) {
+        throw Object.assign(new Error('Не удалось передать исходное аудио. Повторите попытку.'), { name: 'AudioUploadError' });
+      }
+      await waitPoll(signal, attempt + 2);
+    }
   }
 }
 
@@ -688,6 +695,7 @@ async function sendFallbackAudioNotify(
 }
 
 function waitPoll(signal: AbortSignal, remainingTime = 0): Promise<void> {
+  if (signal.aborted) return Promise.reject(Object.assign(new Error('Translation aborted'), { name: 'AbortError' }));
   const ms =
     remainingTime > 0
       ? Math.max(5_000, Math.min(POLL_INTERVAL_MS, (remainingTime + 3) * 1000))
@@ -782,10 +790,12 @@ export async function translateVideo(
   apiToken = '',
   forceSourceLang = false,
   videoTitle = '',
-  bypassCache = false
+  bypassCache = false,
+  onDiagnostic?: (event: TranslationDiagnosticEvent) => void
 ): Promise<VotTranslationResult> {
   const url = `https://youtu.be/${videoId}`;
-  let audioHandled = false;
+  const handledAudioJobs = new Set<string>();
+  let audioJobAttempts = 0;
   let shouldRetryCount = 0;
   // Lively voice needs a Yandex account: with a token the request is sent
   // authorized (Authorization: OAuth ...), anonymously we try briefly and
@@ -808,6 +818,7 @@ export async function translateVideo(
       continue;
     }
 
+    onDiagnostic?.({ stage: 'session', attempt: attempt + 1 });
     const session = await getSession();
     const body = encodeTranslationRequest(
       url,
@@ -819,12 +830,14 @@ export async function translateVideo(
       forceSourceLang,
       videoTitle
     );
+    onDiagnostic?.({ stage: 'request', attempt: attempt + 1, bypass: bypassCache });
     const res = await sendTranslationRequest(
       body,
       session,
       signal,
       livelyHeaders()
     );
+    onDiagnostic?.({ stage: 'response', httpStatus: res.status });
 
     if (!res.success) {
       if (res.status >= 500 || res.status === 0) {
@@ -841,6 +854,7 @@ export async function translateVideo(
       throw new Error('VOT: unexpected response type');
 
     const data = decodeTranslationResponse(res.data);
+    onDiagnostic?.({ stage: 'response', status: data.status, shouldRetry: data.shouldRetry });
     console.debug('[VOT] response:', data);
 
     // Server says lively voices are unavailable (no account / unsupported
@@ -869,7 +883,7 @@ export async function translateVideo(
         // Keep bypass enabled for the following polls. Previously a one-off
         // bypass response (including a finished translation) was discarded,
         // and polling then returned to the cached failure.
-        if (!bypassCache) audioHandled = false;
+        if (!bypassCache) handledAudioJobs.clear();
         bypassCache = true;
         onWaiting?.(0, '', true);
         await waitPoll(signal, shouldRetryCount * 2);
@@ -911,8 +925,9 @@ export async function translateVideo(
       continue;
     }
 
-    if (data.status === STATUS_AUDIO_REQUESTED && !audioHandled) {
-      audioHandled = true;
+    if (data.status === STATUS_AUDIO_REQUESTED && !handledAudioJobs.has(data.translationId)) {
+      if (++audioJobAttempts > 3) throw new Error('Сервис повторно запрашивает аудио. Попробуйте позже.');
+      onDiagnostic?.({ stage: 'source-audio', attempt: audioJobAttempts });
       try {
         await downloadAndUploadYouTubeAudio(
           videoId,
@@ -920,10 +935,19 @@ export async function translateVideo(
           duration * 1000,
           session,
           signal,
-          (message) => onWaiting?.(0, message)
+          (message) => onWaiting?.(0, message),
+          onDiagnostic
         );
       } catch (err) {
         if (signal.aborted) throw Object.assign(new Error('Translation aborted'), { name: 'AbortError' });
+        // The audio was downloaded successfully: an upload refusal must not be
+        // disguised as a source-download failure or replaced by empty audio.
+        if ((err as { name?: string })?.name === 'AudioUploadError') throw err;
+        const message = err instanceof Error ? err.message : '';
+        onDiagnostic?.({ stage: 'source-audio-failed', reason:
+          message.includes('no player request captured') ? 'source-not-ready' :
+          message.includes('another video') ? 'source-video-mismatch' :
+          message.includes('attestation') ? 'source-attestation' : 'source-download-error' });
         console.warn(
           '[VOT] Audio download failed, falling back to fail-audio-js:',
           err
@@ -937,6 +961,7 @@ export async function translateVideo(
           signal
         );
       }
+      handledAudioJobs.add(data.translationId);
       continue;
     }
 

@@ -70,6 +70,35 @@ been visually confirmed**; the owner's successful observation was with the
 OLED setting disabled. Native decoder changes were unnecessary and are not
 part of this preview fix.
 
+## Intermittent translation errors
+
+A later report showed the generic server translation error on a video that
+previously worked. The error did not recur during the observation: the user
+confirmed successful translation. No specific server-side cause was established.
+
+Regression tests exposed two client-side recovery problems:
+
+- Source-audio upload results were ignored. A failed chunk could be followed
+  by later chunks, then be reported as a generic translation error. Uploads now
+  retry transient failures with the same chunk/file id, stop on permanent or
+  exhausted failures, and never send an empty-audio fallback for an upload
+  rejection. New server job ids can request audio again; repeated polls of the
+  same job do not re-upload it. Work is bounded to three jobs per request.
+- On Cobalt, any whole-file download failure was treated as an expired URL.
+  Timeouts and temporary server errors now preserve the cached translation;
+  only HTTP 401/403/404/410 allow the normal expired-URL refresh path.
+
+The last failure stores at most 24 diagnostic events locally under
+`ytaf-vot-last-error-v1` (stage, response codes, retry/chunk numbers and video id).
+It excludes raw errors/responses, titles, URLs, credentials and audio content.
+Cancellation/success do not overwrite it; records older than seven days are
+removed when a new translation starts. Storage failure cannot stop playback.
+No collection server, remote-command interface or temporary probe is included.
+
+The new failure tests fail on the preceding source and pass after the changes.
+The intermittent TV error itself remains unconfirmed, so these are concrete
+recovery fixes plus diagnostics, not a claim that all upstream errors are gone.
+
 ## Optional blue launcher
 
 Set `COBALT_ICON_VARIANT=blue` when running `cobalt-port/package.sh` to use the
@@ -97,7 +126,7 @@ node bench/vot-oled-preview-check.cjs
 CHROME_BIN=/path/to/chrome node bench/vot-controls-layout-check.cjs
 ```
 
-The 58 tests cover pointer/remote ownership, repeated native DOM redraws,
+The 70 tests cover pointer/remote ownership, repeated native DOM redraws,
 button/image identity, disposal, volume replacement/restoration, cancellation,
 protobuf decoding, bounded retries, cache separation and OLED preview lifecycle. The compiled bundle
 check covers toggle/close and native focus return. The browser check verifies
