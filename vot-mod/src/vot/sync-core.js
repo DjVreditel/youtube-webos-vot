@@ -123,3 +123,42 @@ export function mp3TimeAt(index, byteOffset) {
   }
   return low < index.times.length ? index.times[low] : index.duration;
 }
+
+/** Select a frame-aligned chunk from the MP3's own timeline, without video metadata. */
+export function calcIndexedChunkRange(index, targetTime, fileSize) {
+  if (
+    !index || !index.offsets.length || index.offsets.length !== index.times.length ||
+    !Number.isFinite(index.duration) || !Number.isFinite(targetTime) ||
+    targetTime < 0 || targetTime >= index.duration ||
+    !Number.isSafeInteger(fileSize) || fileSize <= 0
+  ) return null;
+
+  // Last frame whose start time is at or before the desired audio position.
+  let low = 0;
+  let high = index.times.length;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (index.times[middle] <= targetTime) low = middle + 1;
+    else high = middle;
+  }
+  if (low === 0) return null;
+  const targetFrame = low - 1;
+  const targetByte = index.offsets[targetFrame];
+  if (!Number.isSafeInteger(targetByte) || targetByte < 0 || targetByte >= fileSize) return null;
+
+  // Keep decoder history before the target, bounded by the existing lookback.
+  // Choose the next complete frame so slicing never begins inside a frame.
+  const earliestByte = Math.max(0, targetByte - RANGE_ALIGN_BYTES);
+  low = 0;
+  high = targetFrame + 1;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (index.offsets[middle] < earliestByte) low = middle + 1;
+    else high = middle;
+  }
+  const startByte = index.offsets[low];
+  return {
+    startByte,
+    endByte: Math.min(fileSize - 1, startByte + AUDIO_CHUNK_BYTES - 1)
+  };
+}

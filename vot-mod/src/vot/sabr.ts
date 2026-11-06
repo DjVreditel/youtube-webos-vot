@@ -32,6 +32,7 @@ const PART_STREAM_PROTECTION_STATUS = 58;
 const AUDIO_ONLY = 1;
 const MAX_REQUESTS = 400;
 const MAX_STALLS = 3;
+const COVERAGE_TOLERANCE_MS = 1000;
 
 let nativeFetch: typeof fetch | null = null;
 let template: Template | null = null;
@@ -212,18 +213,29 @@ export async function downloadAudioViaSabr(
     let end = 0;
     let first = Infinity;
     let last = -1;
-    for (const s of segments.values()) {
+    let count = 0;
+    // Only advertise the contiguous prefix: a later segment is not evidence
+    // that the audio between it and the previous segment was downloaded.
+    for (const s of Array.from(segments.values()).sort((a, b) => a.num - b.num)) {
+      if (
+        !Number.isFinite(s.startMs) || !Number.isFinite(s.durationMs) ||
+        s.startMs < 0 || s.durationMs <= 0 ||
+        (count > 0 && s.num !== last + 1) ||
+        s.startMs > end + COVERAGE_TOLERANCE_MS
+      ) break;
       end = Math.max(end, s.startMs + s.durationMs);
       first = Math.min(first, s.num);
-      last = Math.max(last, s.num);
+      last = s.num;
+      count++;
     }
-    return { end, first, last };
+    return { end, first, last, count };
   };
 
   for (let request = 0; request < MAX_REQUESTS; request++) {
     if (signal.aborted) throw new Error('aborted');
     const { end, first, last } = coveredUntil();
-    if (initSegment && end >= durationMs - 1000) break;
+    if (initSegment && end >= durationMs - COVERAGE_TOLERANCE_MS) break;
+    const hadInitSegment = initSegment !== null;
 
     const bufferedRange =
       last >= 0
@@ -247,7 +259,6 @@ export async function downloadAudioViaSabr(
     const headers = new Map<number, MediaHeader>();
     const buffers = new Map<number, Uint8Array[]>();
     let backoffMs = 0;
-    let gotAudio = false;
     for (const part of parts) {
       if (part.type === PART_MEDIA_HEADER) {
         const { headerId, header } = parseMediaHeader(part.data);
@@ -263,7 +274,6 @@ export async function downloadAudioViaSabr(
         const header = headers.get(headerId);
         const data = concat(buffers.get(headerId) ?? []);
         if (header && header.itag === audioItag && data.length) {
-          gotAudio = true;
           if (header.isInit) initSegment = initSegment ?? data;
           else segments.set(header.num, { ...header, data });
         }
@@ -285,13 +295,22 @@ export async function downloadAudioViaSabr(
       }
     }
 
-    onProgress?.(coveredUntil().end, durationMs);
-    stalls = gotAudio ? 0 : stalls + 1;
+    const coverage = coveredUntil();
+    onProgress?.(coverage.end, durationMs);
+    stalls = coverage.end > end || (!hadInitSegment && initSegment) ? 0 : stalls + 1;
     if (stalls >= MAX_STALLS) break;
     if (backoffMs) await wait(backoffMs);
   }
 
   if (!initSegment || segments.size === 0) throw new Error('SABR: no audio received');
+  if (signal.aborted) throw new Error('aborted');
+  const coverage = coveredUntil();
+  if (
+    !Number.isFinite(durationMs) || durationMs <= 0 ||
+    coverage.count !== segments.size || coverage.end < durationMs - COVERAGE_TOLERANCE_MS
+  ) {
+    throw new Error(`SABR: incomplete audio (${coverage.end} of ${durationMs} ms)`);
+  }
   const ordered = Array.from(segments.values()).sort((a, b) => a.num - b.num);
   return concat([initSegment, ...ordered.map((s) => s.data)]);
 }

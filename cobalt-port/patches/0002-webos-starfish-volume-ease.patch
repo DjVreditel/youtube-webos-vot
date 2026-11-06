@@ -1,0 +1,7 @@
+--- a/cobalt-platform/webos/arm/starfish_av_components.cc
++++ b/cobalt-platform/webos/arm/starfish_av_components.cc
+@@ -732,3 +732,3 @@
+     if (loaded && volume != session.volume) {
+-      const auto payload = FormatString("{\"volume\":%d}", int(std::lround(volume * 100)));
++      const auto payload = FormatString("{\"volume\":%d,\"ease\":{\"duration\":50,\"type\":\"Linear\"}}", int(std::lround(volume * 100)));
+       if (!session.api->setVolume(payload.c_str())) { FailSession(session, "shared volume rejected"); return; }

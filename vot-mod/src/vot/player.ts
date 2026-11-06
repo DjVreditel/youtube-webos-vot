@@ -14,6 +14,8 @@ type VideoData = {
 };
 
 type YTPlayer = HTMLElement & {
+  getVolume?(): number;
+  setVolume?(volume: number): void;
   getVideoData(): VideoData;
   getVideoStats(): { el?: string };
   isInline(): boolean;

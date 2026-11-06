@@ -308,6 +308,40 @@ function patchUiJs() {
   process.stdout.write('  ui.js patched\n');
 }
 
+function patchPlayerMenuEntry() {
+  const filePath = path.join(PROJECT_SRC, 'ui.js');
+  let content = readSource(filePath);
+  const marker = '// @vot-player-menu-entry';
+  if (content.includes(marker)) return;
+  const start = content.indexOf('function showPointerButton() {');
+  const end = content.indexOf('\n}\n', start) + 3;
+  if (start < 0 || end <= start) throw new Error('Cannot find floating settings button');
+  content = content.slice(0, start) + marker + '\nfunction showPointerButton() {\n  hidePointerButton();\n}\n' + content.slice(end);
+  content = replaceOnce(content, "createConfigCheckbox('pointerSettingsButton'), ", '', 'remove obsolete floating-button option');
+  content = replaceOnce(content, '    ensureMenuKey(true);\n',
+    "    ensureMenuKey(true);\n    window.dispatchEvent(new Event('ytaf-options-closed'));\n", 'return from app menu to native controls');
+  fs.writeFileSync(filePath, content, 'utf8');
+}
+
+function patchOledPreviewGuard() {
+  const filePath = path.join(PROJECT_SRC, 'ui.js');
+  let content = readSource(filePath);
+  const marker = '// @vot-oled-preview-guard';
+  if (content.includes(marker)) return;
+  const anchor = "  document.documentElement.classList.toggle('oled-theme-active', !!enabled);";
+  if (!content.includes(anchor) || !content.includes('html.oled-theme-active ')) {
+    throw new Error('Cannot locate OLED page styles and preference handler');
+  }
+  content = `${marker}\nimport { setOledPageEnabled } from './vot/oled-preview';\n${content}`;
+  content = content.replace(anchor, `${anchor}\n  setOledPageEnabled(!!enabled);`);
+  // Keep the settings panel theme while suppressing all page-level OLED rules
+  // during Cobalt previews. Do not overwrite YouTube's own transparency rules.
+  content = content.replaceAll('html.oled-theme-active ', 'html.oled-theme-active.oled-page-active ')
+    .replaceAll('html.oled-theme-active.oled-transparent-shelf ',
+      'html.oled-theme-active.oled-page-active.oled-transparent-shelf ');
+  fs.writeFileSync(filePath, content, 'utf8');
+}
+
 function patchSourceFile(rel, edits) {
   const filePath = path.join(PROJECT_SRC, rel);
   if (!fs.existsSync(filePath)) {
@@ -381,6 +415,9 @@ function patchAssets() {
   }
   for (const name of fs.readdirSync(MOD_ASSETS)) {
     const from = path.join(MOD_ASSETS, name);
+    // Optional variants (for example the Cobalt blue launcher) are selected
+    // by their own packager; only top-level files replace the default assets.
+    if (!fs.statSync(from).isFile()) continue;
     const to = path.join(PROJECT_ASSETS, name);
     const src = fs.readFileSync(from);
     if (fs.existsSync(to) && fs.readFileSync(to).equals(src)) {
@@ -523,6 +560,8 @@ patchAuthServerUrl();
 
 step('Patching ui.js (VOT panel shortcut, branding)...');
 patchUiJs();
+patchPlayerMenuEntry();
+patchOledPreviewGuard();
 
 step('Patching ui.css (VOT theme colours)...');
 patchThemeCss();
