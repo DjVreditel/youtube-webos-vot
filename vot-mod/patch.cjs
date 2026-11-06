@@ -308,6 +308,21 @@ function patchUiJs() {
   process.stdout.write('  ui.js patched\n');
 }
 
+function patchPlayerMenuEntry() {
+  const filePath = path.join(PROJECT_SRC, 'ui.js');
+  let content = readSource(filePath);
+  const marker = '// @vot-player-menu-entry';
+  if (content.includes(marker)) return;
+  const start = content.indexOf('function showPointerButton() {');
+  const end = content.indexOf('\n}\n', start) + 3;
+  if (start < 0 || end <= start) throw new Error('Cannot find floating settings button');
+  content = content.slice(0, start) + marker + '\nfunction showPointerButton() {\n  hidePointerButton();\n}\n' + content.slice(end);
+  content = replaceOnce(content, "createConfigCheckbox('pointerSettingsButton'), ", '', 'remove obsolete floating-button option');
+  content = replaceOnce(content, '    ensureMenuKey(true);\n',
+    "    ensureMenuKey(true);\n    window.dispatchEvent(new Event('ytaf-options-closed'));\n", 'return from app menu to native controls');
+  fs.writeFileSync(filePath, content, 'utf8');
+}
+
 function patchSourceFile(rel, edits) {
   const filePath = path.join(PROJECT_SRC, rel);
   if (!fs.existsSync(filePath)) {
@@ -381,6 +396,9 @@ function patchAssets() {
   }
   for (const name of fs.readdirSync(MOD_ASSETS)) {
     const from = path.join(MOD_ASSETS, name);
+    // Optional variants (for example the Cobalt blue launcher) are selected
+    // by their own packager; only top-level files replace the default assets.
+    if (!fs.statSync(from).isFile()) continue;
     const to = path.join(PROJECT_ASSETS, name);
     const src = fs.readFileSync(from);
     if (fs.existsSync(to) && fs.readFileSync(to).equals(src)) {
@@ -523,6 +541,7 @@ patchAuthServerUrl();
 
 step('Patching ui.js (VOT panel shortcut, branding)...');
 patchUiJs();
+patchPlayerMenuEntry();
 
 step('Patching ui.css (VOT theme colours)...');
 patchThemeCss();

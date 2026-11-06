@@ -151,9 +151,11 @@ class ProtoReader {
       case 1:
         this.pos += 8;
         break;
-      case 2:
-        this.pos += this.readVarint();
+      case 2: {
+        const length = this.readVarint();
+        this.pos += length;
         break;
+      }
       case 5:
         this.pos += 4;
         break;
@@ -784,7 +786,6 @@ export async function translateVideo(
 ): Promise<VotTranslationResult> {
   const url = `https://youtu.be/${videoId}`;
   let audioHandled = false;
-  let bypassCacheUsed = bypassCache;
   let shouldRetryCount = 0;
   // Lively voice needs a Yandex account: with a token the request is sent
   // authorized (Authorization: OAuth ...), anonymously we try briefly and
@@ -860,45 +861,18 @@ export async function translateVideo(
     }
 
     if (data.status === STATUS_FAILED) {
-      if (data.shouldRetry === 1 && !bypassCacheUsed) {
-        bypassCacheUsed = true;
-        cachedSession = null;
-        const bypassBody = encodeTranslationRequest(
-          url,
-          duration,
-          fromLang,
-          toLang,
-          true,
-          lively,
-          forceSourceLang,
-          videoTitle
-        );
-        const bypassSession = await getSession();
-        const bypassRes = await sendTranslationRequest(
-          bypassBody,
-          bypassSession,
-          signal,
-          livelyHeaders()
-        );
-        if (bypassRes.success && bypassRes.data instanceof ArrayBuffer) {
-          const bypassData = decodeTranslationResponse(bypassRes.data);
-          console.debug('[VOT] bypassCache response:', bypassData);
-          if (bypassData.status !== STATUS_FAILED) {
-            onWaiting?.(
-              bypassData.remainingTime,
-              bypassData.message || `~${bypassData.remainingTime}s`
-            );
-            await waitPoll(signal, bypassData.remainingTime);
-            continue;
-          }
-        }
-      }
-
-      if (data.shouldRetry === 1 && shouldRetryCount < 3) {
+      const temporaryFailure = data.shouldRetry === 1 ||
+        /возникла ошибка при переводе.*попробуйте позже|translation.*(?:try again later|temporarily unavailable)/i.test(data.message);
+      if (temporaryFailure && shouldRetryCount < 3) {
         shouldRetryCount++;
         cachedSession = null;
+        // Keep bypass enabled for the following polls. Previously a one-off
+        // bypass response (including a finished translation) was discarded,
+        // and polling then returned to the cached failure.
+        if (!bypassCache) audioHandled = false;
+        bypassCache = true;
         onWaiting?.(0, '', true);
-        await waitPoll(signal, 2);
+        await waitPoll(signal, shouldRetryCount * 2);
         continue;
       }
 
@@ -949,6 +923,7 @@ export async function translateVideo(
           (message) => onWaiting?.(0, message)
         );
       } catch (err) {
+        if (signal.aborted) throw Object.assign(new Error('Translation aborted'), { name: 'AbortError' });
         console.warn(
           '[VOT] Audio download failed, falling back to fail-audio-js:',
           err

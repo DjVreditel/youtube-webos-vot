@@ -5,6 +5,7 @@ import { translateVideo } from './client';
 import type { VotTranslationStatus } from './types';
 import { isSourceLang, isTargetLang } from './langs';
 import { needsAudioShim, wrapAudioContext } from './cobalt-audio';
+import { OriginalVolume } from './original-volume';
 import {
   AUDIO_CHUNK_BYTES,
   RANGE_ALIGN_BYTES,
@@ -29,9 +30,9 @@ let lastErrorVideoId: VideoID | null = null;
 let abortController: AbortController | null = null;
 let videoElement: HTMLVideoElement | null = null;
 let statusCallback: StatusChangeCallback | null = null;
-let originalVolume: number | null = null;
 let videoListenerCleanup: VideoListenerCleanup | null = null;
 let currentManager: PlayerManager | null = null;
+const originalAudio = new OriginalVolume(getVideoElement, () => currentManager?.player ?? null);
 
 let audioCtx: AudioContext | null = null;
 let wholeFileAudio = false;
@@ -615,14 +616,6 @@ function attachVideoListeners() {
     void loadChunkAt(seekTime);
   };
 
-  const onVolumeChange = () => {
-    if (originalVolume === null) return;
-    const expected = originalVolume * originalVolumeReduction;
-    if (Math.abs(el.volume - expected) < 0.01) return;
-    originalVolume = el.volume;
-    el.volume = originalVolume * originalVolumeReduction;
-  };
-
   const onRateChange = () => {
     if (audioSource && videoElement) {
       audioSource.playbackRate.value = videoElement.playbackRate;
@@ -638,7 +631,6 @@ function attachVideoListeners() {
   el.addEventListener('emptied', onStop);
   el.addEventListener('seeked', onSeeked);
   el.addEventListener('ratechange', onRateChange);
-  el.addEventListener('volumechange', onVolumeChange);
 
   videoListenerCleanup = () => {
     el.removeEventListener('play', onPlay);
@@ -647,23 +639,17 @@ function attachVideoListeners() {
     el.removeEventListener('emptied', onStop);
     el.removeEventListener('seeked', onSeeked);
     el.removeEventListener('ratechange', onRateChange);
-    el.removeEventListener('volumechange', onVolumeChange);
     clearInterval(syncId);
     syncIntervalId = null;
   };
 }
 
 function reduceOriginalVolume() {
-  if (!videoElement) return;
-  originalVolume = videoElement.volume;
-  videoElement.volume = originalVolume * originalVolumeReduction;
+  originalAudio.start(originalVolumeReduction);
 }
 
 function restoreOriginalVolume() {
-  if (videoElement && originalVolume !== null) {
-    videoElement.volume = originalVolume;
-  }
-  originalVolume = null;
+  originalAudio.stop();
 }
 
 export function setVolumeTranslation(volume: number) {
@@ -674,9 +660,7 @@ export function setVolumeTranslation(volume: number) {
 
 export function setOriginalVolumeReduction(factor: number) {
   originalVolumeReduction = Math.min(1, Math.max(0, factor));
-  if (originalVolume !== null && videoElement) {
-    videoElement.volume = originalVolume * originalVolumeReduction;
-  }
+  originalAudio.setLevel(originalVolumeReduction);
 }
 
 export function setStatusCallback(cb: StatusChangeCallback) {
@@ -858,7 +842,9 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
     };
 
     let fromCache = false;
-    let audioUrl = lively ? null : getCachedTranslationUrl(cacheKey);
+    // The key includes the voice actually delivered, so a warm lively URL is
+    // safe to reuse without accidentally selecting a standard-voice fallback.
+    let audioUrl = getCachedTranslationUrl(cacheKey);
     if (audioUrl) {
       fromCache = true;
       console.log('[VOT] using cached translation URL');

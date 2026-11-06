@@ -1,4 +1,5 @@
 import './vot.css';
+import { installTranslationButton } from './controls-button';
 import { configRead, configWrite } from '../config';
 import {
   startTranslation,
@@ -58,6 +59,7 @@ let mainLabel: HTMLSpanElement | null = null;
 let voiceBtn: HTMLButtonElement | null = null;
 let menuBtn: HTMLButtonElement | null = null;
 let ccBtn: HTMLButtonElement | null = null;
+let closeBtn: HTMLButtonElement | null = null;
 let menu: HTMLDivElement | null = null;
 let menuRows: { row: MenuRow; el: HTMLDivElement; valueEl: HTMLSpanElement }[] = [];
 
@@ -178,6 +180,9 @@ function setVisible(next: boolean, takeFocus = false) {
 
 function setMenuOpen(next: boolean) {
   if (!menu) return;
+  // Pointer clicks can open the panel before a remote
+  // shortcut has given it keyboard ownership.
+  if (next && !focused) setVisible(true, true);
   menuOpen = next;
   menu.style.display = next ? 'block' : 'none';
   if (next) {
@@ -191,6 +196,17 @@ function setMenuOpen(next: boolean) {
 function focusMenuRow() {
   menuRows.forEach(({ el }, i) => el.classList.toggle('ytaf-vot-row--focused', i === menuIndex));
   menuRows[menuIndex]?.el.focus();
+}
+
+function releaseMenuFocus(restore = false) {
+  if (!focused || qrOverlay) return;
+  focused = false;
+  menuRows.forEach(({ el }) => el.classList.remove('ytaf-vot-row--focused'));
+  const active = document.activeElement as HTMLElement | null;
+  if (active && root?.contains(active)) active.blur();
+  if (restore && focusBeforeOpen && document.body.contains(focusBeforeOpen)) {
+    focusBeforeOpen.focus();
+  }
 }
 
 async function restartIfRunning() {
@@ -302,10 +318,12 @@ function onKey(evt: KeyboardEvent) {
   evt.preventDefault();
   evt.stopImmediatePropagation();
 
-  if (menuOpen) {
+  if (menuOpen && menu?.contains(document.activeElement)) {
     const current = menuRows[menuIndex];
     if (code === KEY_UP && menuIndex === 0) {
       setMenuOpen(false);
+    } else if (code === KEY_DOWN && menuIndex === menuRows.length - 1) {
+      releaseMenuFocus(true);
     } else if (code === KEY_UP || code === KEY_DOWN) {
       menuIndex = Math.min(menuRows.length - 1, menuIndex + (code === KEY_DOWN ? 1 : -1));
       focusMenuRow();
@@ -320,7 +338,7 @@ function onKey(evt: KeyboardEvent) {
     return;
   }
 
-  const segments = [mainBtn, voiceBtn, ccBtn, menuBtn].filter(Boolean) as HTMLElement[];
+  const segments = [mainBtn, voiceBtn, ccBtn, menuBtn, closeBtn].filter(Boolean) as HTMLElement[];
   const at = Math.max(0, segments.indexOf(document.activeElement as HTMLElement));
   if (code === KEY_LEFT || code === KEY_RIGHT) {
     segments[(at + (code === KEY_RIGHT ? 1 : -1) + segments.length) % segments.length]?.focus();
@@ -334,17 +352,26 @@ function onKey(evt: KeyboardEvent) {
 }
 
 function onStatus(status: VotTranslationStatus, message?: string) {
-  const changed = status !== lastStatus;
   lastStatus = status;
   lastMessage = message ?? '';
   render();
-  if (changed && status !== 'idle') setVisible(true, focused);
 }
 
 function createSegment(className: string, onClick: () => void): HTMLButtonElement {
   const btn = document.createElement('button');
   btn.className = `ytaf-vot-seg ${className}`;
-  btn.addEventListener('click', onClick);
+  btn.addEventListener('mouseenter', () => {
+    if (!focused) setVisible(true, true);
+    menuRows.forEach(({ el }) => el.classList.remove('ytaf-vot-row--focused'));
+    btn.focus();
+  });
+  btn.addEventListener('click', (evt) => {
+    evt.preventDefault();
+    evt.stopPropagation();
+    if (!focused) setVisible(true, true);
+    btn.focus();
+    onClick();
+  });
   return btn;
 }
 
@@ -369,11 +396,16 @@ function createUi(): HTMLDivElement {
   ccBtn.textContent = 'CC';
   menuBtn = createSegment('ytaf-vot-seg--menu', () => setMenuOpen(!menuOpen));
   menuBtn.textContent = '⋮';
+  closeBtn = createSegment('ytaf-vot-seg--close', () => setVisible(false));
+  closeBtn.textContent = '×';
+  closeBtn.title = 'Закрыть меню перевода';
+  closeBtn.setAttribute('aria-label', 'Закрыть меню перевода');
 
   bar.appendChild(mainBtn);
   bar.appendChild(voiceBtn);
   bar.appendChild(ccBtn);
   bar.appendChild(menuBtn);
+  bar.appendChild(closeBtn);
   container.appendChild(bar);
 
   menu = document.createElement('div');
@@ -383,7 +415,7 @@ function createUi(): HTMLDivElement {
   title.className = 'ytaf-vot-menu-title';
   title.textContent = 'Настройки перевода';
   menu.appendChild(title);
-  menuRows = buildMenuRows().map((row) => {
+  menuRows = buildMenuRows().map((row, index) => {
     const el = document.createElement('div');
     el.className = 'ytaf-vot-row';
     el.setAttribute('tabindex', '-1');
@@ -394,6 +426,19 @@ function createUi(): HTMLDivElement {
     valueEl.className = 'ytaf-vot-row-value';
     el.appendChild(labelEl);
     el.appendChild(valueEl);
+    const selectRow = () => {
+      if (!focused) setVisible(true, true);
+      menuIndex = index;
+      focusMenuRow();
+    };
+    el.addEventListener('mouseenter', selectRow);
+    el.addEventListener('click', (evt) => {
+      evt.preventDefault();
+      evt.stopPropagation();
+      selectRow();
+      (row.activate ?? (() => row.change?.(1)))();
+      render();
+    });
     menu!.appendChild(el);
     return { row, el, valueEl };
   });
@@ -402,17 +447,34 @@ function createUi(): HTMLDivElement {
   window.addEventListener(
     'keydown',
     (evt) => {
-      if (focused && !qrOverlay) onKey(evt);
+      if (focused && !qrOverlay) {
+        if (!container.contains(document.activeElement)) releaseMenuFocus();
+        else onKey(evt);
+      }
     },
     true
   );
+  const releaseForPointer = (evt: MouseEvent) => {
+    if (!focused || qrOverlay) return;
+    const target = evt.target as HTMLElement | null;
+    if (target && (bar?.contains(target) || menu?.contains(target))) return;
+    releaseMenuFocus();
+    // Some Magic Remote versions send OK as Enter to the focused element.
+    // Give that focus to the native control under the pointer, when available.
+    const native = target?.closest?.('button, [tabindex], [role="button"]') as HTMLElement | null;
+    if (native && !container.contains(native)) native.focus();
+  };
+  document.addEventListener('mousemove', releaseForPointer, true);
+  document.addEventListener('mousedown', releaseForPointer, true);
+  container.addEventListener('mouseleave', () => releaseMenuFocus());
   container.addEventListener('focusout', (evt) => {
     if (!focused || qrOverlay) return;
     const to = evt.relatedTarget as Node | null;
     if (to && container.contains(to)) return;
+    if (to) { releaseMenuFocus(); return; }
     setTimeout(() => {
       if (focused && !qrOverlay && root && !root.contains(document.activeElement)) {
-        (menuOpen ? menuRows[menuIndex]?.el : mainBtn)?.focus();
+        releaseMenuFocus();
       }
     }, 0);
   });
@@ -527,7 +589,7 @@ export function showVotPanel(show?: boolean): string {
     root = createUi();
     document.body.appendChild(root);
   }
-  const next = show ?? !(visible && focused);
+  const next = show ?? !visible;
   render();
   setVisible(next, next);
   return next ? 'opened' : 'closed';
@@ -542,4 +604,7 @@ export function initVotPanel() {
   root = createUi();
   document.body.appendChild(root);
   render();
+  installTranslationButton(() => {
+    if (showVotPanel() === 'opened') setMenuOpen(true);
+  });
 }

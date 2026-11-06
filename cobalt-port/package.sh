@@ -7,6 +7,20 @@ rf="$work/rf"
 runtime="$work/runtime-libs"
 build_dir="$rf/workdir/cobalt-source/out/webos-arm-sbversion-13_${COBALT_BUILD_TYPE:-devel}"
 
+# Optional launcher artwork for installations alongside the stock YouTube app.
+icon_dir="$port_dir/../assets"
+icon_name="icon.png"
+large_icon_name="largeIcon.png"
+case "${COBALT_ICON_VARIANT:-default}" in
+  default) ;;
+  blue)
+    icon_dir="$port_dir/../vot-mod/assets/launcher-blue"
+    icon_name="icon-blue-vot.png"
+    large_icon_name="largeIcon-blue-vot.png"
+    ;;
+  *) echo "COBALT_ICON_VARIANT must be default or blue" >&2; exit 2 ;;
+esac
+
 mkdir -p "$runtime"
 docker run --rm -v ytaf-webos-linux-sdk:/sdk:ro -v "$runtime:/out" ubuntu:24.04 bash -c '
   set -euo pipefail
@@ -17,8 +31,8 @@ docker run --rm -v ytaf-webos-linux-sdk:/sdk:ro -v "$runtime:/out" ubuntu:24.04 
 '
 
 cd "$rf"
-cp "$port_dir/../assets/icon.png" assets/icon.png
-cp "$port_dir/../assets/largeIcon.png" assets/largeIcon.png
+cp "$icon_dir/$icon_name" assets/icon.png
+cp "$icon_dir/$large_icon_name" assets/largeIcon.png
 git checkout -q -- starterless-cobalt/appinfo.json
 jq --arg id "${COBALT_APP_ID:-youtube.leanback.v4}" --arg title "${COBALT_TITLE:-YouTube}" \
   --arg version "${COBALT_VERSION:-}" \
