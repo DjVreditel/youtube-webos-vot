@@ -2,7 +2,7 @@
 
 Validated on an LG G5 running webOS 11.2.0, using the separate Cobalt app
 (`youtube.vot.cobalt`, 101.5.2). The Magic Remote has no red shortcut button.
-The user confirmed the complete flow on the TV, including the final redraw fix.
+The user confirmed the controls/audio flow on the TV, including the final redraw fix.
 
 ## Controls and focus
 
@@ -50,6 +50,26 @@ failures have bounded retries, persistent cache bypass and correctly consume a
 successful retry response. Unknown length-delimited protobuf fields no longer
 corrupt the following fields. Cancellation during audio upload is propagated.
 
+## OLED theme and inline previews
+
+On the same G5, full-screen playback worked while home-screen autoplay tiles
+were black. The user confirmed that disabling OLED-care mode restored preview
+video. The media element reported ready frames and advancing playback at the
+expected tile rectangle (720×405 in the 1920×1080 UI).
+
+The new guard temporarily suspends page-level OLED overrides while a Cobalt
+inline preview has a frame. YouTube can then retain its native transparency.
+The saved preference and settings-panel theme are preserved; page styling
+returns when inline playback ends or the user opens Watch/Shorts. Paused
+previews remain visible. Non-Cobalt clients keep the existing behavior.
+
+The guard passed lifecycle tests and a compiled-bundle CSS check, including
+transparent preview backgrounds and restoration on the watch page. The updated
+payload was installed on the TV. Re-enabling OLED with this guard has **not yet
+been visually confirmed**; the owner's successful observation was with the
+OLED setting disabled. Native decoder changes were unnecessary and are not
+part of this preview fix.
+
 ## Optional blue launcher
 
 Set `COBALT_ICON_VARIANT=blue` when running `cobalt-port/package.sh` to use the
@@ -72,13 +92,14 @@ npm run typecheck --prefix vot-mod
 node --test vot-mod/tests/*.test.mjs
 npm run build
 node bench/vot-player-controls-check.cjs
+node bench/vot-oled-preview-check.cjs
 # Optional real browser layout check; point this at your Chrome/Chromium:
 CHROME_BIN=/path/to/chrome node bench/vot-controls-layout-check.cjs
 ```
 
-The 53 tests cover pointer/remote ownership, repeated native DOM redraws,
+The 58 tests cover pointer/remote ownership, repeated native DOM redraws,
 button/image identity, disposal, volume replacement/restoration, cancellation,
-protobuf decoding, bounded retries and cache separation. The compiled bundle
+protobuf decoding, bounded retries, cache separation and OLED preview lifecycle. The compiled bundle
 check covers toggle/close and native focus return. The browser check verifies
 that both inline and flex toolbars retain their original height and matching
 icon size/centres; the previous inline implementation grew from 56 to 79px.

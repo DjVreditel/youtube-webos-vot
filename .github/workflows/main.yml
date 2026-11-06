@@ -28,6 +28,7 @@ jobs:
       - run: node --test vot-mod/tests/*.test.mjs
       - run: npm run build
       - run: node bench/vot-player-controls-check.cjs
+      - run: node bench/vot-oled-preview-check.cjs
 
   build:
     runs-on: ubuntu-latest

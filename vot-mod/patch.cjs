@@ -323,6 +323,25 @@ function patchPlayerMenuEntry() {
   fs.writeFileSync(filePath, content, 'utf8');
 }
 
+function patchOledPreviewGuard() {
+  const filePath = path.join(PROJECT_SRC, 'ui.js');
+  let content = readSource(filePath);
+  const marker = '// @vot-oled-preview-guard';
+  if (content.includes(marker)) return;
+  const anchor = "  document.documentElement.classList.toggle('oled-theme-active', !!enabled);";
+  if (!content.includes(anchor) || !content.includes('html.oled-theme-active ')) {
+    throw new Error('Cannot locate OLED page styles and preference handler');
+  }
+  content = `${marker}\nimport { setOledPageEnabled } from './vot/oled-preview';\n${content}`;
+  content = content.replace(anchor, `${anchor}\n  setOledPageEnabled(!!enabled);`);
+  // Keep the settings panel theme while suppressing all page-level OLED rules
+  // during Cobalt previews. Do not overwrite YouTube's own transparency rules.
+  content = content.replaceAll('html.oled-theme-active ', 'html.oled-theme-active.oled-page-active ')
+    .replaceAll('html.oled-theme-active.oled-transparent-shelf ',
+      'html.oled-theme-active.oled-page-active.oled-transparent-shelf ');
+  fs.writeFileSync(filePath, content, 'utf8');
+}
+
 function patchSourceFile(rel, edits) {
   const filePath = path.join(PROJECT_SRC, rel);
   if (!fs.existsSync(filePath)) {
@@ -542,6 +561,7 @@ patchAuthServerUrl();
 step('Patching ui.js (VOT panel shortcut, branding)...');
 patchUiJs();
 patchPlayerMenuEntry();
+patchOledPreviewGuard();
 
 step('Patching ui.css (VOT theme colours)...');
 patchThemeCss();
