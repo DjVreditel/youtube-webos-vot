@@ -160,6 +160,36 @@ English for the user-identified video; no hardcoded video id or repair endpoint
 is present in the production source. Audible/UI behavior after deployment still
 requires the owner's observation; passing tests are not that confirmation.
 
+## Source-audio completeness follow-up (fix13)
+
+The owner reported that the built-in translation button in Yandex Browser on
+iPhone works for the same video. A read-only comparison inspected runtime
+JavaScript from an installed Yandex Browser for Mac 26.10.0.1810, module 26.10.1.0,
+and current unofficial VOT sources. This is not the native iOS source or a
+successful playback comparison on the Mac. No vendor code or user media was
+copied into this contribution.
+
+The comparison led to a concrete local regression: SABR could stop after empty
+responses or the 400-request limit and return a truncated source as success.
+Its coverage calculation counted the farthest endpoint even when intermediate
+segments were missing. Uploading that data risks creating an incomplete cached
+translation, regardless of whether another client has a good audio variant.
+
+Coverage now follows a contiguous sequence from the beginning, checking segment
+numbers and timestamps with the existing 1-second precision tolerance. A partial
+or gapped result is rejected before upload; repeated old segments do not reset
+the stall counter. Valid data, small rounding offsets, and recovered out-of-order
+segments remain accepted. The regression harness uses encoded UMP responses and
+the real capture/download path, including cancellation and request exhaustion.
+Four of the first six tests fail before the fix and pass after it; all eight new
+checks and the existing 96 pass. VOT typecheck, production build and compiled
+controls/OLED checks also pass.
+
+The update is staged as the app's next-start preload, without closing or
+restarting the current TV playback. A post-restart audible test is not claimed.
+Remaining audit items (not implemented here): source-track language validation
+and scoping captured SABR templates earlier to the target video identity.
+
 ## Optional blue launcher
 
 Set `COBALT_ICON_VARIANT=blue` when running `cobalt-port/package.sh` to use the
@@ -187,7 +217,7 @@ node bench/vot-oled-preview-check.cjs
 CHROME_BIN=/path/to/chrome node bench/vot-controls-layout-check.cjs
 ```
 
-The 96 tests cover pointer/remote ownership, repeated native DOM redraws,
+The 104 tests cover pointer/remote ownership, repeated native DOM redraws,
 button/image identity, disposal, volume replacement/restoration, cancellation,
 protobuf decoding, bounded retries, cache separation and OLED preview lifecycle. The compiled bundle
 check covers toggle/close and native focus return. The browser check verifies
