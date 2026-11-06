@@ -4,6 +4,7 @@ import { configRead, configWrite } from '../config';
 import {
   startTranslation,
   stopTranslation,
+  stopTranslationManually,
   isTranslationActive,
   isTranslationInProgress,
   setVolumeTranslation,
@@ -70,6 +71,22 @@ let menuIndex = 0;
 let focusBeforeOpen: HTMLElement | null = null;
 let lastStatus: VotTranslationStatus = 'idle';
 let lastMessage = '';
+let toggleEpoch = 0;
+let startPending = false;
+let enterPressed = false;
+let enterTarget: HTMLElement | null = null;
+let dispatchingEnterClick = false;
+
+// One remote OK press can produce repeated keydowns and a native click.
+// Keep the manually dispatched activation, but consume its duplicate events.
+function isDuplicateEnterClick(evt: MouseEvent, target: HTMLElement): boolean {
+  return !dispatchingEnterClick && evt.detail === 0 && enterTarget === target;
+}
+
+function resetEnterActivation() {
+  enterPressed = false;
+  enterTarget = null;
+}
 
 function langName(code: string): string {
   return LANG_NAMES_RU[code] ?? code;
@@ -221,13 +238,16 @@ async function restartIfRunning() {
 }
 
 async function toggleTranslation() {
+  const epoch = ++toggleEpoch;
   try {
-    if (isBusy()) {
-      const manager = await getPlayerManager();
-      setManuallyStopped(manager.currentVideoID);
-      await stopTranslation();
+    if (isBusy() || startPending) {
+      startPending = false;
+      // The translation owns the video's identity, even while YouTube's
+      // currentVideoID is temporarily unavailable. Stop before awaiting UI data.
+      await stopTranslationManually();
       return;
     }
+    startPending = true;
     setManuallyStopped(null);
     onStatus('loading');
     const manager = await Promise.race([
@@ -236,6 +256,7 @@ async function toggleTranslation() {
         setTimeout(() => reject(new Error('плеер не отвечает')), 5000)
       )
     ]);
+    if (epoch !== toggleEpoch) return;
     const videoId = manager.currentVideoID;
     if (!videoId) {
       onStatus('error', 'видео не открыто');
@@ -243,7 +264,9 @@ async function toggleTranslation() {
     }
     await startTranslation(videoId);
   } catch (err) {
-    onStatus('error', err instanceof Error ? err.message : String(err));
+    if (epoch === toggleEpoch) onStatus('error', err instanceof Error ? err.message : String(err));
+  } finally {
+    if (epoch === toggleEpoch) startPending = false;
   }
 }
 
@@ -313,10 +336,18 @@ function buildMenuRows(): MenuRow[] {
 
 function onKey(evt: KeyboardEvent) {
   const code = evt.keyCode;
+  // Navigation or another key starts a separate gesture even if a remote
+  // omitted the preceding OK release. Pointer input and window blur reset too.
+  if (code !== KEY_ENTER) resetEnterActivation();
   const handled = [KEY_LEFT, KEY_UP, KEY_RIGHT, KEY_DOWN, KEY_ENTER, ...BACK_KEYS].includes(code);
   if (!handled) return;
   evt.preventDefault();
   evt.stopImmediatePropagation();
+  if (code === KEY_ENTER) {
+    if (evt.repeat || enterPressed) return;
+    enterPressed = true;
+    enterTarget = document.activeElement as HTMLElement | null;
+  }
 
   if (menuOpen && menu?.contains(document.activeElement)) {
     const current = menuRows[menuIndex];
@@ -345,7 +376,12 @@ function onKey(evt: KeyboardEvent) {
   } else if (code === KEY_DOWN) {
     setMenuOpen(true);
   } else if (code === KEY_ENTER) {
-    (document.activeElement as HTMLElement | null)?.click?.();
+    dispatchingEnterClick = true;
+    try {
+      (document.activeElement as HTMLElement | null)?.click?.();
+    } finally {
+      dispatchingEnterClick = false;
+    }
   } else if (code !== KEY_UP) {
     setVisible(false);
   }
@@ -368,6 +404,7 @@ function createSegment(className: string, onClick: () => void): HTMLButtonElemen
   btn.addEventListener('click', (evt) => {
     evt.preventDefault();
     evt.stopPropagation();
+    if (isDuplicateEnterClick(evt, btn)) return;
     if (!focused) setVisible(true, true);
     btn.focus();
     onClick();
@@ -435,6 +472,7 @@ function createUi(): HTMLDivElement {
     el.addEventListener('click', (evt) => {
       evt.preventDefault();
       evt.stopPropagation();
+      if (isDuplicateEnterClick(evt, el)) return;
       selectRow();
       (row.activate ?? (() => row.change?.(1)))();
       render();
@@ -454,6 +492,15 @@ function createUi(): HTMLDivElement {
     },
     true
   );
+  window.addEventListener('keyup', (evt) => {
+    if (evt.keyCode !== KEY_ENTER || !enterPressed) return;
+    enterPressed = false;
+    // Own the release too: Cobalt/YouTube must not synthesize a second action.
+    evt.preventDefault();
+    evt.stopImmediatePropagation();
+  }, true);
+  window.addEventListener('blur', resetEnterActivation);
+  document.addEventListener('mousedown', resetEnterActivation, true);
   const releaseForPointer = (evt: MouseEvent) => {
     if (!focused || qrOverlay) return;
     const target = evt.target as HTMLElement | null;

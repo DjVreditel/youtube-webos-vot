@@ -762,8 +762,6 @@ export function isTranslationInProgress(): boolean {
 export async function startTranslation(videoId: VideoID, _isRestart = false) {
   console.log('[VOT] startTranslation called with', videoId);
 
-  const myGeneration = ++translationGeneration;
-
   lastErrorVideoId = null;
   if (!_isRestart) serverRestartCount = 0;
 
@@ -775,7 +773,11 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
     return;
   }
 
-  await stopTranslation();
+  // stopTranslation invalidates pending starts as well as live requests. Keep
+  // this cleanup's generation so a user stop during the await wins.
+  const stopped = stopTranslation();
+  const myGeneration = translationGeneration;
+  await stopped;
 
   if (translationGeneration !== myGeneration) return;
 
@@ -982,7 +984,10 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
     const failedId = currentVideoId;
     const needsRestart =
       err instanceof Error && err.name === 'ServerRestartNeeded';
-    await stopTranslation();
+    const stopped = stopTranslation();
+    const stoppedGeneration = translationGeneration;
+    await stopped;
+    if (translationGeneration !== stoppedGeneration || failedId === manuallyStoppedVideoId) return;
 
     if (
       needsRestart &&
@@ -1010,6 +1015,7 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
 }
 
 export async function stopTranslation() {
+  translationGeneration++;
   abortController?.abort();
   abortController = null;
 
@@ -1095,6 +1101,14 @@ export function setManuallyStopped(videoId: VideoID | null) {
   manuallyStoppedVideoId = videoId;
 }
 
+export async function stopTranslationManually() {
+  // The player can temporarily report no video (or a preview) while the
+  // translation still belongs to the full-screen video. Stop that session
+  // immediately instead of waiting for a second player lookup.
+  manuallyStoppedVideoId = currentVideoId ?? currentManager?.currentVideoID ?? null;
+  await stopTranslation();
+}
+
 let votTranslationInitialized = false;
 
 export async function initVotTranslation() {
@@ -1166,10 +1180,6 @@ export async function initVotTranslation() {
       return;
     }
 
-    if (manuallyStoppedVideoId !== null && videoId !== manuallyStoppedVideoId) {
-      manuallyStoppedVideoId = null;
-    }
-
     if (!configRead('enableVot')) {
       await stopTranslation();
       return;
@@ -1178,6 +1188,11 @@ export async function initVotTranslation() {
     if (manager.playerMode !== PlayerMode.NORMAL) {
       await stopTranslation();
       return;
+    }
+
+    // Browsing previews must not undo a stop on the current full-screen video.
+    if (manuallyStoppedVideoId !== null && videoId !== manuallyStoppedVideoId) {
+      manuallyStoppedVideoId = null;
     }
 
     if (videoId === lastErrorVideoId) return;

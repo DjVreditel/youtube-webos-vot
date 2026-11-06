@@ -185,10 +185,35 @@ Four of the first six tests fail before the fix and pass after it; all eight new
 checks and the existing 96 pass. VOT typecheck, production build and compiled
 controls/OLED checks also pass.
 
-The update is staged as the app's next-start preload, without closing or
-restarting the current TV playback. A post-restart audible test is not claimed.
+The update was initially staged without restarting playback. The owner later
+requested a restart; app closure and a new process were verified. An audible
+test of the final update is not claimed.
 Remaining audit items (not implemented here): source-track language validation
 and scoping captured SABR templates earlier to the target video identity.
+
+## Manual translation stop (fix14)
+
+The owner reported that pressing the upper panel's stop action restarted translation.
+The UI activated every Enter keydown, including repeats, and could also process a
+native click from the same press. It now owns the press and release, ignores duplicate
+activation, and accepts a separate key press or pointer gesture. Navigation recovers
+from a missing keyup. Stopping no longer awaits player lookup; it uses the translated
+session's video ID even when player metadata is temporarily missing.
+
+Manual stop also invalidates pending startup and server-retry continuations. Preview
+video events preserve the stop marker; a different full-screen video can still use
+the user's automatic-translation preference. A second intentional toggle cancels
+an unresolved manual start.
+
+Eleven additional tests bring the total to 115, all passing. Four UI scenarios,
+immediate-start cancellation, preview-marker loss and the server-retry race reproduce
+failures on the preceding code. Typecheck, production build and compiled control/OLED
+checks pass. The compiled interaction harness now sends complete key down/up pairs
+and pointer mousedown events. No audio decoding/native volume behavior is changed.
+
+Installed the script on LG G5, verified all six relevant file hashes, confirmed full
+app closure and a new process after launch. Settings were preserved. Confirmation of
+the physical remote's final stop behavior is still pending.
 
 ## Optional blue launcher
 
@@ -217,7 +242,7 @@ node bench/vot-oled-preview-check.cjs
 CHROME_BIN=/path/to/chrome node bench/vot-controls-layout-check.cjs
 ```
 
-The 104 tests cover pointer/remote ownership, repeated native DOM redraws,
+The 115 tests cover pointer/remote ownership, repeated native DOM redraws,
 button/image identity, disposal, volume replacement/restoration, cancellation,
 protobuf decoding, bounded retries, cache separation and OLED preview lifecycle. The compiled bundle
 check covers toggle/close and native focus return. The browser check verifies
