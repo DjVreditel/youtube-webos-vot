@@ -38,6 +38,8 @@ function translation({ lively = false, deliveredLively = lively } = {}) {
       isTargetLang: (lang) => lang === "ru",
     },
     "./cobalt-audio": { needsAudioShim: () => false },
+    "./video-metadata": { waitForVideoMetadata: async getVideo => getVideo() },
+    "./source-language": { resolveSourceLanguage: (_id, chosen, detected) => chosen !== "auto" ? chosen : (detected || "auto") },
     "./diagnostics": {
       createTranslationTrace: () => ({ event() {}, fail() {} }),
     },

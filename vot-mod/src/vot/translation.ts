@@ -7,6 +7,8 @@ import { isSourceLang, isTargetLang } from './langs';
 import { needsAudioShim, wrapAudioContext } from './cobalt-audio';
 import { OriginalVolume } from './original-volume';
 import { createTranslationTrace } from './diagnostics';
+import { waitForVideoMetadata } from './video-metadata';
+import { resolveSourceLanguage } from './source-language';
 import {
   AUDIO_CHUNK_BYTES,
   RANGE_ALIGN_BYTES,
@@ -14,6 +16,8 @@ import {
   resolveSyncAction,
   shouldRunDriftCheck,
   calcChunkRange,
+  calcIndexedChunkRange,
+  MIN_PLAYABLE_TAIL_S,
   mp3FrameIndex,
   mp3TimeAt
 } from './sync-core';
@@ -68,6 +72,7 @@ let manuallyStoppedVideoId: VideoID | null = null;
 let countdownTimerId: ReturnType<typeof setInterval> | null = null;
 let countdownRemaining = 0;
 let countdownExhausted = false;
+let countdownEpoch = 0;
 
 const MAX_SERVER_RESTARTS = 3;
 
@@ -88,7 +93,9 @@ function startCountdown(remaining: number) {
     countdownRemaining = remaining;
   }
   if (countdownTimerId !== null) return;
+  const epoch = countdownEpoch;
   countdownTimerId = setInterval(() => {
+    if (epoch !== countdownEpoch) return;
     if (countdownRemaining > 0) {
       countdownRemaining--;
       setStatus('waiting', `~${countdownRemaining}s`);
@@ -100,6 +107,7 @@ function startCountdown(remaining: number) {
 }
 
 function stopCountdown() {
+  countdownEpoch++;
   if (countdownTimerId !== null) {
     clearInterval(countdownTimerId);
     countdownTimerId = null;
@@ -233,7 +241,8 @@ function fetchRangedChunk(
   signal: AbortSignal,
   startByte: number,
   endByte: number,
-  fileSize: number
+  fileSize: number,
+  seekTime?: number
 ): Promise<AudioChunk> {
   return new Promise((resolve, reject) => {
     if (signal.aborted || !audioCtx) {
@@ -288,6 +297,16 @@ function fetchRangedChunk(
         const file = wholeFile;
         const index = file?.index ?? mp3FrameIndex(new Uint8Array(data));
         if (file) file.index = index;
+        if (seekTime !== undefined) {
+          if (!index.offsets.length) { reject(new Error('Audio contains no MP3 frames')); return; }
+          const range = calcIndexedChunkRange(index, seekTime, data.byteLength);
+          if (!range || seekTime >= index.duration - MIN_PLAYABLE_TAIL_S) {
+            reject(Object.assign(new Error('Translation audio ended'), { name: 'TranslationAudioEnded' }));
+            return;
+          }
+          startByte = range.startByte;
+          endByte = range.endByte;
+        }
         decodeChunk(data.slice(startByte, endByte + 1), mp3TimeAt(index, startByte));
       }, reject);
       return;
@@ -526,7 +545,8 @@ async function loadChunkAt(seekTime: number) {
       seekCtrl.signal,
       startByte,
       endByte,
-      currentFileSize
+      currentFileSize,
+      seekTime
     );
     if (
       seekCtrl.signal.aborted ||
@@ -543,6 +563,7 @@ async function loadChunkAt(seekTime: number) {
     setTimeout(() => void prefetchNextChunk(), PREFETCH_DELAY_MS);
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') return;
+    if ((err as { name?: string })?.name === 'TranslationAudioEnded') { void stopTranslation(); return; }
     console.error('[VOT] seek chunk error:', err);
   } finally {
     if (seekAbortController === seekCtrl) seekAbortController = null;
@@ -765,8 +786,12 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
   setStatus('loading');
   console.log('[VOT] status set to loading, calling translateVideo');
   const trace = createTranslationTrace(videoId);
+  const ownsSession = () => !signal.aborted && abortController?.signal === signal;
 
   try {
+    const readyVideo = await waitForVideoMetadata(getVideoElement, signal);
+    if (signal.aborted) return;
+    const readyDuration = readyVideo.duration;
     const configuredToLang = String(configRead('votToLang'));
     const toLang = isTargetLang(configuredToLang) ? configuredToLang : 'ru';
     const configuredFromLang = String(configRead('votFromLang'));
@@ -776,12 +801,7 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
     const detectedFromLang = currentManager
       ? videoAudioLanguage(currentManager)
       : '';
-    const fromLang =
-      chosenFromLang !== 'auto'
-        ? chosenFromLang
-        : isSourceLang(detectedFromLang)
-          ? detectedFromLang
-          : 'auto';
+    const fromLang = resolveSourceLanguage(videoId, chosenFromLang, detectedFromLang);
     const lively =
       !!configRead('votLivelyVoice') && fromLang !== 'auto' && toLang === 'ru';
     const videoTitle = currentManager?.player.getVideoData().title ?? '';
@@ -793,16 +813,17 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
       bypassCache = false
     ): Promise<string | null> => {
       const rawDuration = getVideoElement()?.duration;
+      let acceptingProgress = true;
       const result = await translateVideo(
         videoId,
         fromLang,
         toLang,
-        // duration is NaN until video metadata loads — NaN passes `??`
-        rawDuration !== undefined && Number.isFinite(rawDuration)
+        rawDuration !== undefined && Number.isFinite(rawDuration) && rawDuration > 0
           ? rawDuration
-          : 343,
+          : readyDuration,
         signal,
         (remainingTime, message, isRetry) => {
+          if (!acceptingProgress || !ownsSession()) return;
           if (isRetry) {
             stopCountdown();
             setStatus('retrying');
@@ -826,10 +847,10 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
         videoTitle,
         bypassCache,
         trace.event
-      );
+      ).finally(() => { acceptingProgress = false; });
 
+      if (!ownsSession()) return null;
       stopCountdown();
-      if (signal.aborted) return null;
 
       if (!result.translated || !result.url) {
         setStatus('error', 'Translation not available');
@@ -919,7 +940,8 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
       signal,
       startByte,
       endByte,
-      fileSize
+      fileSize,
+      videoElement.currentTime
     );
 
     if (signal.aborted) return;
@@ -945,6 +967,7 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
     setTimeout(() => void prefetchNextChunk(), PREFETCH_DELAY_MS);
 
     serverRestartCount = 0;
+    stopCountdown();
     trace.event({ stage: 'ready' });
     setStatus('playing');
   } catch (err) {
@@ -953,6 +976,7 @@ export async function startTranslation(videoId: VideoID, _isRestart = false) {
     // stop it or restart on our stale error
     if (signal.aborted) return;
     if (err instanceof Error && err.name === 'AbortError') return;
+    if ((err as { name?: string })?.name === 'TranslationAudioEnded') { await stopTranslation(); return; }
     trace.fail(err);
 
     const failedId = currentVideoId;

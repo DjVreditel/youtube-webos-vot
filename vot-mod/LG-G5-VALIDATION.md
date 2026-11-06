@@ -122,6 +122,44 @@ short generated tones with a generation recipe, with no user audio and no FFmpeg
 requirement in CI. The connection to the owner's audible symptom and the
 candidate's effect on the TV are not yet confirmed.
 
+## Video-specific silence and stale waiting status (fix12)
+
+The owner confirmed that other videos play translated audio normally, while the
+reported video still had the problem after rollback. Two cached translations of
+that video were inspected locally. Independent FFmpeg and minimp3 decoding found
+continuous silence from 350.66s to 3395.88s in the `auto` source-language version;
+the `en` version contains nonzero speech at corresponding sampled positions.
+The media and signed cache URLs are not part of this contribution.
+
+The client could start before video metadata arrived and substitute a 343-second
+duration. This can bound the requested source-audio upload to an incorrect short
+length; the observed silence boundary is consistent with that risk, but the
+original server job was not traced. It now waits for finite, positive loaded
+metadata and uses the real duration. Cancellation/timeout cannot create a request
+with an invented duration. Detected source languages are remembered per video
+(maximum100 entries,30days) so transiently missing language metadata does not
+select a different `auto` translation; explicit manual selection still wins.
+
+Cobalt initial starts and seeks use the downloaded MP3 frame index to locate the
+requested time, even if earlier video metadata was absent or the audio is VBR.
+Sequential prefetch and other engines keep their existing path. An audio-end
+seek stops instead of repeatedly replaying the tail. The affected MP3s themselves
+are CBR and have correct indexing; this is a separate reproduced positioning bug.
+
+The owner also reported a waiting countdown while translation was audible.
+Progress callbacks and request completion now require ownership of the current
+translation session; progress after request completion is ignored. Countdown
+epochs reject already-queued old ticks, and ready playback clears the countdown.
+Four of five lifecycle regressions fail on the preceding source and pass with
+these guards; two further tests verify metadata gating and cancellation.
+
+The final local build passes96 tests, VOT typecheck, production build and compiled
+control/OLED checks. The previous native player and volume adapter are unchanged.
+A one-time local repair removes only the known bad `auto` cache entry and records
+English for the user-identified video; no hardcoded video id or repair endpoint
+is present in the production source. Audible/UI behavior after deployment still
+requires the owner's observation; passing tests are not that confirmation.
+
 ## Optional blue launcher
 
 Set `COBALT_ICON_VARIANT=blue` when running `cobalt-port/package.sh` to use the
@@ -149,7 +187,7 @@ node bench/vot-oled-preview-check.cjs
 CHROME_BIN=/path/to/chrome node bench/vot-controls-layout-check.cjs
 ```
 
-The 73 tests cover pointer/remote ownership, repeated native DOM redraws,
+The 96 tests cover pointer/remote ownership, repeated native DOM redraws,
 button/image identity, disposal, volume replacement/restoration, cancellation,
 protobuf decoding, bounded retries, cache separation and OLED preview lifecycle. The compiled bundle
 check covers toggle/close and native focus return. The browser check verifies
