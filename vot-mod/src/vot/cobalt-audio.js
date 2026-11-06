@@ -5,6 +5,7 @@ const COPY_LEAD_S = 0.35;
 const LATE_START_S = 0.03;
 const MAX_START_CORRECTIONS = 2;
 let minimp3 = null;
+let decodeQueue = Promise.resolve();
 
 export function resample(input, fromRate, toRate) {
   if (fromRate === toRate) return input;
@@ -20,56 +21,86 @@ export function resample(input, fromRate, toRate) {
 }
 
 export function decodeMp3(data, targetRate) {
+  // minimp3 has one decoder state. A seek can overlap a prefetched chunk
+  // while decoding yields between slices, so keep each complete job exclusive.
+  const decoded = decodeQueue.then(() => decodeMp3Exclusive(data, targetRate));
+  decodeQueue = decoded.catch(() => {});
+  return decoded;
+}
+
+function decodeMp3Exclusive(data, targetRate) {
   minimp3 = minimp3 || createMinimp3();
   return minimp3.then(
     (module) =>
       new Promise((resolve, reject) => {
         const bytes = new Uint8Array(data);
-        const pointer = module._malloc(bytes.length);
-        module.HEAPU8.set(bytes, pointer);
-        module._mp3_init();
+        let pointer = null;
+        const release = () => {
+          if (pointer === null) return;
+          const allocated = pointer;
+          pointer = null;
+          module._free(allocated);
+        };
+        const fail = (error) => {
+          try { release(); } catch { /* preserve the decoding error */ }
+          reject(error);
+        };
+        try {
+          pointer = module._malloc(bytes.length);
+          module.HEAPU8.set(bytes, pointer);
+          module._mp3_init();
+        } catch (error) {
+          fail(error);
+          return;
+        }
         const pieces = [];
         let total = 0;
         let rate = 0;
         let channels = 0;
         let offset = 0;
         const step = () => {
-          for (let frame = 0; frame < FRAMES_PER_SLICE && offset < bytes.length; frame++) {
-            const samples = module._mp3_decode(pointer + offset, bytes.length - offset);
-            const info = module._mp3_frame() >> 2;
-            const used = module.HEAP32[info];
-            if (!used) {
-              offset = bytes.length;
-              break;
+          try {
+            for (let frame = 0; frame < FRAMES_PER_SLICE && offset < bytes.length; frame++) {
+              const samples = module._mp3_decode(pointer + offset, bytes.length - offset);
+              const info = module._mp3_frame() >> 2;
+              const used = module.HEAP32[info];
+              if (!used) {
+                offset = bytes.length;
+                break;
+              }
+              offset += used;
+              if (samples) {
+                channels = module.HEAP32[info + 1];
+                rate = module.HEAP32[info + 2];
+                const pcm = module._mp3_pcm() >> 1;
+                pieces.push(module.HEAP16.slice(pcm, pcm + samples * channels));
+                total += samples;
+              }
             }
-            offset += used;
-            if (samples) {
-              channels = module.HEAP32[info + 1];
-              rate = module.HEAP32[info + 2];
-              const pcm = module._mp3_pcm() >> 1;
-              pieces.push(module.HEAP16.slice(pcm, pcm + samples * channels));
-              total += samples;
+            if (offset < bytes.length) {
+              setTimeout(step, 0);
+              return;
             }
+            release();
+            if (!total) {
+              reject(new Error('mp3 decode failed'));
+              return;
+            }
+            const result = [];
+            for (let channel = 0; channel < channels; channel++) {
+              const samples = new Float32Array(total);
+              let index = 0;
+              pieces.forEach((piece) => {
+                for (let i = channel; i < piece.length; i += channels) samples[index++] = piece[i] / 32768;
+              });
+              result.push(resample(samples, rate, targetRate));
+            }
+            resolve(result);
+          } catch (error) {
+            // Exceptions in a later setTimeout slice must settle the job too,
+            // otherwise its allocation leaks and every queued decode stalls.
+            fail(error);
           }
-          if (offset < bytes.length) {
-            setTimeout(step, 0);
-            return;
-          }
-          module._free(pointer);
-          if (!total) {
-            reject(new Error('mp3 decode failed'));
-            return;
-          }
-          const result = [];
-          for (let channel = 0; channel < channels; channel++) {
-            const samples = new Float32Array(total);
-            let index = 0;
-            pieces.forEach((piece) => {
-              for (let i = channel; i < piece.length; i += channels) samples[index++] = piece[i] / 32768;
-            });
-            result.push(resample(samples, rate, targetRate));
-          }
-          resolve(result);
         };
         step();
       })

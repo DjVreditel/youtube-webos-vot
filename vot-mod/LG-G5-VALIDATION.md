@@ -99,6 +99,29 @@ The new failure tests fail on the preceding source and pass after the changes.
 The intermittent TV error itself remains unconfirmed, so these are concrete
 recovery fixes plus diagnostics, not a claim that all upstream errors are gone.
 
+## Concurrent MP3 decoding and audio-stutter follow-up
+
+After fix10 the owner reported stuttering and disappearing translation audio.
+The exact previous fix9 preload was restored and the app relaunched; the native
+player and volume adapter hashes were unchanged. Audible behavior after that
+rollback is awaiting the owner's check. This does not establish fix10 as the
+cause: its changes did not alter decoding or ongoing playback scheduling.
+
+A separate decoder defect was reproduced with generated sine-wave MP3 files.
+`decodeMp3` shared one minimp3 decoder state across jobs while yielding between
+frame slices. A prefetch and a seek decode could reset each other's state,
+producing shortened audio and different PCM samples. The defect also exists in
+fix9. Complete decoder jobs now run serially; a rejected job releases the queue,
+and exceptions from later timer slices free the input allocation and reject.
+Playback scheduling, gain, native output and volume handling are unchanged.
+
+Three regression tests cover exact concurrent-versus-serial PCM equality,
+recovery after invalid input, and allocation/queue cleanup after a later-slice
+exception. Two fail on the old source; all pass after the change. Fixtures are
+short generated tones with a generation recipe, with no user audio and no FFmpeg
+requirement in CI. The connection to the owner's audible symptom and the
+candidate's effect on the TV are not yet confirmed.
+
 ## Optional blue launcher
 
 Set `COBALT_ICON_VARIANT=blue` when running `cobalt-port/package.sh` to use the
@@ -126,7 +149,7 @@ node bench/vot-oled-preview-check.cjs
 CHROME_BIN=/path/to/chrome node bench/vot-controls-layout-check.cjs
 ```
 
-The 70 tests cover pointer/remote ownership, repeated native DOM redraws,
+The 73 tests cover pointer/remote ownership, repeated native DOM redraws,
 button/image identity, disposal, volume replacement/restoration, cancellation,
 protobuf decoding, bounded retries, cache separation and OLED preview lifecycle. The compiled bundle
 check covers toggle/close and native focus return. The browser check verifies
